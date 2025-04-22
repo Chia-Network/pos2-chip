@@ -14,13 +14,11 @@
 // Structs for pairing results
 //------------------------------------------------------------------------------
 
-#define NON_BIPARTITE_UNTIL_T3x true
-#define RETAIN_X_VALUES true
-#define GROW_TO_T3_THEN_SHRINKx true
-#define MAKE_T4_BIGGERx true
-#define GROW_T3_THEN_PARITY_TABLE_SIZESx true
-#define EXCLUSIVE_L_R_SETSx true
-#define T3_FACTOR_T4_T5_EVEN 1
+// use retain x values for validating results
+//#define RETAIN_X_VALUES true
+
+// use to reduce T4/T5 relative to T3, T4 and T5 will be approx same size.
+//#define T3_FACTOR_T4_T5_EVEN 1
 
 struct T1Pairing
 {
@@ -47,9 +45,6 @@ struct T3Pairing
     uint32_t lower_partition;       // (k - sub_k) bits.
     uint32_t upper_partition;       // (k - sub_k) bits.
     uint32_t order_bits;            // 2-bit order field.
-#ifdef EXCLUSIVE_L_R_SETS
-    uint32_t exclusive_bit;         // 1-bit exclusive bit.
-#endif
 #ifdef RETAIN_X_VALUES
     uint32_t xs[8];
 #endif
@@ -140,25 +135,14 @@ public:
     // Returns: a T1Pairing with match_info (k bits) and meta (2k bits).
     std::optional<T1Pairing> pairing_t1(uint32_t x_l, uint32_t x_r)
     {
-
-        #ifdef GROW_TO_T3_THEN_SHRINK
-        // this code below grows T1 by 25%
-        int num_test_bits = 6; // will create 1/64
-        PairingResult pair = hashing.pairing(1, x_l, x_r,
-                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                             static_cast<int>(params_.get_k()),
-                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                             num_test_bits);
-        if (pair.test_result >= 5)
-            return std::nullopt;
-        #else
+        // fast test for matching to speed up solver.
         if (!match_filter_16(x_l & 0xFFFFU, x_r & 0xFFFFU))
             return std::nullopt;
-        // Assume hashing_.pairing(...) for table 1 returns a tuple {match_info, meta}.
+        
         PairingResult pair = hashing.pairing(1, x_l, x_r,
                                              static_cast<int>(params_.get_k()),
                                              static_cast<int>(params_.get_k()));
-        #endif
+
         T1Pairing result =
             {
                 .meta = static_cast<uint64_t>(x_l) << params_.get_k() | x_r,
@@ -196,13 +180,10 @@ public:
     // meta, order bits, and the full encrypted_xs.
     std::optional<T3Pairing> pairing_t3(uint64_t meta_l, uint64_t meta_r, uint32_t x_bits_l, uint32_t x_bits_r)
     {
-        //#ifdef GROW_T3_THEN_PARITY_TABLE_SIZES
-
-        #ifndef GROW_T3_THEN_PARITY_TABLE_SIZES
         if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
                             static_cast<uint32_t>(meta_r & 0xFFFFU)))
             return std::nullopt;
-        #endif
+        
         uint64_t all_x_bits = (static_cast<uint64_t>(x_bits_l) << params_.get_k()) | x_bits_r;
         uint64_t encrypted_xs = xs_encryptor.encrypt(all_x_bits);
         uint32_t order_bits = xs_encryptor.get_t3_order_bits(encrypted_xs);
@@ -219,31 +200,11 @@ public:
             lower_partition = xs_encryptor.get_t3_r_partition(encrypted_xs);
             upper_partition = xs_encryptor.get_t3_l_partition(encrypted_xs) + params_.get_num_partitions();
         }
-        #ifdef GROW_T3_THEN_PARITY_TABLE_SIZES
-        //if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
-        //                    static_cast<uint32_t>(meta_r & 0xFFFFU)))
-        //    return std::nullopt;
-        int num_test_bits = 4; // will create 1/64
-        //PairingResult pair = hashing.pairing(3, meta_l, meta_r,
-        //                                     static_cast<int>(params_.get_num_pairing_meta_bits()),
-        //                                     static_cast<int>(params_.get_k()),
-        //                                     static_cast<int>(params_.get_num_pairing_meta_bits()),
-        //                                     num_test_bits);
-        // 5/16 is +25% growth
-        //if (pair.test_result >= 5)
-        //    return std::nullopt;
-        PairingResult pair = hashing.pairing(3, meta_l, meta_r,
-            static_cast<int>(params_.get_num_pairing_meta_bits()),
-            static_cast<int>(params_.get_sub_k()) - 1,
-            static_cast<int>(params_.get_num_pairing_meta_bits()), num_test_bits);
-        if (pair.test_result >= 8)
-            return std::nullopt;
-        #else
+        
         PairingResult pair = hashing.pairing(3, meta_l, meta_r,
                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
                                              static_cast<int>(params_.get_sub_k()) - 1,
                                              static_cast<int>(params_.get_num_pairing_meta_bits()));
-        #endif
 
         // TODO: this can be bitpacked much better
         T3Pairing result;
@@ -252,9 +213,6 @@ public:
         result.upper_partition = upper_partition;
         result.order_bits = order_bits;
         result.encrypted_xs = encrypted_xs;
-        #ifdef EXCLUSIVE_L_R_SETS
-        result.exclusive_bit = xs_encryptor.get_exclusive_bit(encrypted_xs);
-        #endif
         // Build match_info by combining top_order_bit with lower_match_info.
         result.match_info_lower_partition = (top_order_bit << (params_.get_sub_k() - 1)) | pair.match_info_result;
         result.match_info_upper_partition = ((1 - top_order_bit) << (params_.get_sub_k() - 1)) | pair.match_info_result;
@@ -266,19 +224,10 @@ public:
     // Returns: a T4Pairing with match_info (sub_k bits) and meta (2k bits).
     std::optional<T4Pairing> pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l, uint32_t order_bits_r)
     {
-        #ifdef GROW_TO_T3_THEN_SHRINK
-        int num_test_bits = params_.get_num_match_key_bits(4) + 3;
-        #elif defined(MAKE_T4_BIGGER)
-        int num_test_bits = params_.get_num_match_key_bits(4);
-        #elif defined(GROW_T3_THEN_PARITY_TABLE_SIZES)
-        // we grew in t3, now need to shink by 25%, need pass rate of 0.2
-        // however, since partitions take twice the data, need pass rate of 0.1
-        int num_test_bits = 32;
-        #elif defined(EXCLUSIVE_L_R_SETS)
-        int num_test_bits = params_.get_num_match_key_bits(4) + 0;
-        #elif defined(T3_FACTOR_T4_T5_EVEN) 
+        #if defined(T3_FACTOR_T4_T5_EVEN) 
         int num_test_bits = 32;
         #else
+        // shrink output by 50% by using 1 bit larger than num match bits.
         int num_test_bits = params_.get_num_match_key_bits(4) + 1;
         #endif
         PairingResult pair = hashing.pairing(4, meta_l, meta_r,
@@ -286,19 +235,11 @@ public:
                                              static_cast<int>(params_.get_k()) - 1,
                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
                                              num_test_bits);
-        #ifdef GROW_T3_THEN_PARITY_TABLE_SIZES
-        if (pair.test_result > 107374182) // 0.025
-            return std::nullopt;
-        //if (pair.test_result > 171798691) // 0.04
-        //    return std::nullopt;
-        //if (pair.test_result > 300647710) // 0.07
-        //    return std::nullopt;
-        //if (pair.test_result > 429496729) // should be 0.1 or 90% chance of not matching.
-        //    return std::nullopt;
-        #elif defined(T3_FACTOR_T4_T5_EVEN)
+        
+                                             #if defined(T3_FACTOR_T4_T5_EVEN)
         double threshold_double = (4294967296 / 8) * T3_FACTOR_T4_T5_EVEN;
         unsigned long threshold = static_cast<unsigned long>(threshold_double);
-        if (pair.test_result > threshold) // (134217728 << 2))
+        if (pair.test_result > threshold)
             return std::nullopt;
         #else
         if (pair.test_result > 0)
@@ -324,34 +265,14 @@ public:
                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
                                              0, 0, num_test_bits);
 
-        #ifdef GROW_TO_T3_THEN_SHRINK
-        //if (pair.test_result >= (1073741824 << 1))
-        if (pair.test_result >= (855570511 << 0))
-            return false;
-        #elif defined(GROW_T3_THEN_PARITY_TABLE_SIZES)
-        // should be 0.07968
-        if (pair.test_result >= (684456408 << 1))
-            return false;
-        //if (pair.test_result >= (1073741824 << 1))
-        //    return false;
-        #elif defined(MAKE_T4_BIGGER)
-        if (pair.test_result >= (855570511 >> 2))
-            return false;
-        #elif defined(EXCLUSIVE_L_R_SETS)
-        if (pair.test_result >= (855570511 << 2))
-            return false;
-        #elif defined(T3_FACTOR_T4_T5_EVEN)
-        double threshold_double = (4294967296 * 0.1992030328 * 2) / T3_FACTOR_T4_T5_EVEN;
-        unsigned long threshold = static_cast<unsigned long>(threshold_double);
-        if (pair.test_result >= threshold)
-            return false;
-        #else
+        // adjust the final table so that T3/4/5 will prune to the same # of entries each.
         if (pair.test_result >= (855570511 << 1))
             return false;
-        #endif
         return true;
         
-        /*int num_test_bits = params_.get_num_match_key_bits(5) - 1;
+        /*
+        // below does parity matching, T5 will have more entries than T4/3.
+        int num_test_bits = params_.get_num_match_key_bits(5) - 1;
         PairingResult pair = hashing.pairing(5, meta_l, meta_r,
                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
                                              0, 0, num_test_bits);
