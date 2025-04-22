@@ -1,0 +1,10 @@
+*.o
+*.out
+*.exe
+*.obj
+*.log
+*.a
+*.so
+*.dll
+*.dSYM/
+build/
