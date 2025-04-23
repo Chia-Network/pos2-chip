@@ -22,7 +22,7 @@ public:
       : plot_id_(hexToBytes(plot_id_hex)), k_(k), sub_k_(sub_k),
         proof_params_(plot_id_.data(), k_, sub_k_), xs_encryptor_(proof_params_) {}
 
-    // Execute the entire plotting pipeline
+    // Execute the plotting pipeline
     PlotData run() {
         std::cout << "Starting plotter..." << std::endl;
 
@@ -55,7 +55,7 @@ public:
         std::cout << "Constructed " << t3_results.encrypted_xs.size() << " Table 3 entries." << std::endl;
 
         // 5) Prepare pruner
-        TablePruner pruner(t3_results.encrypted_xs);
+        TablePruner pruner(proof_params_, t3_results.encrypted_xs);
 
         // 6) Partitioned Table4 + Table5
         std::vector<std::vector<T4BackPointers>> all_t4;
@@ -86,37 +86,23 @@ public:
         }
 
         // 7) Finalize pruning
+        timer_.start("Finalizing Table 3");
+        T4ToT3LateralPartitionRanges t4_to_t3_lateral_partition_ranges = pruner.finalize_t3_and_prepare_mappings_for_t4();
+        timer_.stop();
+        
         timer_.start("Finalizing Table 4");
-        pruner.prepare_t3_mappings_for_t4();
         for (auto& t4bp : all_t4) pruner.finalize_t4_partition(t4bp);
         timer_.stop();
 
-        timer_.start("Finalizing Table 3");
-        pruner.finalize_t3_entries();
-        timer_.stop();
-
-        //TableCompressor table_compressor(proof_params_, t3_results.encrypted_xs, all_t4, all_t5);
-        //table_compressor.compress();
-
         return {
             .t3_encrypted_xs = t3_results.encrypted_xs,
+            .t4_to_t3_lateral_ranges = t4_to_t3_lateral_partition_ranges,
+            .t4_to_t3_back_pointers = all_t4,
+            .t5_to_t4_back_pointers = all_t5,
             #ifdef RETAIN_X_VALUES
             .xs_correlating_to_encrypted_xs = t3_results.xs_correlating_to_encrypted_xs,
             #endif
-            .t4_to_t3_back_pointers = all_t4,
-            .t5_to_t4_back_pointers = all_t5
         };
-
-        // 8) Write plot file
-        //std::string filename = "plot_file_" + std::to_string(k_) + "_" + std::to_string(sub_k_) + ".bin";
-        //PlotFile::Data data;
-        //data.t4_to_t3_back_pointers = all_t4;
-        //data.t5_to_t4_back_pointers = all_t5;
-
-        //PlotFile::writeData(filename, data);
-        //std::cout << "Wrote plot file: " << filename << std::endl;
-
-        
     }
 
     ProofParams getProofParams() const {
