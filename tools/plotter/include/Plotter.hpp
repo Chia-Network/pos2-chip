@@ -12,7 +12,7 @@
 
 #include "TableConstructorGeneric.hpp"
 #include "TablePruner.hpp"
-#include "PlotFile.hpp"
+#include "PlotData.hpp"
 #include "TableCompressor.hpp"
 
 class Plotter {
@@ -21,15 +21,6 @@ public:
     Plotter(const std::string& plot_id_hex, int k, int sub_k)
       : plot_id_(hexToBytes(plot_id_hex)), k_(k), sub_k_(sub_k),
         proof_params_(plot_id_.data(), k_, sub_k_), xs_encryptor_(proof_params_) {}
-
-    struct PlotData {
-        std::vector<uint64_t> t3_encrypted_xs;
-        #ifdef RETAIN_X_VALUES
-        std::vector<std::array<uint32_t, 8>> xs_correlating_to_encrypted_xs;
-        #endif
-        std::vector<std::vector<T4BackPointers>> t4_to_t3_back_pointers;
-        std::vector<std::vector<T5Pairing>> t5_to_t4_back_pointers;
-    };
 
     // Execute the entire plotting pipeline
     PlotData run() {
@@ -104,6 +95,9 @@ public:
         pruner.finalize_t3_entries();
         timer_.stop();
 
+        //TableCompressor table_compressor(proof_params_, t3_results.encrypted_xs, all_t4, all_t5);
+        //table_compressor.compress();
+
         return {
             .t3_encrypted_xs = t3_results.encrypted_xs,
             #ifdef RETAIN_X_VALUES
@@ -121,6 +115,8 @@ public:
 
         //PlotFile::writeData(filename, data);
         //std::cout << "Wrote plot file: " << filename << std::endl;
+
+        
     }
 
     ProofParams getProofParams() const {

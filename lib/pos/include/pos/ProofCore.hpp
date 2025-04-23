@@ -80,6 +80,8 @@ struct T4BackPointers
     #ifdef RETAIN_X_VALUES
     uint32_t xs[16];
     #endif
+
+    bool operator==(T4BackPointers const& o) const = default;
 };
 
 struct T4PairingPropagation
@@ -99,6 +101,8 @@ struct T5Pairing
 #ifdef RETAIN_X_VALUES
     uint32_t xs[32];
 #endif
+
+    bool operator==(T5Pairing const& o) const = default;
 };
 
 //------------------------------------------------------------------------------
