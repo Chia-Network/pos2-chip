@@ -14,7 +14,7 @@
 // Structs for pairing results
 //------------------------------------------------------------------------------
 
-// use retain x values for validating results
+// use retain x values to help validate results
 //#define RETAIN_X_VALUES true
 
 // use to reduce T4/T5 relative to T3, T4 and T5 will be approx same size.

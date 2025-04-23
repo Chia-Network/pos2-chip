@@ -63,20 +63,6 @@ int main(int argc, char *argv[])
     std::cout << "Total T5 entries: " << t5_to_t4_count << "\n";
     std::cout << "----------------------" << std::endl;
 
-    // show t4 entries
-    std::cout << "T4 entries: " << std::endl;
-    for (int partition_id = 0; partition_id < plot.t4_to_t3_back_pointers.size(); ++partition_id)
-    {
-        std::cout << "  Partition " << partition_id << ": " << std::endl;
-        for (size_t i = 0; i < plot.t4_to_t3_back_pointers[partition_id].size(); ++i)
-        {
-            std::cout << "(" << plot.t4_to_t3_back_pointers[partition_id][i].encx_index_l << ", "
-                      << plot.t4_to_t3_back_pointers[partition_id][i].encx_index_r << "), ";
-        }
-        std::cout << std::endl;
-    }
-    std::cout << "----------------------" << std::endl;
-
 #ifdef RETAIN_X_VALUES
     bool validate = true;
     if (validate)
@@ -135,12 +121,19 @@ int main(int argc, char *argv[])
     bool writeToFile = true;
     if (writeToFile)
     {
+        #ifdef RETAIN_X_VALUES
+        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k) + "_xvalues_" + plot_id_hex + ".bin";
+        #else
         std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k) + '_' + plot_id_hex + ".bin";
+        #endif
+        timer.start("Writing plot file: " + filename);
         PlotFile::writeData(filename, plot);
-        std::cout << "Wrote plot file: " << filename << std::endl;
+        timer.stop();
 
         // test read
+        // if we have x values the comparison function won't be valid since plot does not store x values.
         PlotData read_plot = PlotFile::readData(filename);
+       
         if (read_plot == plot)
         {
             std::cout << "Plot read/write successful." << std::endl;
