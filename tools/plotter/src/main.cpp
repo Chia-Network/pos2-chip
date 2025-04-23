@@ -2,6 +2,7 @@
 #include <string>
 #include <cstdlib>
 #include "Plotter.hpp"
+#include "PlotFile.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -32,7 +33,7 @@ int main(int argc, char *argv[])
     Timer timer;
     timer.start("Plotting");
     Plotter plotter(plot_id_hex, k, sub_k);
-    Plotter::PlotData plot = plotter.run();
+    PlotData plot = plotter.run();
     timer.stop();
     std::cout << "Plotting completed.\n";
     std::cout << "----------------------" << std::endl;
@@ -60,6 +61,20 @@ int main(int argc, char *argv[])
     std::cout << "Total T3 entries: " << plot.t3_encrypted_xs.size() << "\n";
     std::cout << "Total T4 entries: " << t4_to_t3_count << "\n";
     std::cout << "Total T5 entries: " << t5_to_t4_count << "\n";
+    std::cout << "----------------------" << std::endl;
+
+    // show t4 entries
+    std::cout << "T4 entries: " << std::endl;
+    for (int partition_id = 0; partition_id < plot.t4_to_t3_back_pointers.size(); ++partition_id)
+    {
+        std::cout << "  Partition " << partition_id << ": " << std::endl;
+        for (size_t i = 0; i < plot.t4_to_t3_back_pointers[partition_id].size(); ++i)
+        {
+            std::cout << "(" << plot.t4_to_t3_back_pointers[partition_id][i].encx_index_l << ", "
+                      << plot.t4_to_t3_back_pointers[partition_id][i].encx_index_r << "), ";
+        }
+        std::cout << std::endl;
+    }
     std::cout << "----------------------" << std::endl;
 
 #ifdef RETAIN_X_VALUES
@@ -116,6 +131,26 @@ int main(int argc, char *argv[])
         std::cout << "Validated " << total_validated << " final entries." << std::endl;
     }
 #endif
+
+    bool writeToFile = true;
+    if (writeToFile)
+    {
+        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k) + '_' + plot_id_hex + ".bin";
+        PlotFile::writeData(filename, plot);
+        std::cout << "Wrote plot file: " << filename << std::endl;
+
+        // test read
+        PlotData read_plot = PlotFile::readData(filename);
+        if (read_plot == plot)
+        {
+            std::cout << "Plot read/write successful." << std::endl;
+        }
+        else
+        {
+            std::cerr << "Read plot does not match original." << std::endl;
+            exit(23);
+        }
+    }
 
     return 0;
 }
