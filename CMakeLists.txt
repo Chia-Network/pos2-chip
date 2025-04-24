@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS    OFF)
 
 # ─── Subprojects ───────────────────────
-# add_subdirectory(lib/fse)
+add_subdirectory(lib/fse)
 add_subdirectory(lib/pos)
 add_subdirectory(lib/common)
 add_subdirectory(tools/plotter)

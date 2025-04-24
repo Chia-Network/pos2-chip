@@ -8,6 +8,6 @@ target_include_directories(pos INTERFACE
 )
 
 # If pos depends on FSE at compile/link time:
-#target_link_libraries(pos INTERFACE
-#  fse
-#)
+target_link_libraries(pos INTERFACE
+ fse
+)
