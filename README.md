@@ -33,21 +33,26 @@ This repository provides a **public reference implementation** of the new ProofÂ
    cd pos2-chip
    ```
 
-2. Create an out-of-source build directory and enter it:
+### Shortcut with helper script:
+2. Build
+```bash
+   ./build-release.sh
+```
 
+
+### Manually, directly via CMake:
+2. Configure with CMake (Release mode enables optimizations):
     ```bash
-    mkdir build
-    cd build
+    cmake -B build -DCMAKE_BUILD_TYPE=Release .
     ```
-
-3. Configure with CMake (Release mode enables optimizations):
+3. Compile:
     ```bash
-    cmake -DCMAKE_BUILD_TYPE=Release ..
-    ```
-4. Compile:
-    ```bash
+    
+    # Linux
+    cmake --build build -j$(nproc)
 
-    make -j$(nproc)
+    # macOS
+    cmake --build build -j$(sysctl -n hw.logicalcpu)
     ```
 
 ## Running the Plotter
