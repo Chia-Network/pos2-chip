@@ -2,7 +2,7 @@
 #include <string>
 #include <cstdlib>
 #include "Plotter.hpp"
-#include "PlotFile.hpp"
+#include <common/PlotFile.hpp>
 
 int main(int argc, char *argv[])
 {

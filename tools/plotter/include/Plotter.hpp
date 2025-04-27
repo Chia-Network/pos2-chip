@@ -9,10 +9,10 @@
 
 #include <pos/ProofCore.hpp>
 #include <common/Timer.hpp>
+#include <common/PlotData.hpp>
 
 #include "TableConstructorGeneric.hpp"
 #include "TablePruner.hpp"
-#include "PlotData.hpp"
 #include "TableCompressor.hpp"
 
 class Plotter {
@@ -89,6 +89,17 @@ public:
         timer_.start("Finalizing Table 3");
         T4ToT3LateralPartitionRanges t4_to_t3_lateral_partition_ranges = pruner.finalize_t3_and_prepare_mappings_for_t4();
         timer_.stop();
+
+        if (true)
+        {
+            // output all partition ranges
+            for (int partition_id = 0; partition_id < t4_to_t3_lateral_partition_ranges.size(); ++partition_id) {
+                std::cout << "Partition " << partition_id << ": "
+                          << t4_to_t3_lateral_partition_ranges[partition_id].start << " - "
+                          << t4_to_t3_lateral_partition_ranges[partition_id].end << std::endl;
+            }
+            exit(23);
+        }
         
         timer_.start("Finalizing Table 4");
         for (auto& t4bp : all_t4) pruner.finalize_t4_partition(t4bp);
