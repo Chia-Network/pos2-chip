@@ -367,7 +367,7 @@ public:
                 .meta = r.meta,
                 .match_info = r.match_info,
                 .x_bits = x_bits,
-#ifdef RETAIN_X_VALUES
+#ifdef RETAIN_X_VALUES_TO_T3
                 .xs = {
                     static_cast<uint32_t>(meta_l >> params_.get_k()),
                     static_cast<uint32_t>(meta_l & ((1 << params_.get_k()) - 1)),
@@ -398,7 +398,7 @@ struct T3_Partitions_Results
 {
     std::vector<std::vector<T3PartitionedPairing>> partitioned_pairs;
     std::vector<uint64_t> encrypted_xs;
-    #ifdef RETAIN_X_VALUES
+    #ifdef RETAIN_X_VALUES_TO_T3
     std::vector<std::array<uint32_t, 8>> xs_correlating_to_encrypted_xs;
     #endif
 };
@@ -418,7 +418,7 @@ public:
             .meta = prev_table_pair.meta,
             .match_info = r_match_target,
             .x_bits = prev_table_pair.x_bits,
-#ifdef RETAIN_X_VALUES
+#ifdef RETAIN_X_VALUES_TO_T3
             .xs = {
                 static_cast<uint32_t>(prev_table_pair.xs[0]),
                 static_cast<uint32_t>(prev_table_pair.xs[1]),
@@ -440,7 +440,7 @@ public:
         if (opt_res.has_value())
         {
             T3Pairing pairing = opt_res.value();
-#ifdef RETAIN_X_VALUES
+#ifdef RETAIN_X_VALUES_TO_T3
             for (int i = 0; i < 4; i++)
             {
                 pairing.xs[i] = l_candidate.xs[i];
@@ -476,7 +476,7 @@ private:
         int num_partitions = params_.get_num_partitions() * 2; // two sets of partitions, upper and lower
         std::vector<std::vector<T3PartitionedPairing>> partitioned_pairs(num_partitions);
 
-        #ifdef RETAIN_X_VALUES
+        #ifdef RETAIN_X_VALUES_TO_T3
         std::vector<std::array<uint32_t, 8>> xs_correlating_to_encrypted_xs(pairings.size());
         #endif
 
@@ -486,7 +486,7 @@ private:
 
             // encrypted_xs are pre-allocated, so set directly in the vector
             encrypted_xs[encx_index] = pairing.encrypted_xs;
-            #ifdef RETAIN_X_VALUES
+            #ifdef RETAIN_X_VALUES_TO_T3
             xs_correlating_to_encrypted_xs[encx_index] = {
                 pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
                 pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7]};
@@ -539,7 +539,7 @@ private:
         return T3_Partitions_Results{
             .partitioned_pairs = partitioned_pairs,
             .encrypted_xs = encrypted_xs,
-            #ifdef RETAIN_X_VALUES
+            #ifdef RETAIN_X_VALUES_TO_T3
             .xs_correlating_to_encrypted_xs = xs_correlating_to_encrypted_xs
             #endif
         };

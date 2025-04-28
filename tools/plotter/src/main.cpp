@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
     bool writeToFile = true;
     if (writeToFile)
     {
-        #ifdef RETAIN_X_VALUES
+        #ifdef RETAIN_X_VALUES_TO_T3
         std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k) + "_xvalues_" + plot_id_hex + ".bin";
         #else
         std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k) + '_' + plot_id_hex + ".bin";
