@@ -411,7 +411,7 @@ public:
     {
     }
 
-    T2Pairing matching_target(const T2Pairing &prev_table_pair, uint32_t match_key_r)
+    T2Pairing matching_target(const T2Pairing &prev_table_pair, uint32_t match_key_r) override
     {
         uint32_t r_match_target = proof_core_.matching_target(3, prev_table_pair.meta, match_key_r);
         return T2Pairing{
@@ -432,7 +432,7 @@ public:
                      const T2Pairing &r_candidate,
                      std::vector<T3Pairing> &pairs,
                      size_t left_index,
-                     size_t right_index)
+                     size_t right_index) override
     {
         uint64_t meta_l = l_candidate.meta;
         uint64_t meta_r = r_candidate.meta;
@@ -561,7 +561,7 @@ public:
     {
     }
 
-    T3PartitionedPairing matching_target(const T3PartitionedPairing &prev_table_pair, uint32_t match_key_r)
+    T3PartitionedPairing matching_target(const T3PartitionedPairing &prev_table_pair, uint32_t match_key_r) override
     {
         uint32_t r_match_target = proof_core_.matching_target(4, prev_table_pair.meta, match_key_r);
         return T3PartitionedPairing{
@@ -583,7 +583,7 @@ public:
                      const T3PartitionedPairing &r_candidate,
                      std::vector<T4Pairing> &pairs,
                      size_t left_index,
-                     size_t right_index)
+                     size_t right_index) override
     {
         uint64_t meta_l = l_candidate.meta;
         uint64_t meta_r = r_candidate.meta;
@@ -675,7 +675,7 @@ public:
     {
     }
 
-    T4PairingPropagation matching_target(const T4PairingPropagation &prev_table_pair, uint32_t match_key_r)
+    T4PairingPropagation matching_target(const T4PairingPropagation &prev_table_pair, uint32_t match_key_r) override
     {
         uint32_t r_match_target = proof_core_.matching_target(5, prev_table_pair.meta, match_key_r);
         return T4PairingPropagation{
@@ -700,7 +700,7 @@ public:
                      const T4PairingPropagation &r_candidate,
                      std::vector<T5Pairing> &pairs,
                      size_t left_index,
-                     size_t right_index)
+                     size_t right_index) override
     {
         uint64_t meta_l = l_candidate.meta;
         uint64_t meta_r = r_candidate.meta;

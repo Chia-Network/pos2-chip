@@ -16,6 +16,8 @@ target_include_directories(tests PRIVATE
   ../lib/doctest
 )
 
+# target_link_libraries(tests PRIVATE lib_plotter)
+
 target_compile_options(tests PRIVATE
   $<$<CXX_COMPILER_ID:Clang,AppleClang,GNU>:
     -include test_util.h

@@ -210,8 +210,8 @@ public:
                 last_used_t3_index++;
 
                 uint32_t lateral_partition = xs_encryptor.get_t3_l_partition(t3_encrypted_xs[i]);
-                t3_lateral_t4_partition_index_start[lateral_partition] = std::min(t3_lateral_t4_partition_index_start[lateral_partition], i);
-                t3_lateral_t4_partition_index_end[lateral_partition] = std::max(t3_lateral_t4_partition_index_end[lateral_partition], i);
+                t3_lateral_t4_partition_index_start[lateral_partition] = std::min(t3_lateral_t4_partition_index_start[lateral_partition], (uint64_t)i);
+                t3_lateral_t4_partition_index_end[lateral_partition] = std::max(t3_lateral_t4_partition_index_end[lateral_partition], (uint64_t)i);
             }
         }
         // std::cout << "Cropping t3 from " << t3_encrypted_xs.size()
