@@ -1,0 +1,23 @@
+buildType:
+  default: debug
+  choices:
+    debug:
+      short: Debug
+      buildType: Debug
+    release:
+      short: Release
+      buildType: Release
+
+tests:
+  default: off
+  choices:
+    off:
+      short: Tests Disabled
+      long: Disable CUDA
+      settings:
+        CP_ENABLE_TESTS: OFF
+    on:
+      short: Tests Enabled
+      long: Enable CUDA
+      settings:
+        CP_ENABLE_TESTS: ON

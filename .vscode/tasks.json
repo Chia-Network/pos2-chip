@@ -1,0 +1,20 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label":  "build-tests",
+      "type": 	"cmake",
+      "command":"build",
+      "targets": [
+        "tests"
+      ],
+      "group": {
+        "kind":     "build",
+        "isDefault": true
+      },
+      "problemMatcher": [ "$gcc", "$msvc" ],
+      "options": {
+      },
+    },
+  ]
+}
