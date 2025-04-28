@@ -7,7 +7,7 @@
 #include <vector>
 #include <span>
 #include <iostream>
-#include <common/Timer.hpp>
+#include "common/Timer.hpp"
 
 // A generic radix sort that works on objects of type T by extracting a key (uint32_t)
 // using the provided KeyExtractor functor.

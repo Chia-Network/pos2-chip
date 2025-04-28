@@ -1,15 +1,17 @@
 #pragma once
 
-#include <pos/ProofParams.hpp>   // Expected to provide: 
-                             //   - const uint8_t* getPlotIdBytes() const;
-                             //   - size_t getK() const;
-                             //   - size_t get_num_partition_bits() const;
-#include <pos/FeistelCipher.hpp> // Expected to provide:
-                             //   - FeistelCipher(const uint8_t* plot_id_bytes, size_t k);
-                             //   - uint64_t encrypt(uint64_t all_x_bits);
-                             //   - uint64_t decrypt(uint64_t ciphertext);
 #include <cstdint>
 #include <cstddef>
+
+#include "ProofParams.hpp"  // Expected to provide: 
+                            //   - const uint8_t* getPlotIdBytes() const;
+                            //   - size_t getK() const;
+                            //   - size_t get_num_partition_bits() const;
+#include "FeistelCipher.hpp"// Expected to provide:
+                            //   - FeistelCipher(const uint8_t* plot_id_bytes, size_t k);
+                            //   - uint64_t encrypt(uint64_t all_x_bits);
+                            //   - uint64_t decrypt(uint64_t ciphertext);
+
 
 // XsEncryptor provides methods for encrypting/decrypting an x-value block and 
 // extracting partition bits from the resulting encrypted value.
