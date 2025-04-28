@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include <pos/ProofCore.hpp>
-#include "PlotData.hpp"
+#include <common/PlotData.hpp>
 
 class TablePruner
 {
@@ -150,18 +150,21 @@ public:
 
         for (size_t i = 0; i < t3_encrypted_xs.size(); ++i)
         {
+            
             if (isUsed(t3_used_entries_bitmask, i))
             {
                 t3_new_mapping[i] = t3_pruned_index;
                 t3_encrypted_xs[t3_pruned_index] = t3_encrypted_xs[i];
-                ++t3_pruned_index;
 
                 // classify lateral partition
-                uint32_t lateral = xs_encryptor.get_t3_l_partition(t3_encrypted_xs[t3_pruned_index]);
+                uint32_t lateral = xs_encryptor.get_lateral_to_t4_partition(t3_encrypted_xs[t3_pruned_index]);
+                
                 // update this partition's range at new index
                 auto &r = ranges[lateral];
                 r.start = std::min(r.start, (uint64_t)t3_pruned_index);
                 r.end = std::max(r.end, (uint64_t)t3_pruned_index);
+
+                ++t3_pruned_index;
             }
             else
             {

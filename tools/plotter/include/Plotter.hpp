@@ -9,10 +9,10 @@
 
 #include <pos/ProofCore.hpp>
 #include <common/Timer.hpp>
+#include <common/PlotData.hpp>
 
 #include "TableConstructorGeneric.hpp"
 #include "TablePruner.hpp"
-#include "PlotData.hpp"
 #include "TableCompressor.hpp"
 
 class Plotter {
@@ -99,7 +99,7 @@ public:
             .t4_to_t3_lateral_ranges = t4_to_t3_lateral_partition_ranges,
             .t4_to_t3_back_pointers = all_t4,
             .t5_to_t4_back_pointers = all_t5,
-            #ifdef RETAIN_X_VALUES
+            #ifdef RETAIN_X_VALUES_TO_T3
             .xs_correlating_to_encrypted_xs = t3_results.xs_correlating_to_encrypted_xs,
             #endif
         };

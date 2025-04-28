@@ -14,7 +14,9 @@
 // Structs for pairing results
 //------------------------------------------------------------------------------
 
-// use retain x values to help validate results
+// use retain x values to t3 to make a plot and save x values to disk for analysis
+// use BOTH includes to for deeper validation of results
+//#define RETAIN_X_VALUES_TO_T3 true
 //#define RETAIN_X_VALUES true
 
 // use to reduce T4/T5 relative to T3, T4 and T5 will be approx same size.
@@ -31,7 +33,7 @@ struct T2Pairing
     uint64_t meta;       // 2k-bit meta value.
     uint32_t match_info; // k-bit match info.
     uint32_t x_bits;     // k-bit x bits.
-#ifdef RETAIN_X_VALUES
+#ifdef RETAIN_X_VALUES_TO_T3
     uint32_t xs[4];
 #endif
 };
@@ -45,7 +47,7 @@ struct T3Pairing
     uint32_t lower_partition;       // (k - sub_k) bits.
     uint32_t upper_partition;       // (k - sub_k) bits.
     uint32_t order_bits;            // 2-bit order field.
-#ifdef RETAIN_X_VALUES
+#ifdef RETAIN_X_VALUES_TO_T3
     uint32_t xs[8];
 #endif
 };
