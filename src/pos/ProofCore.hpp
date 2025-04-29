@@ -1,14 +1,15 @@
 #pragma once
 
-#include <pos/ProofParams.hpp>
-#include <pos/ProofHashing.hpp>
-#include <pos/XsEncryptor.hpp>
-
 #include <cstdint>
 #include <stdexcept>
 #include <tuple>
 #include <iostream>
 #include <optional>
+
+#include "ProofParams.hpp"
+#include "ProofHashing.hpp"
+#include "XsEncryptor.hpp"
+
 
 //------------------------------------------------------------------------------
 // Structs for pairing results

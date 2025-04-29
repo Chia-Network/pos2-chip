@@ -2,12 +2,23 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label":  "build-plotter",
+      "type": 	"cmake",
+      "command":"build",
+      "targets": [ "plotter"],
+      "group": {
+        "kind":     "build",
+        "isDefault": true
+      },
+      "problemMatcher": [ "$gcc", "$msvc" ],
+      "options": {
+      },
+    },
+    {
       "label":  "build-tests",
       "type": 	"cmake",
       "command":"build",
-      "targets": [
-        "tests"
-      ],
+      "targets": [ "tests"],
       "group": {
         "kind":     "build",
         "isDefault": true

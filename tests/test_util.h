@@ -13,6 +13,7 @@
 #endif
 
 #include <assert.h>
+#include <stdarg.h>
 #ifdef _WIN32 
     #ifndef WIN32_LEAN_AND_MEAN
         #define WIN32_LEAN_AND_MEAN 1
@@ -88,4 +89,12 @@ is_debugger_present()
     if( !(x) ) { if(is_debugger_present()) { DEBUG_BREAK(); } REQUIRE(x); }
 
 
+void printfln(const char* fmt, ... ) {
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
 
+    fputc('\n', stdout);
+    fflush(stdout);
+}

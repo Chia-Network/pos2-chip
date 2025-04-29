@@ -1,8 +1,8 @@
 #pragma once
 
-#include <pos/ProofCore.hpp>
 #include <vector>
 #include <array>
+#include "pos/ProofCore.hpp"
 
 struct Range {
     uint64_t start;

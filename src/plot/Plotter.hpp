@@ -1,5 +1,4 @@
 #pragma once
-// File: tools/plotter/include/plotter/Plotter.hpp
 
 #include <array>
 #include <cstdint>
@@ -7,13 +6,13 @@
 #include <string>
 #include <vector>
 
-#include <pos/ProofCore.hpp>
-#include <common/Timer.hpp>
-#include <common/PlotData.hpp>
+#include "common/Timer.hpp"
+#include "pos/ProofCore.hpp"
+#include "PlotData.hpp"
 
 #include "TableConstructorGeneric.hpp"
 #include "TablePruner.hpp"
-#include "TableCompressor.hpp"
+// #include "TableCompressor.hpp"
 
 class Plotter {
 public:

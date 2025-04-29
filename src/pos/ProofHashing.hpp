@@ -1,11 +1,12 @@
 #pragma once
 
-#include <pos/ProofParams.hpp>
-#include <pos/ChachaHash.hpp>
-#include <pos/BlakeHash.hpp>
-
 #include <cstdint>
 #include <stdexcept>
+
+#include "ProofParams.hpp"
+#include "ChachaHash.hpp"
+#include "BlakeHash.hpp"
+
 
 // A simple structure to hold the result of a pairing computation.
 struct PairingResult {

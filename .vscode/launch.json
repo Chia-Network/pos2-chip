@@ -9,7 +9,7 @@
             "type":    "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/test",
-            "cwd":     "${workspaceFolder}",
+            "cwd":     "${workspaceFolder}/build",
             "preLaunchTask": "build-tests",
             "args": [
                 "-tc", "plot-file"

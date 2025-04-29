@@ -8,7 +8,7 @@
 #include <sstream>
 #include <string>
 
-#include <pos/ProofCore.hpp>
+#include "ProofCore.hpp"
 
 class ProofValidator
 {

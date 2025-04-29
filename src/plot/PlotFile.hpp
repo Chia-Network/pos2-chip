@@ -1,9 +1,5 @@
 #pragma once
 
-// File: tools/plotter/include/plotter/PlotFile.hpp
-
-#pragma once
-
 #include <string>
 #include <fstream>
 #include <stdexcept>

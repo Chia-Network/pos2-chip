@@ -2,8 +2,8 @@
 #include <vector>
 #include <cstdint>
 
-#include <pos/ProofCore.hpp>
-#include <common/PlotData.hpp>
+#include "pos/ProofCore.hpp"
+#include "PlotData.hpp"
 
 class TablePruner
 {

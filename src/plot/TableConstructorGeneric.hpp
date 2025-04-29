@@ -8,10 +8,9 @@
 #include <algorithm>
 #include <unordered_set>
 
-#include <pos/ProofParams.hpp>
-#include <pos/ProofCore.hpp>
-#include <pos/ProofValidator.hpp>
-
+#include "pos/ProofParams.hpp"
+#include "pos/ProofCore.hpp"
+#include "pos/ProofValidator.hpp"
 #include "RadixSort.hpp"
 
 

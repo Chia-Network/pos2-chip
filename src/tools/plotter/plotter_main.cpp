@@ -1,8 +1,8 @@
 #include <iostream>
 #include <string>
 #include <cstdlib>
-#include "Plotter.hpp"
-#include <common/PlotFile.hpp>
+#include "plot/Plotter.hpp"
+#include "plot/PlotFile.hpp"
 
 int main(int argc, char *argv[])
 {
