@@ -131,6 +131,32 @@ public:
         return sub_k_;
     }
 
+    void debugPrint() const {
+        std::cout << "Plot ID: ";
+        for (int i = 0; i < 32; ++i) {
+            std::cout << std::hex << std::setw(2) << std::setfill('0')
+                      << static_cast<int>(plot_id_bytes_[i]);
+        }
+        std::cout << std::dec << std::endl;
+
+        std::cout << "k: " << k_ << std::endl;
+        std::cout << "num_pairing_meta_bits: " << num_pairing_meta_bits_ << std::endl;
+        std::cout << "num_partition_bits: " << num_partition_bits_ << std::endl;
+        std::cout << "num_partitions: " << num_partitions_ << std::endl;
+        std::cout << "sub_k: " << sub_k_ << std::endl;
+    }
+
+    // Equality: only compare plot ID bytes, k, and sub_k
+    bool operator==(ProofParams const& other) const {
+        return k_ == other.k_
+            && sub_k_ == other.sub_k_
+            && std::memcmp(plot_id_bytes_, other.plot_id_bytes_, sizeof(plot_id_bytes_)) == 0;
+    }
+
+    bool operator!=(ProofParams const& other) const {
+        return !(*this == other);
+    }
+
 private:
     uint8_t plot_id_bytes_[32];     // Fixed-size storage for the 32-byte plot ID.
     size_t k_;                      // Half of the block size (i.e., 2*k bits total).

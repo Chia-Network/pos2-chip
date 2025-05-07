@@ -122,11 +122,11 @@ public:
         // Validate each side as table 3
         std::optional<T3Pairing> result_l = validate_table_3_pairs(l_xs);
         if (!result_l.has_value()) {
-            return t4_pairs;//std::nullopt;
+            return t4_pairs; // will be empty
         }
         std::optional<T3Pairing> result_r = validate_table_3_pairs(r_xs);
         if (!result_r.has_value()) {
-            return t4_pairs;//std::nullopt;
+            return t4_pairs; // will be empty
         }
 
         // make sure encrypted xs are valid
@@ -158,8 +158,8 @@ public:
         if (result_l->lower_partition == result_r->lower_partition) {
             // Validate table 4 pairing
             if (sub_proof_core_.validate_match_info_pairing(
-                4, result_l->meta, result_l->match_info_lower_partition, result_r->match_info_lower_partition)) {
-                    std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta, result_r->meta, result_l->order_bits, result_r->order_bits);
+                4, result_l->meta_lower_partition, result_l->match_info_lower_partition, result_r->match_info_lower_partition)) {
+                    std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_lower_partition, result_r->meta_lower_partition, result_l->order_bits, result_r->order_bits);
                     if (result.has_value()) {
                         t4_pairs.push_back(result.value());
                     }
@@ -168,8 +168,8 @@ public:
         if (result_l->upper_partition == result_r->upper_partition) {
             // Validate table 4 pairing
             if (sub_proof_core_.validate_match_info_pairing(
-                4, result_l->meta, result_l->match_info_upper_partition, result_r->match_info_upper_partition)) {
-                    std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta, result_r->meta, result_l->order_bits, result_r->order_bits);
+                4, result_l->meta_upper_partition, result_l->match_info_upper_partition, result_r->match_info_upper_partition)) {
+                    std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_upper_partition, result_r->meta_upper_partition, result_l->order_bits, result_r->order_bits);
                     if (result.has_value()) {
                         t4_pairs.push_back(result.value());
                     }
@@ -194,27 +194,27 @@ public:
     validate_table_5_pairs(const uint32_t *x_values)
     {
         std::vector<T4Pairing> result_l = validate_table_4_pairs(x_values + 0);
-        if (!result_l.empty()) {
+        if (result_l.empty()) {
             return false;
         }
         auto result_r = validate_table_4_pairs(x_values + 16);
-        if (!result_r.empty()) {
+        if (result_r.empty()) {
             return false;
         }
 
-        if (result_l.size() > 1 || result_r.size() > 1) {
-            std::cerr << "Validation has multiple valid pairs: ["
-                      << result_l.size() << ", " << result_r.size() << "]\n";
-            std::cerr << "NOT IMPLEMENTED YET" << std::endl;
-            exit(23);
+        // infrequent, but possible to have multiple valid table 4 pairs
+        // so we need to check all combinations
+        // and only if all fail is it invalid.
+        for (int l_index = 0; l_index < result_l.size(); l_index++) {
+            for (int r_index = 0; r_index < result_r.size(); r_index++) {
+                if (sub_proof_core_.validate_match_info_pairing(
+                    5, result_l[l_index].meta, result_l[l_index].match_info, result_r[r_index].match_info)) {
+                    return true;
+                }
+            }
         }
 
-        if (!proof_core_.validate_match_info_pairing(
-            5, result_l[0].meta, result_l[0].match_info, result_r[0].match_info)) {
-            return false;
-        }
-
-        return true;
+        return false;
     }
 
 

@@ -25,14 +25,15 @@ TEST_CASE("plot-read-write")
     std::string file_name = (std::string("plot_") + "k") + tostr(K) + "_" + tostr(SUB_K) + "_" PLOT_ID_HEX + ".bin";
     
     timer.start("Writing plot file: " + file_name);
-    PlotFile::writeData(file_name, plot);
+    PlotFile::writeData(file_name, plot, plotter.getProofParams());
     timer.stop();
 
     timer.start("Reading plot file: " + file_name);
-    PlotData read_plot = PlotFile::readData(file_name);
+    PlotFile::PlotFileContents read_plot = PlotFile::readData(file_name);
     timer.stop();
 
-    ENSURE(plot == read_plot);
+    ENSURE(plot == read_plot.data);
+    ENSURE(plotter.getProofParams() == read_plot.params);
 }
 
 TEST_SUITE_END();

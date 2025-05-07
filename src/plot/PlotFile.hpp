@@ -5,17 +5,43 @@
 #include <stdexcept>
 #include <type_traits>
 #include "PlotData.hpp"
+#include "pos/ProofParams.hpp"
 
 class PlotFile
 {
 public:
-    /// Write PlotData to a binary file.
-    static void writeData(const std::string &filename, PlotData const &data)
+    // Current on-disk format version, update this when the format changes.
+    static constexpr uint32_t X_VALUES_VERSION_ADD = 100;
+    #ifdef RETAIN_X_VALUES_TO_T3
+    static constexpr uint32_t FORMAT_VERSION = X_VALUES_VERSION_ADD+1;
+    #else
+    static constexpr uint32_t FORMAT_VERSION = 1;
+    #endif
+
+    struct PlotFileContents {
+        PlotData    data;
+        ProofParams params;
+    };
+    
+    // Write PlotData to a binary file.
+    static void writeData(const std::string &filename, PlotData const &data, ProofParams const &params)
     {
         std::ofstream out(filename, std::ios::binary);
         if (!out)
             throw std::runtime_error("Failed to open " + filename);
 
+        // 1) Write format version, note this will be different if we are writting x values for debugging.
+        uint32_t version = FORMAT_VERSION;
+        out.write((char *)&version, sizeof(version));
+        // 2) Write plot ID
+        out.write((char *)params.get_plot_id_bytes(), 32);
+        // 3) Write k and sub_k
+        uint32_t k = params.get_k();
+        uint32_t sub_k = params.get_sub_k();
+        out.write((char *)&k, sizeof(k));
+        out.write((char *)&sub_k, sizeof(sub_k));
+
+        // 4) Write plot data
         writeVector(out, data.t3_encrypted_xs);
         writeRanges(out, data.t4_to_t3_lateral_ranges);
         writeNestedVector(out, data.t4_to_t3_back_pointers);
@@ -26,12 +52,44 @@ public:
     }
 
     /// Read PlotData from a binary file.
-    static PlotData readData(const std::string &filename)
+    static PlotFileContents readData(const std::string &filename)
     {
         std::ifstream in(filename, std::ios::binary);
         if (!in)
             throw std::runtime_error("Failed to open " + filename);
 
+        // 1) Read format version
+        uint32_t version;
+        in.read((char *)&version, sizeof(version));
+        if (version != FORMAT_VERSION) {
+            // version mismatch, check if plot requires RETAIN_X_VALUES_TO_T3
+            #ifdef RETAIN_X_VALUES_TO_T3
+            if (version == FORMAT_VERSION - X_VALUES_VERSION_ADD) {
+                throw std::runtime_error("Plot file format version " + std::to_string(version) + " written without x-values. Compile without RETAIN_X_VALUES_TO_T3.");
+            }
+            else {
+                throw std::runtime_error("Plot file format version " + std::to_string(version) + " is not supported.");
+            }
+            #else
+            if (version == FORMAT_VERSION + X_VALUES_VERSION_ADD) {
+                throw std::runtime_error("Plot file format version " + std::to_string(version) + " contains x-values. Compile with RETAIN_X_VALUES_TO_T3.");
+            }
+            else {
+                throw std::runtime_error("Plot file format version " + std::to_string(version) + " is not supported.");
+            }
+            #endif
+        }
+        // 2) Read plot ID
+        uint8_t plot_id_bytes[32];
+        in.read((char *)plot_id_bytes, 32);
+        // 3) Read k and sub_k
+        uint32_t k;
+        uint32_t sub_k;
+        in.read((char *)&k, sizeof(k));
+        in.read((char *)&sub_k, sizeof(sub_k));
+        // 4) Set proof parameters - creates set fault!
+        ProofParams params = ProofParams(plot_id_bytes, k, sub_k);
+        // 5) Read plot data
         PlotData data;
         data.t3_encrypted_xs = readVector<uint64_t>(in);
         data.t4_to_t3_lateral_ranges = readRanges(in);
@@ -40,7 +98,10 @@ public:
         #ifdef RETAIN_X_VALUES_TO_T3
         data.xs_correlating_to_encrypted_xs    = readVector<std::array<uint32_t,8>>(in);
         #endif
-        return data;
+        return {
+            .data = data,
+            .params = params
+        };
     }
 
 private:

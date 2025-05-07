@@ -13,7 +13,6 @@
 #include "pos/ProofValidator.hpp"
 #include "RadixSort.hpp"
 
-
 template <typename PairingCandidate, typename T_Pairing, typename T_Result>
 class TableConstructorGeneric
 {
@@ -154,11 +153,22 @@ public:
 
         for (uint32_t section = 0; section < params_.get_num_sections(); section++)
         {
+            #ifdef NON_BIPARTITE_BEFORE_T3
+            uint32_t section_l = section;
+            uint32_t section_r = proof_core_.matching_section(section_l);
+            if (table_id_ > 3) {
+                if (section_r < section_l) {
+                    // swap
+                    std::swap(section_l, section_r);
+                }
+            }
+            #else
             // TODO: as section_l is always lower, we can speedup plotting by re-using the same section_r hashes
             // for each section_l (two total) they compare against.
             uint32_t other_section = proof_core_.matching_section(section);
             uint32_t section_l = std::min(section, other_section);
             uint32_t section_r = std::max(section, other_section);
+            #endif
 
             // l_start..l_end in the previous_table_pairs
             uint64_t l_start = pairing_candidates_offsets[section_l][0];
@@ -397,9 +407,9 @@ struct T3_Partitions_Results
 {
     std::vector<std::vector<T3PartitionedPairing>> partitioned_pairs;
     std::vector<uint64_t> encrypted_xs;
-    #ifdef RETAIN_X_VALUES_TO_T3
+#ifdef RETAIN_X_VALUES_TO_T3
     std::vector<std::array<uint32_t, 8>> xs_correlating_to_encrypted_xs;
-    #endif
+#endif
 };
 
 class Table3Constructor : public TableConstructorGeneric<T2Pairing, T3Pairing, T3_Partitions_Results>
@@ -435,7 +445,7 @@ public:
     {
         uint64_t meta_l = l_candidate.meta;
         uint64_t meta_r = r_candidate.meta;
-        auto opt_res = proof_core_.pairing_t3(meta_l, meta_r, l_candidate.x_bits, r_candidate.x_bits);
+        std::optional<T3Pairing> opt_res = proof_core_.pairing_t3(meta_l, meta_r, l_candidate.x_bits, r_candidate.x_bits);
         if (opt_res.has_value())
         {
             T3Pairing pairing = opt_res.value();
@@ -475,9 +485,9 @@ private:
         int num_partitions = params_.get_num_partitions() * 2; // two sets of partitions, upper and lower
         std::vector<std::vector<T3PartitionedPairing>> partitioned_pairs(num_partitions);
 
-        #ifdef RETAIN_X_VALUES_TO_T3
+#ifdef RETAIN_X_VALUES_TO_T3
         std::vector<std::array<uint32_t, 8>> xs_correlating_to_encrypted_xs(pairings.size());
-        #endif
+#endif
 
         for (uint64_t encx_index = 0; encx_index < pairings.size(); encx_index++)
         {
@@ -485,16 +495,16 @@ private:
 
             // encrypted_xs are pre-allocated, so set directly in the vector
             encrypted_xs[encx_index] = pairing.encrypted_xs;
-            #ifdef RETAIN_X_VALUES_TO_T3
+#ifdef RETAIN_X_VALUES_TO_T3
             xs_correlating_to_encrypted_xs[encx_index] = {
                 pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
                 pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7]};
-            #endif
+#endif
 
             T3PartitionedPairing partitioned_pairing;
 
             partitioned_pairs[pairing.lower_partition].push_back(T3PartitionedPairing{
-                .meta = pairing.meta,
+                .meta = pairing.meta_lower_partition,
                 .encx_index = encx_index,
                 .match_info = pairing.match_info_lower_partition,
                 .order_bits = pairing.order_bits,
@@ -504,7 +514,7 @@ private:
 #endif
             });
             partitioned_pairs[pairing.upper_partition].push_back(T3PartitionedPairing{
-                .meta = pairing.meta,
+                .meta = pairing.meta_upper_partition,
                 .encx_index = encx_index,
                 .match_info = pairing.match_info_upper_partition,
                 .order_bits = pairing.order_bits,
@@ -538,13 +548,12 @@ private:
         return T3_Partitions_Results{
             .partitioned_pairs = partitioned_pairs,
             .encrypted_xs = encrypted_xs,
-            #ifdef RETAIN_X_VALUES_TO_T3
+#ifdef RETAIN_X_VALUES_TO_T3
             .xs_correlating_to_encrypted_xs = xs_correlating_to_encrypted_xs
-            #endif
+#endif
         };
     }
 };
-
 
 struct T4_Partition_Result
 {
@@ -613,11 +622,11 @@ public:
         std::vector<T4Pairing> temp_buffer(pairings.size());
         // Create a span over the temporary buffer
         std::span<T4Pairing> buffer(temp_buffer.data(), temp_buffer.size());
-        
+
         // sort by (index_l, index_r), radix sort is stable so sort by r first, then l.
         radix_sort_by_index_r.sort(pairings, buffer, t3_k_ + 1); // TODO: L has limited range of 2^(sub_k+1) bits, but needs to be localized index to partition first.
         radix_sort_by_index_l.sort(pairings, buffer, t3_k_ + 1); // don't forget to sort full possible indexes 2^(k+1) entries of T3
-        
+
         // now split data into back pointers and propagation pairs
         std::vector<T4BackPointers> t4_to_t3_back_pointers(pairings.size());
         std::vector<T4PairingPropagation> t4_pairs(pairings.size());
@@ -639,14 +648,13 @@ public:
             t4_to_t3_back_pointers[i] = T4BackPointers{
                 .encx_index_l = pairing.encx_index_l,
                 .encx_index_r = pairing.encx_index_r,
-            #ifdef RETAIN_X_VALUES
+#ifdef RETAIN_X_VALUES
                 .xs = {pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
                        pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7],
                        pairing.xs[8], pairing.xs[9], pairing.xs[10], pairing.xs[11],
                        pairing.xs[12], pairing.xs[13], pairing.xs[14], pairing.xs[15]}
-            #endif
+#endif
             };
-            
         }
 
         // now we sort t4_pairs by match_info
@@ -658,8 +666,7 @@ public:
 
         return T4_Partition_Result{
             .pairs = t4_pairs,
-            .t4_to_t3_back_pointers = t4_to_t3_back_pointers
-        };
+            .t4_to_t3_back_pointers = t4_to_t3_back_pointers};
     }
 
 private:
@@ -730,9 +737,9 @@ public:
         std::span<T5Pairing> buffer(temp_buffer.data(), temp_buffer.size());
 
         // sort by (index_l, index_r)
-        radix_sort_by_index_r.sort(pairings, buffer, params_.get_k()+1);
-        radix_sort_by_index_l.sort(pairings, buffer, params_.get_k()+1);
-        
+        radix_sort_by_index_r.sort(pairings, buffer, params_.get_k() + 1);
+        radix_sort_by_index_l.sort(pairings, buffer, params_.get_k() + 1);
+
         return pairings;
     }
 };
