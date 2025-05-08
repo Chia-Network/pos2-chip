@@ -144,7 +144,7 @@ public:
     std::optional<T1Pairing> pairing_t1(uint32_t x_l, uint32_t x_r)
     {
         // fast test for matching to speed up solver.
-        if (!match_filter_16(x_l & 0xFFFFU, x_r & 0xFFFFU))
+        if (!match_filter_16(x_l & 0xFFFFU, x_r & 0xFFFFU)) 
             return std::nullopt;
 
         PairingResult pair = hashing.pairing(1, x_l, x_r,
@@ -303,7 +303,7 @@ public:
         uint32_t section_l = params_.extract_section_from_match_info(table_id, match_info_l);
         uint32_t section_r = params_.extract_section_from_match_info(table_id, match_info_r);
         // For this version, we ignore bipartite logic.
-#ifdef NON_BITPARTITE_BEFORE_T3
+#ifdef NON_BIPARTITE_BEFORE_T3
         if (table_id <= 3)
         {
             int match_section = matching_section(section_l);

@@ -7,6 +7,8 @@
 #include <array>
 #include <algorithm>
 #include <unordered_set>
+#include <iomanip>
+#include <bitset>
 
 #include "pos/ProofParams.hpp"
 #include "pos/ProofCore.hpp"
@@ -37,8 +39,14 @@ public:
         {
             uint32_t section = params_.extract_section_from_match_info(table_id_, candidate.match_info);
             uint32_t match_key = params_.extract_match_key_from_match_info(table_id_, candidate.match_info);
+            // display match info as binary, section and match_key as binary
+            std::cout << "match_info: " << std::bitset<32>(candidate.match_info) << " section: " << std::bitset<2>(section) << " match_key: " << std::bitset<2>(match_key) << std::endl;
+            if (section == 1) {
+                exit(23);
+            }
             counts[section][match_key]++;
         }
+        exit(23);
 
         // Now compute the prefix sums.
         // Each row (for a section) will have (num_match_keys_ + 1) values.

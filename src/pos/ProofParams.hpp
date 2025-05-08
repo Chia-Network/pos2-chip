@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <iomanip>
+#include <array>
 
 class ProofParams {
 public:
@@ -73,19 +74,19 @@ public:
         return (table_id == 1 ? k_ : k_ * 2);
     }
 
-    // Extracts the section from match_info by shifting right by (k - num_section_bits).
+    // Extracts the section (msb) from match_info by shifting right by (k - num_section_bits).
     inline uint64_t extract_section_from_match_info(size_t table_id, uint64_t match_info) const {
         return match_info >> (k_ - get_num_section_bits());
     }
 
-    // Extracts the match key from match_info.
+    // Extracts the match key (middle bits) from match_info.
     // Shifts right by (k - num_section_bits - num_match_key_bits) and masks out the key bits.
     inline uint64_t extract_match_key_from_match_info(size_t table_id, uint64_t match_info) const {
         return (match_info >> (k_ - get_num_section_bits() - get_num_match_key_bits(table_id)))
                & ((1ULL << get_num_match_key_bits(table_id)) - 1);
     }
 
-    // Extracts the match target from match_info by masking the lower bits.
+    // Extracts the match target (lower bits) from match_info by masking the lower bits.
     inline uint64_t extract_match_target_from_match_info(size_t table_id, uint64_t match_info) const {
         return match_info & ((1ULL << get_num_match_target_bits(table_id)) - 1);
     }
