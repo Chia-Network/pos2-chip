@@ -12,4 +12,5 @@ target_include_directories(solver PRIVATE
 # Link against TBB
 target_link_libraries(solver PRIVATE
   TBB::tbb
+  atomic # required for Pi / 32-bit ARM
 )

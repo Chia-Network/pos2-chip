@@ -21,7 +21,7 @@
 #include <iomanip>
 #include <bitset>
 
-#define DEBUG_VERIFY true
+//#define DEBUG_VERIFY true
 
 // Needed for macOS
 typedef unsigned int uint;
@@ -204,6 +204,8 @@ public:
 
         std::cout << "num_match_target_hashes: " << num_match_target_hashes << std::endl;
         std::cout << "unique_x1_list size: " << x_bits_group.unique_x_bits_list.size() << std::endl;
+
+        std::cout << "bitmask shift: " << this->bitmask_shift_ << std::endl;
 #endif
 
         // Phase 1: Allocate storage for x1 candidates.
@@ -234,7 +236,7 @@ public:
         // Phase 5: Filter x2 candidates using the x1 bitmask.
         std::vector<uint32_t> x2_potential_match_xs;
         std::vector<uint32_t> x2_potential_match_hashes;
-        filterX2Candidates(x1_bitmask, x2_potential_match_xs, x2_potential_match_hashes);
+        filterX2Candidates(x1_bitmask, num_x_pairs_, x2_potential_match_xs, x2_potential_match_hashes);
 
         // Phase 6: Sort the filtered x2 candidates.
         timer.start("Sorting matches (" + std::to_string(x2_potential_match_xs.size()) + ")");
@@ -409,7 +411,7 @@ public:
         // TODO: handle rare chance we get a false positive full proof
         std::vector<uint32_t> full_proof = constructProof(t5_matches);
         all_proofs.push_back(full_proof);
-        
+
         timings_.printSummary();
 
         return all_proofs;
@@ -648,16 +650,15 @@ public:
             int group_mapping_index_r = (t2_group * 2) + 1;
             int t1_group_l = x_bits_group.mapping[group_mapping_index_l];
             int t1_group_r = x_bits_group.mapping[group_mapping_index_r];
-            // std::cout << "Processing T2 group " << t2_group << " comparing " << t1_group_l << " and " << t1_group_r << std::endl;
-            // std::cout << "L group size: " << t1_match_groups[t1_group_l].size() << std::endl;
-            // std::cout << "R group size: " << t1_match_groups[t1_group_r].size() << std::endl;
-
+            
             const std::vector<T1_Match> &R_list = t1_match_groups[t1_group_r];
 
+            sub_timer.start("Sorting R list");
             std::fill(hashes_bitmask.begin(), hashes_bitmask.end(), 0);
             std::vector<T1_Match> R_sorted = R_list;
             std::sort(R_sorted.begin(), R_sorted.end(), [](const T1_Match &a, const T1_Match &b)
                       { return a.pair_hash < b.pair_hash; });
+            
 
             for (size_t j = 0; j < R_sorted.size(); j++)
             {
@@ -666,6 +667,7 @@ public:
                 int bit = hash_reduced & 31;
                 hashes_bitmask[slot] |= (1 << bit);
             }
+            timings_.t2_sort_short_list += sub_timer.stop();
             const std::vector<T1_Match> &L_list = t1_match_groups[t1_group_l];
             int potential_matches = 0;
             // std::cout << "L_list size: " << L_list.size() << std::endl;
@@ -673,71 +675,7 @@ public:
             ProofCore proof_core(params_);
             uint32_t num_match_keys = 1 << num_T2_match_key_bits;
 
-            // uint32_t l_x1 = 321;
-            // uint32_t l_x2 = 2806;
-            // uint32_t r_x1 = 1368;
-            // uint32_t r_x2 = 393;
-            /*uint32_t l_x1 = 214077;
-           uint32_t l_x2 = 24747;
-           uint32_t r_x1 = 7725;
-            uint32_t r_x2 = 148094;
-
-           if (true)
-           {
-               ProofValidator validator(params_);
-               uint32_t x_values[2] = {l_x1, l_x2};
-               uint32_t final_hashes[4];
-               if (auto result = validator.validate_table_1_pair(x_values);
-                   result.has_value())
-               {
-                   std::cout << "Found valid L T2 match for x1 = " << l_x1 << " and x2 = " << l_x2 << std::endl;
-                   std::cout << "Match info: " << result->match_info << std::endl;
-                   std::cout << "Meta: " << result->meta << std::endl;
-                   for (uint32_t match_key = 0; match_key < num_match_keys; match_key++)
-                   {
-                       uint64_t meta = ((uint64_t)l_x1 << num_k_bits) | l_x2;
-                       uint32_t L_hash = proof_core.matching_target(2, meta, match_key);
-                       uint32_t L_section_bits = result.value().match_info >> (num_k_bits - num_section_bits);
-                       uint32_t R_section = proof_core.matching_section(L_section_bits);
-                       uint32_t L_final_hash = (R_section << (num_k_bits - num_section_bits)) | (match_key << num_T2_match_target_bits) | L_hash;
-                       std::cout << "Match key: " << match_key << " L_final_hash: " << L_final_hash << std::endl;
-                       final_hashes[match_key] = L_final_hash;
-                   }
-               }
-               else
-               {
-                   std::cout << "Did not find valid T2 match for " << l_x1 << " and " << l_x2 << std::endl;
-               }
-
-               uint32_t xr_values[2] = {r_x1, r_x2};
-               if (auto result = validator.validate_table_1_pair(xr_values);
-                   result.has_value())
-               {
-                   std::cout << std::endl;
-                   std::cout << "Found valid R T2 match for x1 = " << r_x1 << " and x2 = " << r_x2 << std::endl;
-                   std::cout << "Match info: " << result->match_info << std::endl;
-                   std::cout << "Meta: " << result->meta << std::endl;
-                   // check if meta in final_hashes
-                   bool found = false;
-                   for (uint32_t match_key = 0; match_key < num_match_keys; match_key++)
-                   {
-                       if (final_hashes[match_key] == result->match_info)
-                       {
-                           found = true;
-                           std::cout << "**** Found match key: " << "Match key: " << match_key << " L_final_hash: " << final_hashes[match_key] << std::endl;
-                       }
-                   }
-                   if (!found) {
-                       std::cout << "**** Did not find match key for x1 = " << r_x1 << " and x2 = " << r_x2 << std::endl;
-                       exit(23);
-                   }
-               }
-               else
-               {
-                   std::cout << "Did not find valid T2 match for x1 = " << r_x1 << " and x2 = " << r_x2 << std::endl;
-               }
-           }*/
-
+            sub_timer.start("Processing L list");
             for (size_t j = 0; j < L_list.size(); j++)
             {
                 // std::cout << "Processing L_list[" << j << "]" << std::endl;
@@ -766,7 +704,7 @@ public:
                         L_short_list[potential_matches++] = m;
                         if (potential_matches >= L_short_list.size())
                         {
-                            // std::cout << "Potential matches exceeded size, resizing..." << potential_matches << std::endl;
+                            std::cout << "Potential matches exceeded size, resizing..." << potential_matches << std::endl;
                             //  double the size
                             //  TODO: this happens quite often, so we should probably use a better data structure
                             L_short_list.resize(L_short_list.size() * 2);
@@ -777,72 +715,16 @@ public:
             }
             // std::cout << "Potential matches: " << potential_matches << std::endl;
             L_short_list.resize(potential_matches);
+            timings_.t2_gen_L_list += sub_timer.stop();
 
             // std::cout << "Sorting..." << std::endl;
+            Timer sort_short_list_timer;
+            sort_short_list_timer.start("Sorting potential matches");
             std::sort(L_short_list.begin(), L_short_list.end(), [](const T1_Match &a, const T1_Match &b)
                       { return a.pair_hash < b.pair_hash; });
+            timings_.t2_sort_short_list += sort_short_list_timer.stop();
             // std::cout << "Sorted potential matches: " << L_short_list.size() << std::endl;
             int L_pos = 0, R_pos = 0;
-
-            // check if we can find x1 = 214077 and x2 = 24747 in L short list
-            /*bool debug_stop = false;
-            if (true)
-            {
-
-                for (int i = 0; i < L_short_list.size(); i++)
-                {
-                    if (L_short_list[i].x1 == l_x1 && L_short_list[i].x2 == l_x2)
-                    {
-                        std::cout << std::endl;
-                        std::cout << "Found x1 = " << l_x1 << " and x2 = " << l_x2 << " in L short list at pos " << i << std::endl;
-                        std::cout << "Hash: " << L_short_list[i].pair_hash << std::endl;
-
-                        ProofValidator validator(params_);
-                        uint32_t x_values[2] = {L_short_list[i].x1, L_short_list[i].x2};
-                        if (auto result = validator.validate_table_1_pair(x_values);
-                            result.has_value())
-                        {
-                            std::cout << "Found valid L T2 match for x1 = " << l_x1 << " and x2 = " << l_x2 << std::endl;
-                            std::cout << "Match info: " << result->match_info << std::endl;
-                            std::cout << "Meta: " << result->meta << std::endl;
-                        }
-                        else
-                        {
-                            std::cout << "Did not find valid T2 match for x1 = 214077 and x2 = 24747" << std::endl;
-                        }
-                    }
-                }
-                // and look for r_x1 and rx_2 in r sort list
-                for (int i = 0; i < R_sorted.size(); i++)
-                {
-                    if (R_sorted[i].x1 == r_x1 && R_sorted[i].x2 == r_x2)
-                    {
-                        std::cout << std::endl;
-                        std::cout << "Found x1 = " << r_x1 << " and x2 = " << r_x2 << " in R sorted list at pos " << i << std::endl;
-                        std::cout << "Hash: " << R_sorted[i].pair_hash << std::endl;
-
-                        ProofValidator validator(params_);
-                        uint32_t x_values[2] = {R_sorted[i].x1, R_sorted[i].x2};
-                        if (auto result = validator.validate_table_1_pair(x_values);
-                            result.has_value())
-                        {
-                            std::cout << "Found valid R T2 match for x1 = " << r_x1 << " and x2 = " << r_x2 << std::endl;
-                            std::cout << "Match info: " << result->match_info << std::endl;
-                            std::cout << "Meta: " << result->meta << std::endl;
-                            debug_stop = true;
-                        }
-                        else
-                        {
-                            std::cout << "Did not find valid T2 match for x1 = 7725 and x2 = 148094" << std::endl;
-                        }
-                    }
-                }
-                if (debug_stop)
-                {
-                    params_.debugPrint();
-                    exit(23);
-                }
-            }*/
 
             while (L_pos < potential_matches && R_pos < (int)R_sorted.size())
             {
@@ -875,6 +757,7 @@ public:
                             const uint32_t x_values[4] = {
                                 L_short_list[i].x1, L_short_list[i].x2,
                                 R_sorted[R_pos].x1, R_sorted[R_pos].x2};
+                            Timer validate_timer;
                             ProofValidator validator(params_);
                             if (auto result = validator.validate_table_2_pairs(x_values);
                                 result.has_value())
@@ -887,6 +770,8 @@ public:
                                 t2.meta = result->meta;
                                 t2_matches[t2_group].push_back(t2);
                             }
+                            timings_.t2_validate_matches += validate_timer.stop();
+                            
                         }
 
                         ++i;
@@ -1019,7 +904,7 @@ public:
         switch (params_.get_k())
         {
         case 28:
-            max_matches = 2100000;
+            max_matches = 2100000*2;
             break;
         case 30:
             max_matches = 4200000;
@@ -1052,30 +937,6 @@ public:
             int x1_end = (section == NUM_SECTIONS - 1) ? num_match_target_hashes : section_boundaries_x1[section + 1];
             int x2_start = section_boundaries_x2[section];
             int x2_end = (section == NUM_SECTIONS - 1) ? x2_match_hashes.size() : section_boundaries_x2[section + 1];
-
-            // scan x2 for our number 1636 for x2 values
-            /*if (true)
-            {
-                int scan_x1 = 82;
-                int scan_x2 = 1636;
-                std::cout << "Trace scan for x2 " << scan_x2 << " in section " << section << " range: " << x2_start << " to " << x2_end << std::endl;
-                for (int i = x2_start; i < x2_end; i++)
-                {
-                    if (x2_match_xs[i] == scan_x2)
-                    {
-                        std::cout << "Found x2 " << scan_x2 << " at index " << i << std::endl;
-                        // exit(23);
-                    }
-                }
-                std::cout << "Trace scan for x1 " << scan_x1 << " in section " << section << " range " << x1_start << " to " << x1_end << std::endl;
-                for (int i = x1_start; i < x1_end; i++)
-                {
-                    if (x1s[i] == scan_x1)
-                    {
-                        std::cout << "Found x1 " << scan_x1 << " at index " << i << std::endl;
-                    }
-                }
-            }*/
 
             // Use two pointers to find matching hash values between x1 and x2 in the current section
             int i = x1_start;
@@ -1233,6 +1094,7 @@ public:
 
     // Phase 5 helper: Filter x2 candidates using the x1 bitmask.
     void filterX2Candidates(const std::vector<uint32_t> &x1_bitmask,
+                            const int num_x_pairs,
                             std::vector<uint32_t> &x2_potential_match_xs,
                             std::vector<uint32_t> &x2_potential_match_hashes)
     {
@@ -1244,7 +1106,7 @@ public:
         const int x1_bits = num_k_bits / 2;
         const int x1_range_size = 1 << (num_k_bits - x1_bits);
         const int num_match_keys = params_.get_num_match_keys(1); // 1 << num_match_key_bits_;
-        const int num_match_target_hashes = 128 * x1_range_size * num_match_keys;
+        const int num_match_target_hashes = num_x_pairs * x1_range_size * num_match_keys;
         double hit_probability = (double)(num_match_target_hashes) / (double)(NUM_XS >> this->bitmask_shift_);
         // std::cout << "NUM_XS: " << NUM_XS << " HIT PROBABILITY: " << hit_probability << std::endl;
 

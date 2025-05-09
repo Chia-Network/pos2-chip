@@ -13,9 +13,9 @@ public:
     // Current on-disk format version, update this when the format changes.
     static constexpr uint32_t X_VALUES_VERSION_ADD = 100;
     #ifdef RETAIN_X_VALUES_TO_T3
-    static constexpr uint32_t FORMAT_VERSION = X_VALUES_VERSION_ADD+1;
+    static constexpr uint32_t FORMAT_VERSION = X_VALUES_VERSION_ADD+2;
     #else
-    static constexpr uint32_t FORMAT_VERSION = 1;
+    static constexpr uint32_t FORMAT_VERSION = 2;
     #endif
 
     struct PlotFileContents {
@@ -40,6 +40,9 @@ public:
         uint32_t sub_k = params.get_sub_k();
         out.write((char *)&k, sizeof(k));
         out.write((char *)&sub_k, sizeof(sub_k));
+        // write array of match key bits
+        std::array<uint8_t, 5> match_key_bits = params.get_match_key_bits();
+        out.write((char *)match_key_bits.data(), sizeof(uint8_t) * match_key_bits.size());
 
         // 4) Write plot data
         writeVector(out, data.t3_encrypted_xs);
@@ -87,6 +90,9 @@ public:
         uint32_t sub_k;
         in.read((char *)&k, sizeof(k));
         in.read((char *)&sub_k, sizeof(sub_k));
+        // read array of match key bits
+        std::array<uint8_t, 5> match_key_bits;
+        in.read((char *)match_key_bits.data(), sizeof(uint8_t) * match_key_bits.size());
         // 4) Set proof parameters - creates set fault!
         ProofParams params = ProofParams(plot_id_bytes, k, sub_k);
         // 5) Read plot data
@@ -125,6 +131,13 @@ private:
         if (n)
             in.read((char *)v.data(), n * sizeof(T));
         return v;
+    }
+
+    template <typename T>
+    static void writeArray(std::ofstream &out, std::array<T, 8> const &a)
+    {
+        static_assert(std::is_trivially_copyable_v<T>);
+        out.write((char *)a.data(), sizeof(T) * 8);
     }
 
     template <typename T>

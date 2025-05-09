@@ -15,6 +15,9 @@ struct ProofSolverTimings
     double sorting_filtered_x2s      = 0;
     double match_x1_x2_sorted_lists  = 0;
     double t2_matches                = 0;
+    double t2_gen_L_list          = 0;
+    double t2_sort_short_list        = 0;
+    double t2_validate_matches       = 0;
     double misc                      = 0;
 
     void printSummary()
@@ -48,6 +51,12 @@ struct ProofSolverTimings
            << std::right << std::setw(VALUE_W) << match_x1_x2_sorted_lists << " ms\n";
         os << std::left  << std::setw(LABEL_W) << "T2 matches"            << ": "
            << std::right << std::setw(VALUE_W) << t2_matches          << " ms\n";
+        os << std::left  << std::setw(LABEL_W) << " - T2 gen L list"      << ": "
+           << std::right << std::setw(VALUE_W) << t2_gen_L_list      << " ms\n";
+        os << std::left  << std::setw(LABEL_W) << " - T2 sort short list"    << ": "
+           << std::right << std::setw(VALUE_W) << t2_sort_short_list  << " ms\n";
+        os << std::left  << std::setw(LABEL_W) << " - T2 validate matches"   << ": "
+           << std::right << std::setw(VALUE_W) << t2_validate_matches << " ms\n";
         os << std::left  << std::setw(LABEL_W) << "Misc"                  << ": "
            << std::right << std::setw(VALUE_W) << misc                << " ms\n";
 

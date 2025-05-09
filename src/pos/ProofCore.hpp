@@ -16,8 +16,8 @@
 
 // use retain x values to t3 to make a plot and save x values to disk for analysis
 // use BOTH includes to for deeper validation of results
-#define RETAIN_X_VALUES_TO_T3 true
-#define RETAIN_X_VALUES true
+//#define RETAIN_X_VALUES_TO_T3 true
+//#define RETAIN_X_VALUES true
 #define NON_BIPARTITE_BEFORE_T3 true
 
 // use to reduce T4/T5 relative to T3, T4 and T5 will be approx same size.
@@ -144,8 +144,18 @@ public:
     std::optional<T1Pairing> pairing_t1(uint32_t x_l, uint32_t x_r)
     {
         // fast test for matching to speed up solver.
-        if (!match_filter_16(x_l & 0xFFFFU, x_r & 0xFFFFU)) 
-            return std::nullopt;
+        if (params_.get_num_match_key_bits(1) == 4) {
+            if (!match_filter_16(x_l & 0xFFFFU, x_r & 0xFFFFU)) 
+                return std::nullopt;
+        }
+        else if (params_.get_num_match_key_bits(1) == 2) {
+            if (!match_filter_4(x_l & 0xFFFFU, x_r & 0xFFFFU)) 
+                return std::nullopt;
+        }
+        else {
+            std::cerr << "pairing_t1: match_filter_4 not supported for this table." << std::endl;
+            exit(1);
+        }
 
         PairingResult pair = hashing.pairing(1, x_l, x_r,
                                              static_cast<int>(params_.get_k()),

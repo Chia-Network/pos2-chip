@@ -31,8 +31,16 @@ int main(int argc, char *argv[])
     plot.params.show();
 
     // let's get num_chain proofs from t5 pairings
-    int num_chains = 12;
+    int num_chains = 16;
     std::cout << "Number of chains: " << num_chains << std::endl;
+
+    int failed_count = 0;
+    for (int partition = 0; partition < 1/*plot.data.t5_to_t4_back_pointers.size()*/; partition++)
+    {
+        std::cout << "************* Partition: " << partition << " *************" << std::endl;
+        
+        
+    
     std::vector<uint32_t> x_bits_list;
     std::vector<uint32_t> xs_solution;
     XsEncryptor xs_encryptor(plot.params);
@@ -41,9 +49,9 @@ int main(int argc, char *argv[])
     {
         std::cout << "Chain: " << chain << std::endl;
 
-        T5Pairing t5_pairing = plot.data.t5_to_t4_back_pointers[0][chain]; // now get t4 L and R pairings
-        T4BackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[0][t5_pairing.t4_index_l];
-        T4BackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[0][t5_pairing.t4_index_r];
+        T5Pairing t5_pairing = plot.data.t5_to_t4_back_pointers[partition][chain]; // now get t4 L and R pairings
+        T4BackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_l];
+        T4BackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_r];
         uint64_t encrypted_xs_LL = plot.data.t3_encrypted_xs[t4_to_t3_L.encx_index_l];
         uint64_t encrypted_xs_LR = plot.data.t3_encrypted_xs[t4_to_t3_L.encx_index_r];
         uint64_t encrypted_xs_RL = plot.data.t3_encrypted_xs[t4_to_t3_R.encx_index_l];
@@ -71,6 +79,7 @@ int main(int argc, char *argv[])
         x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_RR >> (half_k * 1)) & ((uint64_t(1) << half_k) - 1)));
         x_bits_list.push_back(static_cast<uint32_t>(decrypted_xs_RR & ((uint64_t(1) << half_k) - 1)));
 
+        #ifdef RETAIN_X_VALUES_TO_T3
         for (int i = 0; i < 8; i++) {
             xs_full_solution.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_l][i]);
         }
@@ -83,6 +92,7 @@ int main(int argc, char *argv[])
         for (int i = 0; i < 8; i++) {
             xs_full_solution.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_r][i]);
         }
+        #endif
 
     }
     std::cout << "Xs solution: ";
@@ -91,7 +101,7 @@ int main(int argc, char *argv[])
         std::cout << xs_full_solution[i] << " ";
     }
     std::cout << std::endl;
-    std::cout << "X-bits list: ";
+    std::cout << "X-bits list (" << x_bits_list.size() << ") ";
     for (size_t i = 0; i < x_bits_list.size(); i++)
     {
         std::cout << x_bits_list[i] << " ";
@@ -99,6 +109,7 @@ int main(int argc, char *argv[])
     std::cout << std::endl;
 
     Solver solver(plot.params);
+    solver.setBitmaskShift(1);
     
     std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list, xs_full_solution);
 
@@ -112,16 +123,24 @@ int main(int argc, char *argv[])
         }
         std::cout << std::endl;
     }
+    if (all_proofs.size() == 0)
+    {
+        failed_count++;
+    }
+    std::cout << "Partition " << partition << " complete." << std::endl;
 
+    
+    }
+    std::cout << "Failed count: " << failed_count << std::endl;
     return 0;
 
     
-
+/*
     // let's get a full proof, get from t5 and collect call leaves.
     // get t5 pairing
     // for (int partition = 0; partition < plot.data.t5_to_t4_back_pointers.size(); partition++)
     int partition = 0;
-    for (int test_slot = 0; test_slot < 1; /*plot.data.t5_to_t4_back_pointers[partition].size()*/ test_slot++)
+    for (int test_slot = 0; test_slot < plot.data.t5_to_t4_back_pointers[partition].size(); test_slot++)
     {
         // wait for key press, show current test number
         // std::cout << "Press enter to continue to test " << test_slot << " in partition " << partition << std::endl;
@@ -264,5 +283,5 @@ int main(int argc, char *argv[])
         }
     }
     std::cout << "Done." << std::endl;
-    return 0;
+    return 0;*/
 }
