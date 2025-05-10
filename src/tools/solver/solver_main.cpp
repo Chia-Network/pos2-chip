@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
     std::cout << std::endl;
 
     Solver solver(plot.params);
-    solver.setBitmaskShift(1);
+    solver.setBitmaskShift(0);
     
     std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list, xs_full_solution);
 

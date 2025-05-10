@@ -63,7 +63,7 @@ struct ProofSolverTimings
         double nonAllocTotal =
             hashing_x1s + sorting_x1s + bitmaskfillzero + bitmasksetx1s +
             chachafilterx2sbybitmask + sorting_filtered_x2s +
-            match_x1_x2_sorted_lists + misc;
+            match_x1_x2_sorted_lists + t2_matches + misc;
 
         os << sep << "\n";
         os << std::left  << std::setw(LABEL_W) << "Non-allocating total"  << ": "
