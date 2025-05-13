@@ -16,8 +16,14 @@
 
 // use retain x values to t3 to make a plot and save x values to disk for analysis
 // use BOTH includes to for deeper validation of results
-//#define RETAIN_X_VALUES_TO_T3 true
-//#define RETAIN_X_VALUES true
+#define RETAIN_X_VALUES_TO_T3 true
+#define RETAIN_X_VALUES true
+
+// T4 and T5 are bipartite for optimal compression, T3 links back to T2 and T2 to T1 are omitted
+// so bipartite is optional. Some notes as to which mode is best:
+// - The solver's performance seems slightly better without bipartite
+// - plotting could be optimized to be faster using bipartite
+// - bipartite may mix less well, and needs more analysis for T4 Partition Attack
 #define NON_BIPARTITE_BEFORE_T3 true
 
 // use to reduce T4/T5 relative to T3, T4 and T5 will be approx same size.
@@ -345,7 +351,7 @@ public:
 
         if (section_r != section_1 && section_r != section_2)
         {
-            std::cout << "section_r " << section_r << " != section_1 " << section_1 << " and section_2 " << section_2 << std::endl
+            std::cout << "bipartite section_r " << section_r << " != section_1 " << section_1 << " and section_2 " << section_2 << std::endl
                       << "    meta_l: " << meta_l << " match_info_l: " << match_info_l << " match_info_r: " << match_info_r << std::endl;
             return false;
         }
