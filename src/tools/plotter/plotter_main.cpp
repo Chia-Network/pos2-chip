@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
+#include "common/Utils.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -32,7 +33,7 @@ int main(int argc, char *argv[])
 
     Timer timer;
     timer.start("Plotting");
-    Plotter plotter(plot_id_hex, k, sub_k);
+    Plotter plotter(Utils::hexToBytes(plot_id_hex), k, sub_k);
     plotter.setValidate(true);
     PlotData plot = plotter.run();
     timer.stop();
@@ -152,11 +153,16 @@ int main(int argc, char *argv[])
     bool writeToFile = true;
     if (writeToFile)
     {
+        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k);
         #ifdef RETAIN_X_VALUES_TO_T3
-        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k) + "_xvalues_" + plot_id_hex + ".bin";
-        #else
-        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k) + '_' + plot_id_hex + ".bin";
+        filename += "_xvalues";
         #endif
+        #ifdef NON_BIPARTITE_BEFORE_T3
+        filename += "_nonbipartitebeforet3";
+        #else
+        filename += "_bipartite";
+        #endif
+        filename += '_' + plot_id_hex + ".bin";
         timer.start("Writing plot file: " + filename);
         PlotFile::writeData(filename, plot, plotter.getProofParams());
         timer.stop();

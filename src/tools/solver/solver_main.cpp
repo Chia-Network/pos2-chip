@@ -5,11 +5,13 @@
 #include "pos/XsEncryptor.hpp"
 #include "solve/Solver.hpp"
 #include "pos/ProofValidator.hpp"
+#include "common/Utils.hpp"
 
 int exhaustive_test(PlotFile::PlotFileContents &plot)
 {
     XsEncryptor xs_encryptor(plot.params);
 
+#ifdef RETAIN_X_VALUES_TO_T3
     // This function is not implemented in the original code.
     // It seems to be a placeholder for future testing or debugging.
     for (int partition = 0; partition < plot.data.t5_to_t4_back_pointers.size(); partition++)
@@ -35,7 +37,6 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             uint64_t decrypted_xs_RL = xs_encryptor.decrypt(encrypted_xs_RL);
             uint64_t decrypted_xs_RR = xs_encryptor.decrypt(encrypted_xs_RR);
 
-#ifdef RETAIN_X_VALUES_TO_T3
             // verify our xs are correct with encrypted xs
             if (xs_encryptor.validate_encrypted_xs(encrypted_xs_LL, plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_l].data()))
             {
@@ -74,7 +75,6 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
                 return 1;
             }
             std::cout << "All encrypted xs match x-bits." << std::endl;
-#endif
 
             // output full x's solution
             std::cout << "Xs solution: ";
@@ -119,8 +119,8 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             }
             std::cout << std::endl;
 
-// let's verify xs_solution is correct before we solve
-#ifdef RETAIN_X_VALUES_TO_T3
+            // let's verify xs_solution is correct before we solve
+
             ProofValidator proof_validator(plot.params);
             if (proof_validator.validate_table_5_pairs(xs_solution.data()))
             {
@@ -131,7 +131,6 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
                 std::cerr << "Xs solution is invalid." << std::endl;
                 return 1;
             }
-#endif
 
             Solver solver(plot.params);
             std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list, xs_solution);
@@ -157,13 +156,16 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             }
         }
     std::cout << "Done." << std::endl;
+#else
+    std::cerr << "RETAIN_X_VALUES_TO_T3 is not defined. Cannot run exhaustive test." << std::endl;
+#endif
     return 0;
 }
 
 int chain_test(PlotFile::PlotFileContents &plot)
 {
     XsEncryptor xs_encryptor(plot.params);
-    
+
     int num_chains = 16;
     std::cout << "Number of chains: " << num_chains << std::endl;
 
@@ -236,7 +238,7 @@ int chain_test(PlotFile::PlotFileContents &plot)
         std::cout << "X-bits list (" << x_bits_list.size() << ") ";
         for (size_t i = 0; i < x_bits_list.size(); i++)
         {
-            std::cout << x_bits_list[i] << " ";
+            std::cout << x_bits_list[i] << ",";
         }
         std::cout << std::endl;
 
@@ -266,35 +268,122 @@ int chain_test(PlotFile::PlotFileContents &plot)
     return 0;
 }
 
-int main(int argc, char *argv[])
+int benchmark(int k)
 {
-    std::cout << "The solver will take a Quality Link and reconstruct the missing x-bits." << std::endl;
+    const std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+    // hex to bytes
+    std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
+    //const uint8_t *plot_id = Utils::hexToBytes(plot_id_hex);
+#ifdef NON_BIPARTITE_BEFORE_T3
+    uint32_t x_bits_list[256] = {9739, 13461, 10770, 14445, 7339, 6712, 1506, 1453, 4934, 6847, 4101, 9824, 9196, 12120, 6524, 15576, 4026, 12101, 6865, 9189, 4937, 5899, 4342, 13097, 14130, 14922, 10068, 1542, 11971, 9511, 788, 6083, 4026, 12101, 6865, 9189, 4937, 5899, 4342, 13097, 1469, 8090, 10717, 15242, 1356, 619, 7947, 242, 2674, 8416, 15671, 4803, 15002, 15085, 14034, 5366, 5675, 8698, 2355, 3726, 8241, 413, 6578, 7566, 2674, 8416, 15671, 4803, 1404, 9548, 3429, 8580, 2860, 1151, 10345, 1090, 4246, 4, 11413, 12208, 667, 15859, 5872, 10114, 6856, 15823, 6015, 8627, 5987, 4459, 12826, 4445, 9445, 8679, 1566, 12328, 667, 15859, 5872, 10114, 6856, 15823, 6015, 8627, 8192, 8131, 10476, 2966, 3466, 8135, 11290, 8167, 4835, 15248, 12971, 13523, 7356, 16330, 2508, 3642, 12260, 10009, 13650, 10749, 5676, 3509, 14751, 8352, 16070, 12828, 11246, 3880, 1529, 5667, 6331, 7225, 11704, 192, 13773, 8651, 4920, 7466, 15481, 6182, 16070, 12828, 11246, 3880, 1529, 5667, 6331, 7225, 6641, 11842, 3053, 12148, 13731, 10861, 15945, 1189, 16070, 12828, 11246, 3880, 9592, 336, 14284, 13532, 3435, 2250, 8778, 9343, 13788, 14094, 10633, 13773, 16070, 12828, 11246, 3880, 9592, 336, 14284, 13532, 8272, 10913, 5634, 5626, 2824, 7585, 9693, 1610, 16070, 12828, 11246, 3880, 9592, 336, 14284, 13532, 515, 5459, 8248, 9808, 4104, 6409, 15355, 7086, 13734, 11363, 823, 11502, 535, 328, 3902, 15550, 6622, 11639, 1600, 5864, 4765, 7538, 7133, 7887, 13734, 11363, 823, 11502, 535, 328, 3902, 15550, 14566, 11918, 1863, 11614, 9744, 1781, 13911, 15195, 13734, 11363, 823, 11502, 535, 328, 3902, 15550, 5429, 6783, 9648, 140, 11195, 3294, 10334, 14373};
+#else
+    uint32_t x_bits_list[256] = {5698, 1105, 3557, 6679, 16058, 5983, 9317, 8599, 14352, 1427, 9546, 11208, 6908, 6955, 15821, 6398, 5698, 1105, 3557, 6679, 16058, 5983, 9317, 8599, 4200, 15111, 3710, 11345, 6180, 9108, 8532, 2950, 5698, 1105, 3557, 6679, 16058, 5983, 9317, 8599, 9672, 16268, 7425, 3148, 6192, 10267, 4835, 6671, 13276, 2908, 7300, 11715, 12689, 14131, 4077, 1658, 7831, 5071, 9035, 12728, 6452, 285, 13294, 12809, 13276, 2908, 7300, 11715, 12689, 14131, 4077, 1658, 5226, 10950, 2837, 4284, 11588, 13945, 14451, 8226, 13276, 2908, 7300, 11715, 12689, 14131, 4077, 1658, 4995, 15954, 11003, 4495, 1706, 7869, 13911, 10423, 13276, 2908, 7300, 11715, 12689, 14131, 4077, 1658, 8051, 15527, 9535, 12672, 1174, 6788, 1254, 54, 13276, 2908, 7300, 11715, 12689, 14131, 4077, 1658, 4408, 15692, 6959, 6780, 2347, 9517, 417, 1740, 13994, 10202, 11892, 4997, 8070, 16002, 1230, 11028, 9730, 3114, 4877, 10093, 5178, 2548, 11057, 10285, 13842, 12690, 2078, 12022, 3579, 4573, 15185, 4046, 7558, 12635, 9514, 7133, 1047, 6796, 2426, 16203, 13842, 12690, 2078, 12022, 3579, 4573, 15185, 4046, 5807, 15638, 11307, 14090, 831, 15722, 12025, 7333, 13842, 12690, 2078, 12022, 3579, 4573, 15185, 4046, 1485, 8400, 5844, 5583, 14922, 8871, 16297, 12094, 13842, 12690, 2078, 12022, 3579, 4573, 15185, 4046, 7108, 13167, 11297, 10006, 8136, 14080, 9854, 10958, 9608, 8516, 14988, 1800, 3415, 1227, 9709, 6798, 14375, 3615, 5315, 2355, 1544, 437, 2573, 6534, 9608, 8516, 14988, 1800, 3415, 1227, 9709, 6798, 5207, 5201, 13859, 5317, 11916, 15259, 11966, 2323, 13533, 7713, 10735, 2482, 4527, 15370, 9704, 9599, 4836, 4791, 12169, 11689, 8903, 10716, 12033, 15071};
+#endif
 
-    // plot file string is first argument
-    if (argc < 2)
+    std::cout << "Running benchmark for:" << std::endl;
+#ifdef NON_BIPARTITE_BEFORE_T3
+    std::cout << "NON_BIPARTITE_BEFORE_T3" << std::endl;
+#else
+    std::cout << "BIPARTITE" << std::endl;
+#endif
+
+    ProofParams params(plot_id.data(), k, 20);
+    params.show();
+
+    Solver solver(params);
+    solver.setBitmaskShift(0); // with large chaining of 16 bitmask shift doesn't help much (if at all).
+#ifdef NON_BIPARTITE_BEFORE_T3
+    solver.setUsePrefetching(true);
+    // std::cout << "Not using prefetching." << std::endl;
+    std::cout << "Using prefetching." << std::endl;
+#else
+    solver.setUsePrefetching(false);
+    // std::cout << "Using prefetching." << std::endl;
+    std::cout << "Not using prefetching." << std::endl;
+#endif
+
+    std::vector<uint32_t> x_bits_list_vector;
+    for (int i = 0; i < 256; i++)
     {
-        std::cerr << "Usage: " << argv[0] << " <plot_file>\n";
-        return 1;
+        x_bits_list_vector.push_back(x_bits_list[i]);
     }
-    std::string plot_file = argv[1];
-    std::cout << "Plot file: " << plot_file << std::endl;
-    // read plot file
-    ProofParams params(nullptr, /*k*/ 0, /*sub_k*/ 0);
+    const std::vector<uint32_t> x_solution;
+    std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list_vector, x_solution);
 
-    PlotFile::PlotFileContents plot = PlotFile::readData(plot_file);
-    if (plot.data == PlotData())
+    /*std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
+    for (size_t i = 0; i < all_proofs.size(); i++)
     {
+        std::cout << "Proof " << i << ": ";
+        for (size_t j = 0; j < all_proofs[i].size(); j++)
+        {
+            std::cout << all_proofs[i][j] << " ";
+        }
+        std::cout << std::endl;
+    }*/
+
+    return 0;
+}
+
+int prove(const std::string& plot_file) {
+    // read plot file
+    PlotFile::PlotFileContents plot = PlotFile::readData(plot_file);
+    if (plot.data == PlotData()) {
         std::cerr << "Error: plot file is empty or invalid." << std::endl;
         return 1;
     }
 
-    std::cout << "Plot file read successfully." << std::endl;
-    plot.params.show();
+    std::cout << "Plot file read successfully: " << plot_file << std::endl;
+    plot.params.debugPrint();
 
     XsEncryptor xs_encryptor(plot.params);
 
+    // perform the proof/chain test
     chain_test(plot);
-    
-    //exhaustive_test(plot);
-    
+
+    // for exhaustive testing, requires plot and compilation with RETAIN_X_VALUES_TO_T3
+    // exhaustive_test(plot);
+
+    return 0;
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <mode> <arg>\n"
+                  << "Modes:\n"
+                  << "  benchmark <k-size>    Run benchmark with the given k-size integer.\n"
+                  << "  prove     <plot file>  Run proof on the given plot file.\n";
+        return 1;
+    }
+
+    std::string mode = argv[1];
+    if (mode == "benchmark") {
+        int k = 0;
+        try {
+            k = std::stoi(argv[2]);
+            // k must be 28,30, or 32
+            if (!(k == 28 || k == 30 | k == 32)) {
+                std::cerr << "Error: k-size must be 28, 30, or 32." << std::endl;
+                return 1;
+            }
+        } catch (const std::invalid_argument& e) {
+            std::cerr << "Error: k-size must be an integer." << std::endl;
+            return 1;
+        } catch (const std::out_of_range& e) {
+            std::cerr << "Error: k-size out of range." << std::endl;
+            return 1;
+        }
+
+        std::cout << "Running benchmark with k-size = " << k << std::endl;
+        return benchmark(k);
+
+    } else if (mode == "prove") {
+        std::string plot_file = argv[2];
+        std::cout << "Running proof on plot file: " << plot_file << std::endl;
+        return prove(plot_file);
+
+    } else {
+        std::cerr << "Unknown mode: " << mode << "\n"
+                  << "Use 'benchmark' or 'prove'." << std::endl;
+        return 1;
+    }
 }

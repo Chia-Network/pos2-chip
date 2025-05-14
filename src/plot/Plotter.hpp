@@ -17,8 +17,8 @@
 class Plotter {
 public:
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
-    Plotter(const std::string& plot_id_hex, int k, int sub_k)
-      : plot_id_(hexToBytes(plot_id_hex)), k_(k), sub_k_(sub_k),
+    Plotter(const std::array<uint8_t, 32> plot_id, int k, int sub_k)
+      : plot_id_(plot_id), k_(k), sub_k_(sub_k),
         proof_params_(plot_id_.data(), k_, sub_k_), xs_encryptor_(proof_params_), validator_(proof_params_) {}
 
     // Execute the plotting pipeline
@@ -193,7 +193,6 @@ public:
         validate_ = validate;
     }
 
-private:
     // Helper: convert hex string to 32-byte array
     std::array<uint8_t, 32> hexToBytes(const std::string& hex) {
         std::array<uint8_t, 32> bytes{};
@@ -204,6 +203,7 @@ private:
         return bytes;
     }
 
+private:
     // Plot identifiers and parameters
     std::array<uint8_t, 32> plot_id_;
     int k_;

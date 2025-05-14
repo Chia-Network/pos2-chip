@@ -171,6 +171,7 @@ public:
         std::cout << "num_partition_bits: " << num_partition_bits_ << std::endl;
         std::cout << "num_partitions: " << num_partitions_ << std::endl;
         std::cout << "sub_k: " << sub_k_ << std::endl;
+        std::cout << "num sections: " << get_num_sections() << std::endl;
         std::cout << "match_key_bits: [";
         for (size_t i = 0; i < match_key_bits_.size(); ++i)
         {
