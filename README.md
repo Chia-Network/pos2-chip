@@ -27,8 +27,7 @@ This repository provides a **public reference implementation** of the new ProofÂ
 - [CMake](https://cmake.org/) â‰¥Â 3.15
 - `make` (or your preferred build tool)
 - A Unixâ€‘style shell (Linux/macOS) or PowerShell/Bash on Windows
-
----
+- Intel Threading Building Blocks (TBB) library
 
 ## Building
 
@@ -43,7 +42,16 @@ This repository provides a **public reference implementation** of the new ProofÂ
 ```bash
    ./build-release.sh
 ```
+#### Installing TBB library
 
+If you see linker errors, you may need to install the TBB library for multi-threading support.
+
+##### Ubuntu / Debian
+
+```bash
+sudo apt update
+sudo apt install -y libtbb-dev
+```
 
 ### Manually, directly via CMake:
 2. Configure with CMake (Release mode enables optimizations):
