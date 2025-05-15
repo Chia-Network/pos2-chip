@@ -8,6 +8,11 @@ struct Range {
     uint64_t start;
     uint64_t end;
 
+    // ranges are INCLUSIVE
+    bool isInRange(uint64_t value) const {
+        return value >= start && value <= end;
+    }
+
     bool operator==(const Range& other) const {
         return start == other.start && end == other.end;
     }

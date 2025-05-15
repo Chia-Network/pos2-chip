@@ -12,6 +12,7 @@ set(CMAKE_CXX_EXTENSIONS        OFF)
 add_subdirectory(lib/fse)
 add_subdirectory(src/tools/plotter)
 add_subdirectory(src/tools/solver)
+add_subdirectory(src/tools/prover)
 
 # tests, other tools…
 if (CP_ENABLE_TESTS)

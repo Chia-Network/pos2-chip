@@ -183,6 +183,7 @@ public:
                 uint32_t lateral = xs_encryptor.get_lateral_to_t4_partition(t3_encrypted_xs[t3_pruned_index]);
                 
                 // update this partition's range at new index
+                // ranges are inclusive
                 auto &r = ranges[lateral];
                 r.start = std::min(r.start, (uint64_t)t3_pruned_index);
                 r.end = std::max(r.end, (uint64_t)t3_pruned_index);

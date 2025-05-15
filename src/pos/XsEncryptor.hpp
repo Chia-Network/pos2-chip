@@ -76,6 +76,18 @@ public:
         }
     }
 
+    uint32_t get_r_t4_partition(uint64_t encrypted_xs) const {
+        uint32_t top_order_bit = get_t3_order_bits(encrypted_xs) >> 1;
+        if (top_order_bit == 0)
+        {
+            return get_t3_r_partition(encrypted_xs) + params_.get_num_partitions();
+        }
+        else
+        {
+            return get_t3_r_partition(encrypted_xs);
+        }
+    }
+
     // validate_encrypted_xs checks that the decrypted x-values match the provided x_values.
     // x_values is an array of 8 uint32_t values (each representing a k-bit number).
     // It compares the upper halves (k/2 bits) of x_values[0], [2], [4], and [6] with those

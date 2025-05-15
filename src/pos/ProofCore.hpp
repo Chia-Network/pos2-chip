@@ -29,6 +29,9 @@
 // use to reduce T4/T5 relative to T3, T4 and T5 will be approx same size.
 // #define T3_FACTOR_T4_T5_EVEN 1
 
+const uint32_t FINAL_TABLE_FILTER = 855570511; // out of 2^32
+const double FINAL_TABLE_FILTER_D = 0.19920303275; 
+
 struct T1Pairing
 {
     uint64_t meta;       // 2k-bit meta value.
@@ -298,7 +301,7 @@ public:
                                              0, 0, num_test_bits);
 
         // adjust the final table so that T3/4/5 will prune to the same # of entries each.
-        if (pair.test_result >= (855570511 << 1))
+        if (pair.test_result >= (FINAL_TABLE_FILTER << 1))
             return false;
         return true;
 
@@ -420,6 +423,13 @@ public:
         r ^= v >> 10;
         r ^= v >> 2;
         return (((r >> 2) + r) & 3U) == 2;
+    }
+
+    double num_expected_pruned_entries_for_t3() {
+        double k_entries = (double) (1UL << params_.get_k());
+        double t3_entries = (FINAL_TABLE_FILTER_D / 0.25)*k_entries;
+
+        return t3_entries;
     }
 
 private:
