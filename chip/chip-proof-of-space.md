@@ -166,7 +166,7 @@ The proposed new Proof of Space is not backwards compatible with the v1 plots in
 
 - Proofs that rely on legacy plots become invalid after a defined sunset date.
 
-Because the validity rules change and must accept a new Proof of Space that was hitherto invalid, this upgrade must be introduced by a hard fork, and will require a full netspace replot by the end of a phase-out period for the legacy plots.
+Because the validity rules change and must accept a new Proof of Space that was previously invalid, this upgrade must be introduced by a hard fork, and will require a full netspace replot by the end of a phase-out period for the legacy plots.
 
 ### Alternatives to Hard Fork
 [CHIP-12](https://github.com/Chia-Network/chips/blob/main/CHIPs/chip-0012.md) which reduces the plot filter on a schedule, is already in effect. However, this update merely keeps compression resistance on pace with developing technology, and does not sufficiently address the risk of rental attacks. It does not resolve any of the three critical issues we identified in [Motivation](#motivation). Changing the plot filter to a more aggressive schedule would also result in a hard fork. 
@@ -255,7 +255,7 @@ Full analyses of security features are found in the [Security](#security) sectio
 Proof of Space visual representation.
 
 ![Proof of Space visual representation](./assets/proof-of-space-visual-representation.png)
-*Figure X: Sample k-18 plot (8 partitions, ~17,000 proofs). Blue lines trace a left-side match from a pair back to its origin; orange lines do the same for a right-side match.*
+*Figure: Sample k-18 plot (8 partitions, ~17,000 proofs). Blue lines trace a left-side match from a pair back to its origin; orange lines do the same for a right-side match.*
 
 #### Proofs and Proof Fragments
 
@@ -277,7 +277,7 @@ The protocol chains 16 proofs into a Quality Chain.
  
 3. Parent lookup – From that T4 node we step up to its T5 parent. 
 
-4. Sibling crawl – We walk down to the sibling leaves for opposite-side Proof Fragments of the proof. The L-side sibling will be part of the same partition (4), and the R-side sibling points to an Proof Fragment in a third partition which is not collected until we need to get the full proof.
+4. Sibling crawl – We walk down to the sibling leaves for opposite-side Proof Fragments of the proof. The L-side sibling will be part of the same partition (4), and the R-side sibling points to a Proof Fragment in a third partition which is not collected until we need to get the full proof.
 
 5. Set of Chain Links - We find all paths between partition (A) and partition (B) to collect Chain Links.
 
@@ -316,7 +316,7 @@ The matching algorithm is novel in two ways:
 
 - Per-table tunable difficulty – lets us set plotting cost (resistance to rental & compression attacks) by O(2^N) while keeping verification O(1).
 
-- Asymmetric hashing for pairing – honest farmers can recompute the full proof pairs of x-values efficiently, as the cost to solve for the first pair of Xs is expensive, but subsequent Xs for the proof are cheap. Conversely, an attacker looking to solve for a subset of the proof must incur the initial expense of the first solved pair repeatedly.
+- Asymmetric hashing for pairing – honest farmers can recompute the full proof pairs of x-values efficiently, as the cost to solve for the first pair of x-values is expensive, but subsequent x-values for the proof are cheap. Conversely, an attacker looking to solve for a subset of the proof must incur the initial expense of the first solved pair repeatedly.
 
 The parameterization of table security also enables scheduling for stronger security over time (see scheduled plot difficulty).
 
@@ -327,19 +327,19 @@ The parameterization of table security also enables scheduling for stronger secu
 - **Encrypt** the remainder, then
 - **Sort** the resulting Proof Fragments in T3
 
-**Challenge on Proof Fragments**. The challenge now begins at the leaves, using an ordered-scan filter over the Proof Fragments. Because the Proof Fragments are sorted, neighboring entries decrypt to statistically unrelated x-values. An attacker can no longer harvest “similar” neighbors or reuse partial work; any bit-dropping attacks must target the Proof Fragments themselves. 
+**Challenge on Proof Fragments**. The challenge now begins at the leaves, using an ordered-scan filter over the Proof Fragments (aka the Proof Fragment Scan Filter). Because the Proof Fragments are sorted, neighboring entries decrypt to statistically unrelated x-values. An attacker can no longer harvest “similar” neighbors or reuse partial work; any bit-dropping attacks must target the Proof Fragments themselves. 
 
-- Old format: challenge began at the root (last table) which stored a redundant final hash which could be recomputed by collecting all Xs from the proof. Attackers could rearrange leaves at will to open many significant exploits, and/or exploit the redundant final hash with recompute.
+- Old format: challenge began at the root (last table) which stored a redundant final hash which could be recomputed by collecting all x-values from the proof. Attackers could rearrange leaves at will to open many significant exploits, and/or exploit the redundant final hash with recompute.
 
 - New format: the leaf-first scan locks the ordering. If an attacker re-orders data, they must add bits to restore ordering for the scan, which negates compression gains.
 
-**Bit Drops and Recompute Times**. A Proof Fragment represent 8 x-values of a proof (x1,x2,...,x8). We first remove all x2/4/6/8 values, and bit drop the remaining Xs by k/2 bits, to give 2k bits comprising only half the bits in x1/3/5/7.
+**Bit Drops and Recompute Times**. A Proof Fragment represent 8 x-values of a proof (x1,x2,...,x8). We first remove all x2/4/6/8 values, and bit drop the remaining x-values by k/2 bits, to give 2k bits comprising only half the bits in x1/3/5/7.
 
-The Chacha cipher allows fast yet secure cryptographic hashing of 2^k results on a Raspberry Pi 5. The even-number Xs rely on those hashes. The odd-number Xs use a slower hash (Blake 3) over a certain number of iterations to check for matches. Proof solving amortizes results for 1 Proof Fragment over a set of Proof Fragments from the fully chained proof. Below, we show that solving for 32 Proof Fragments takes 29.3ms, less than 1ms per Proof Fragment, whereas just 2 Proof Fragments takes over 10ms alone.
+The Chacha cipher allows fast and secure cryptographic hashing of 2^k results on a Raspberry Pi 5. The even-number x-values rely on those hashes. The odd-number x-values use a slower hash (Blake 3) over a certain number of iterations to check for matches. Proof solving amortizes results for 1 Proof Fragment over a set of Proof Fragments from the fully chained proof. Below, we show that solving for 32 Proof Fragments takes 29.3ms, less than 1ms per Proof Fragment, whereas just 2 Proof Fragments takes over 10ms alone.
 
 ![Proof Fragment Set Solve Times](./assets/proof-fragments-solve-times.png)
 
-Compare to using k/4,k/4 bits, which is faster on a single solve but slower overall when applied on all x pairs (256 in total).
+Compare to using k/4,k/4 bits, which is faster on a single solve but slower overall when applied on all x-value pairs (256 pairs in total).
 
 More about Proof Fragments and how much they bit-drop before encryption is discussed in the [Security](#security) section.
 
@@ -366,14 +366,14 @@ Partitions are structured to reduce HDD seeks to allow for construction of Quali
 ![Partition mappings](./assets/partitions-mappings.png)
 *Showing mapping from T3 Proof Fragments to lateral (L) partition from T4/5.*
 
-Each table is divided into partitions, and partitions can either be lower or upper partitions. In the example above there are 8 partitions, with 4 lower and 4 upper. The Proof Fragment bits define the partitions (see section X). The Proof Fragments in T3 may have one or both of the following pointers from T4: a lateral (L) pointer, and/or a crossover (R) pointer.  These two pointers will always reside in different partitions—one in the lower, and one in the upper—but never in the same partition. The L pointers from a partition in T4 will all map to the same partition in T3. The R pointers to an encrypted X will come from any of the opposite side partitions in T4. An additional benefit is that no R pointer from T4 will point to the same partition as an L pointer in T4, which is important to reduce unused paths that could be dropped for an attacker as we want to build chains between two unique partitions.
+Each table is divided into partitions, and partitions can either be lower or upper partitions. In the example above there are 8 partitions, with 4 lower and 4 upper. The Proof Fragment bits define the partitions (see [Technical Specifications](#proof-of-space-specification)). The Proof Fragments in T3 may have one or both of the following pointers from T4: a lateral (L) pointer, and/or a crossover (R) pointer.  These two pointers will always reside in different partitions—one in the lower, and one in the upper—but never in the same partition. The L pointers from a partition in T4 will all map to the same partition in T3. The R pointers to an encrypted X will come from any of the opposite side partitions in T4. An additional benefit is that no R pointer from T4 will point to the same partition as an L pointer in T4, which is important to reduce unused paths that could be dropped for an attacker as we want to build chains between two unique partitions.
 
 ![Partition mappings](./assets/partitions-mappings-example1.png)
 *In partition (L0', R) all L pointers from T4 come from the 0' partition, and all R pointers can come from any of the 0-3 partitions.*
 
 ![Partition mappings](./assets/partitions-mappings-example3.png)
 
-*Figure x: In partition (L1, R') all L pointers from T4 come from the 1 partition, and all R pointers can come from any of the 0'-3' partitions.*
+*Figure: In partition (L1, R') all L pointers from T4 come from the 1 partition, and all R pointers can come from any of the 0'-3' partitions.*
 
 The optimal number of partitions is determined by our Security Analysis on Partitions.
 
@@ -569,10 +569,10 @@ Full reference implementations for this chip are in:
 
 ### Security: Partition Grinding Attacks
 
-Two primary parition grinding attacks:
-1) Rental Attack Grind: no plot data is retained, all data reconstructed to T3 then focused on T4 and T5 partitions required by challenge.
-2) T3 Grinding Attack: only T3 is retained, if Proof Fragment Scan filter passes on T3 then perform rental attack grind.
-3) T4 Partition Grinding Attack: an attacker collects data focused on partitions needed by challenges, that supply hints to reconstruct the partitions when needed.
+There are three primary partition grinding attacks:
+1) **Rental Attack Grind**: no plot data is retained, all data reconstructed to T3 then focused on T4 and T5 partitions required by challenge.
+2) **T3 Grinding Attack**: only T3 is retained, if Proof Fragment Scan filter passes on T3 then perform rental attack grind.
+3) **T4 Partition Grinding Attack**: an attacker collects data focused on partitions needed by challenges, that supply hints to reconstruct the partitions when needed.
 
 In our data presented for the tables, while a full Total Cost of Ownership (TCO) model—taking into account hardware amortization, maintenance, financing, etc.—is ultimately the most accurate way to assess incentives, we use a simplified comparison of both energy (Watts) and up-front cost ($) to highlight the key points:
 
@@ -734,7 +734,7 @@ Since increasing the Proof Fragment Scan Filter also reduces disk activity, it c
 
 ![Proof Fragment Scan Filter Resistance Gain](./assets/fragment-scan-filter-resistance-gain.png)
 
-As we can see there are diminishing returns for raising Proof Fragment Scan Filter, expecially beyond 32. It also begins to more significantly reduce t3 grinding resistance as we can no longer decrease the Plot ID Filter proportionally to the increase in the Proof Fragment Scan Filter. We have shown that we can use an Proof Fragment Scan Filter of around 4 without weakening security. Beyond that, we must be careful not to weaken too much against the T3 grinding attack.
+As we can see there are diminishing returns for raising Proof Fragment Scan Filter, expecially beyond 32. It also begins to more significantly reduce t3 grinding resistance as we can no longer decrease the Plot ID Filter proportionally to the increase in the Proof Fragment Scan Filter. We have shown that we can use a Proof Fragment Scan Filter of around 4 without weakening security. Beyond that, we must be careful not to weaken too much against the T3 grinding attack.
 
 This is highlighted again in the calculation of **relative effort** (how much W/TB an attacker spends relative to an honest farm's W/TB) expended using various Proof Fragment Scan Filter settings paired with minimum Plot ID Filter settings to support our HDD timing requirements. 
 ![Proof Fragment Scan Filter Relative Effort](./assets/fragment-plotid-effort.png)
@@ -746,7 +746,7 @@ Note, that the Proof Fragment Scan Filter has no effect on an attacker's T4 Part
 
 While there are diminishing returns on resistance, there are still another benefits to a higher Proof Fragment Scan Filter: less work for the harvester to process challenges, and less HDD activity as we skip the large partition reads for constructing Quality Links.
 
-While our models show we are comfortably resistant both in terms of energy and hardware casts against T3 grinding attacks with a high Proof Fragment Scan Filter, further analysis into future outlook is required.
+While our models show we are comfortably resistant both in terms of energy and hardware costs against T3 grinding attacks with a high Proof Fragment Scan Filter, further analysis into future outlook is required.
 
 | Plot ID Filter | Proof Fragment Scan Filter | k28 T3 time w/ 4090 (ms) | \# gpu-assisted plots | eTiB   | Honest Farmer W @ 5.5W per TB | Honest Farmer $/TB | Attacker W (GPU W + HDD W) | Attacker $/eTiB |
 | -------------- | ----------------------- | ------------------------ | --------------------- | ------ | ----------------------------- | ------------------ | -------------------------- | --------------- |
@@ -771,7 +771,7 @@ While our models show we are comfortably resistant both in terms of energy and h
 
 *Table data using 4090 @ $1600 consuming 350W.*
 
-In the above we see that an Proof Fragment Scan Filter of 64 shows some weaknesses at Plot ID Filter of 128 and 256, as an attacker begins to save on energy costs relative to the honest farmer. Either we need to increase Plot Difficulty at this setting, to raise the plotting time, or have an aggressive Filter change schedule ready before the next generation of GPU's.
+In the above we see that a Proof Fragment Scan Filter of 64 shows some weaknesses at Plot ID Filter of 128 and 256, as an attacker begins to save on energy costs relative to the honest farmer. Either we need to increase Plot Difficulty at this setting, to raise the plotting time, or have an aggressive Filter change schedule ready before the next generation of GPU's.
 
 #### Mitigation
 
@@ -803,8 +803,7 @@ A critical design of the Quality Chain is that a challenge start with a scan on 
 #### Bit dropping choices
 
 ![Chaining bit dropping](./assets/security-chaining-bit-dropping.png)
-
-Figure X: all possible bit dropping options on Quality Links
+*Figure: all possible bit dropping options on Quality Links*
 
 | Bit drop on | notes | effectiveness |
 |-|-|-|
@@ -994,7 +993,7 @@ Trying to drop bits falls into the bit saturation trap -- reconstruction of the 
 
 If some data is used less frequently than other data, it could be dropped or occasionally reconstructed from the plot data to save space. 
 
-We highlight one such (failed) attempt with the Statistical Attack on a partition (see section X).
+We highlight one such (failed) attempt with the Statistical Attack on a partition (see [Security](#statistical-attacks)).
 
 The partition data has also been deliberately designed so that the L and R pointers point to disjointed partitions. This means a challenge in partition (A) will never have the second partition also be partition (A), and pointers from partition (A) will also never have R pointers that point to partition (A). This removes any exploits that could have targeted removal of data not used in challenges.
 
@@ -1036,7 +1035,7 @@ Our proposed filter settings are:
 - Proof Fragment Scan Filter: 32
 - Number of Chains: 16
 - Chaining Factor: 1.1
-- T1 Match Bits: 3
+- T1 Match Bits: 2
 - T2 Match Bits: 2
 - T3 Match Bits (Plot Difficulty): 2
 - T4 Match Bits: 2
