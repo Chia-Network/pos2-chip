@@ -638,7 +638,7 @@ Here an attack only retains the T3 from the plot format. When a challenge comes 
 
 #### T4 Partition Grinding Attack
 
-![Partition grinding attack](security-partition-grinding-attack.png)
+![Partition grinding attack](./assets/security-partition-grinding-attack.png)
 *A visual representation of a small sample plot showing source of all endpoints for collecting x's into a T4 grinding partition for an attacker.*
 
 A challenge works between two (or more) partitions.  The first partition originates from a defined range of EncryptedXs candidates. An attacker groups data required to generate partitions used in the challenge. There are two viable options for an attacker:
@@ -652,24 +652,24 @@ Note that it is not sufficient to collect x's solely from T3 partitioned data. A
 
 ##### Attack variant (1)
 
-![Partition mappings](security-partition-grinding-collect.png)
+![Partition mappings](./assets/security-partition-grinding-collect.png)
 *Collecting x's from source data to store partition grinding attack.*
 
 Once x's are collected, they are sorted (with any duplicates removed) and compressed. These form the basis for all data required to reconstruct the encryptedXs for the T3 partition in which a challenge initiates an encryptedXs' scan. Critical is also the inclusion of the R' pointers, which originate from the same encryptedX's pointed to by the L pointers. However, due to pruning and match filtering, there will be a set of R' encryptedXs entries that aren't pointed to by the L pointers, so these must additionally be included in the list of xs for proper reconstruction to respond to a challenge successfully.
 
-![Partition mappings](security-partition-grinding-rebuild.png)
+![Partition mappings](./assets/security-partition-grinding-rebuild.png)
 *Reconstructing tables T3 to T5 focused on first partition required for challenge.*
 
 When a challenge comes in and finds a particular encryptedXs range to scan, the attacker immediately reconstructs the plot using the xs list for that partition. This will result in a full set of encryptedXs used in the scan. The attacker completes the encryptedXs scan to find the filtered list of R' pointers to follow, which will be in other partitions. The attacker then does an additional full reconstruction of all other partition data from the x lists of the destination partitions. Now the attacker has all partitions required for the challenge chaining filter.
 
 ##### Attack variant (2)
 
-![Partition mappings](security-partition-grinding-collect-fragments.png)
+![Partition mappings](./assets/security-partition-grinding-collect-fragments.png)
 *Collecting x's from source data to store partition grinding attack, and filtering list of encryptedXs for unique R scan values.*
 
 Similar to approach (1), except we maintain a seperate list of encryptedXs fitlered to only those with unique R pointers that don't overlap with any L pointers, and only include x values necessary to generate the T4 and T5 partition.
 
-![Partition mappings](security-partition-grinding-rebuild-fragments.png)
+![Partition mappings](./assets/security-partition-grinding-rebuild-fragments.png)
 *Using filtered encryptedXs and reconstructing tables T3 to T5 focused on first partition required for challenge.*
 
 In constract to approach (1) we interleave our list of filtered encryptedXs with the encryptedXs reconstructed from the partioned x's list.
@@ -732,15 +732,15 @@ $$
 
 Since increasing the Proof Fragment Scan Filter also reduces disk activity, it creates additional room to **lower the Plot ID Filter**. Therefore, optimal parameters can be found by setting the Proof Fragment Scan Filter and tuning the Plot ID Filter as low as possible to within HDD activity constraints. 
 
-![Proof Fragment Scan Filter Resistance Gain](fragment-scan-filter-resistance-gain.png)
+![Proof Fragment Scan Filter Resistance Gain](./assets/fragment-scan-filter-resistance-gain.png)
 
 As we can see there are diminishing returns for raising Proof Fragment Scan Filter, expecially beyond 32. It also begins to more significantly reduce t3 grinding resistance as we can no longer decrease the Plot ID Filter proportionally to the increase in the Proof Fragment Scan Filter. We have shown that we can use an Proof Fragment Scan Filter of around 4 without weakening security. Beyond that, we must be careful not to weaken too much against the T3 grinding attack.
 
 This is highlighted again in the calculation of **relative effort** (how much W/TB an attacker spends relative to an honest farm's W/TB) expended using various Proof Fragment Scan Filter settings paired with minimum Plot ID Filter settings to support our HDD timing requirements. 
-![Proof Fragment Scan Filter Relative Effort](fragment-plotid-effort.png)
+![Proof Fragment Scan Filter Relative Effort](./assets/fragment-plotid-effort.png)
 
 And similarly below a calculation of **relative price/TB** (a value of 2 means an attacker spends double the price per eTiB than an honest farmer).
-![Proof Fragment Scan Filter Relative Cost](fragment-plotid-cost.png)
+![Proof Fragment Scan Filter Relative Cost](./assets/fragment-plotid-cost.png)
 
 Note, that the Proof Fragment Scan Filter has no effect on an attacker's T4 Partition attack, as they must complete the grind prior to using the filter. In this case, a lower Plot ID Filter is always better for resistance.
 
@@ -802,7 +802,7 @@ A critical design of the Quality Chain is that a challenge start with a scan on 
 
 #### Bit dropping choices
 
-![Chaining bit dropping](security-chaining-bit-dropping.png)
+![Chaining bit dropping](./assets/security-chaining-bit-dropping.png)
 
 Figure X: all possible bit dropping options on Quality Links
 
