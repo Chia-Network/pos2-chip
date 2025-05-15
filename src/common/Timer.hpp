@@ -5,7 +5,7 @@
 class Timer
 {
 public:
-    bool debugOut = true;
+    bool debugOut = false;
 
     Timer() : start_time_point(std::chrono::steady_clock::now()) {}
 

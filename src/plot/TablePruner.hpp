@@ -7,9 +7,16 @@
 
 class TablePruner
 {
+public:
+    #ifdef RETAIN_X_VALUES_TO_T3
+    std::vector<std::array<uint32_t, 8>> &xs_correlating_to_encrypted_xs;
+    #endif
 private:
     // t3 encrypted xs data (to be pruned later)
     std::vector<uint64_t> &t3_encrypted_xs;
+
+   
+
 
     // Bitmask for t3 used entries (each bit represents whether an entry is used)
     std::vector<uint8_t> t3_used_entries_bitmask;
@@ -33,13 +40,26 @@ private:
 
 public:
     // Constructor initializes using the provided t3 encrypted xs.
+    
+
+    #ifdef RETAIN_X_VALUES_TO_T3
+    TablePruner(const ProofParams &proof_params, std::vector<uint64_t> &t3, std::vector<std::array<uint32_t, 8>> &xs)
+    : params_(proof_params),
+      t3_encrypted_xs(t3),
+        xs_correlating_to_encrypted_xs(xs)
+{
+    size_t num_bitmask_bytes = (t3_encrypted_xs.size() + 7) / 8;
+    t3_used_entries_bitmask.assign(num_bitmask_bytes, 0);
+}
+    #else
     TablePruner(const ProofParams &proof_params, std::vector<uint64_t> &t3)
-        : params_(proof_params),
-          t3_encrypted_xs(t3)
-    {
-        size_t num_bitmask_bytes = (t3_encrypted_xs.size() + 7) / 8;
-        t3_used_entries_bitmask.assign(num_bitmask_bytes, 0);
-    }
+    : params_(proof_params),
+      t3_encrypted_xs(t3)
+{
+    size_t num_bitmask_bytes = (t3_encrypted_xs.size() + 7) / 8;
+    t3_used_entries_bitmask.assign(num_bitmask_bytes, 0);
+}
+    #endif
 
     struct PrunedStats
     {
@@ -155,6 +175,9 @@ public:
             {
                 t3_new_mapping[i] = t3_pruned_index;
                 t3_encrypted_xs[t3_pruned_index] = t3_encrypted_xs[i];
+                #ifdef RETAIN_X_VALUES_TO_T3
+                xs_correlating_to_encrypted_xs[t3_pruned_index] = xs_correlating_to_encrypted_xs[i];
+                #endif
 
                 // classify lateral partition
                 uint32_t lateral = xs_encryptor.get_lateral_to_t4_partition(t3_encrypted_xs[t3_pruned_index]);
@@ -173,6 +196,9 @@ public:
         }
 
         t3_encrypted_xs.resize(t3_pruned_index);
+        #ifdef RETAIN_X_VALUES_TO_T3
+        xs_correlating_to_encrypted_xs.resize(t3_pruned_index);
+        #endif
 
         return ranges;
     }

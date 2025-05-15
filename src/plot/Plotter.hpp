@@ -17,9 +17,9 @@
 class Plotter {
 public:
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
-    Plotter(const std::string& plot_id_hex, int k, int sub_k)
-      : plot_id_(hexToBytes(plot_id_hex)), k_(k), sub_k_(sub_k),
-        proof_params_(plot_id_.data(), k_, sub_k_), xs_encryptor_(proof_params_) {}
+    Plotter(const std::array<uint8_t, 32> plot_id, int k, int sub_k)
+      : plot_id_(plot_id), k_(k), sub_k_(sub_k),
+        proof_params_(plot_id_.data(), k_, sub_k_), xs_encryptor_(proof_params_), validator_(proof_params_) {}
 
     // Execute the plotting pipeline
     PlotData run() {
@@ -39,6 +39,23 @@ public:
         timer_.stop();
         std::cout << "Constructed " << t1_pairs.size() << " Table 1 pairs." << std::endl;
 
+        #ifdef RETAIN_X_VALUES
+        if (validate_) {
+            for (const auto& pair : t1_pairs) {
+                uint32_t xs[2] = { 
+                    static_cast<uint32_t>(pair.meta >> proof_params_.get_k()), 
+                    static_cast<uint32_t>(pair.meta & ((1 << proof_params_.get_k()) - 1)) };
+                auto result = validator_.validate_table_1_pair(xs);
+                if (!result.has_value()) {
+                    std::cerr << "Validation failed for Table 1 pair: ["
+                              << xs[0] << ", " << xs[1] << "]\n";
+                    exit(23);
+                }
+            }
+            std::cout << "Table 1 pairs validated successfully." << std::endl;
+        }
+        #endif
+
         // 3) Table2 generic
         Table2Constructor t2_ctor(proof_params_);
         timer_.start("Constructing Table 2");
@@ -46,15 +63,50 @@ public:
         timer_.stop();
         std::cout << "Constructed " << t2_pairs.size() << " Table 2 pairs." << std::endl;
 
+        #ifdef RETAIN_X_VALUES
+        if (validate_) {
+            for (const auto& pair : t2_pairs) {
+                auto result = validator_.validate_table_2_pairs(pair.xs);
+                if (!result.has_value()) {
+                    std::cerr << "Validation failed for Table 2 pair: ["
+                              << pair.xs[0] << ", " << pair.xs[1] << ", " << pair.xs[2] << ", " << pair.xs[3] << "]\n";
+                    exit(23);
+                }
+            }
+            std::cout << "Table 2 pairs validated successfully." << std::endl;
+        }
+        #endif
+
         // 4) Table3 generic
         Table3Constructor t3_ctor(proof_params_);
         timer_.start("Constructing Table 3");
-        auto t3_results = t3_ctor.construct(t2_pairs);
+        T3_Partitions_Results t3_results = t3_ctor.construct(t2_pairs);
         timer_.stop();
         std::cout << "Constructed " << t3_results.encrypted_xs.size() << " Table 3 entries." << std::endl;
 
+        #ifdef RETAIN_X_VALUES
+        if (validate_) {
+            for (const auto& xs_array : t3_results.xs_correlating_to_encrypted_xs) {
+                auto result = validator_.validate_table_3_pairs(xs_array.data());
+                if (!result.has_value()) {
+                    std::cerr << "Validation failed for Table 3 pair: ["
+                              << xs_array[0] << ", " << xs_array[1] << ", " << xs_array[2] << ", " << xs_array[3] 
+                              << ", " << xs_array[4] << ", " << xs_array[5] << ", " << xs_array[6] << ", " << xs_array[7]
+                              << "]\n";
+                    exit(23);
+                }
+            }
+            std::cout << "Table 3 pairs validated successfully." << std::endl;
+        }
+        #endif
+
         // 5) Prepare pruner
+        
+        #ifdef RETAIN_X_VALUES_TO_T3
+        TablePruner pruner(proof_params_, t3_results.encrypted_xs, t3_results.xs_correlating_to_encrypted_xs);
+        #else
         TablePruner pruner(proof_params_, t3_results.encrypted_xs);
+        #endif
 
         // 6) Partitioned Table4 + Table5
         std::vector<std::vector<T4BackPointers>> all_t4;
@@ -67,10 +119,35 @@ public:
             timer_.start("Building t3/4 partition " + std::to_string(pid));
 
             Table4PartitionConstructor t4_ctor(sub_params, proof_params_.get_k());
-            auto t4_res = t4_ctor.construct(partition);
+            T4_Partition_Result t4_res = t4_ctor.construct(partition);
+
+            #ifdef RETAIN_X_VALUES
+            if (validate_) {
+                for (const auto& pair : t4_res.pairs) {
+                    std::vector<T4Pairing> res = validator_.validate_table_4_pairs(pair.xs);
+                    if (res.size() == 0) {
+                        std::cerr << "Validation failed for Table 4 pair" << std::endl;
+                        exit(23);
+                    }
+                }
+                std::cout << "Table 4 pairs validated successfully." << std::endl;
+            }
+            #endif
             
             Table5GenericConstructor t5_ctor(sub_params);
-            auto t5_pairs = t5_ctor.construct(t4_res.pairs);
+            std::vector<T5Pairing> t5_pairs = t5_ctor.construct(t4_res.pairs);
+
+            #ifdef RETAIN_X_VALUES
+            if (validate_) {
+                for (const auto& pair : t5_pairs) {
+                    if (!validator_.validate_table_5_pairs(pair.xs)) {
+                        std::cerr << "Validation failed for Table 5 pair" << std::endl;
+                        exit(23);
+                    }
+                }
+                std::cout << "Table 5 pairs validated successfully." << std::endl;
+            }
+            #endif
             
             TablePruner::PrunedStats stats = pruner.prune_t4_and_update_t5(t4_res.t4_to_t3_back_pointers, t5_pairs);
             
@@ -112,7 +189,10 @@ public:
         return xs_encryptor_;
     }
 
-private:
+    void setValidate(bool validate) {
+        validate_ = validate;
+    }
+
     // Helper: convert hex string to 32-byte array
     std::array<uint8_t, 32> hexToBytes(const std::string& hex) {
         std::array<uint8_t, 32> bytes{};
@@ -123,6 +203,7 @@ private:
         return bytes;
     }
 
+private:
     // Plot identifiers and parameters
     std::array<uint8_t, 32> plot_id_;
     int k_;
@@ -134,4 +215,8 @@ private:
 
     // Timing utility
     Timer timer_;
+
+    // Debugging: validate as we go
+    bool validate_ = true;
+    ProofValidator validator_;
 };

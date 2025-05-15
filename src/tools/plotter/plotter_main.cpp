@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
+#include "common/Utils.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -32,7 +33,8 @@ int main(int argc, char *argv[])
 
     Timer timer;
     timer.start("Plotting");
-    Plotter plotter(plot_id_hex, k, sub_k);
+    Plotter plotter(Utils::hexToBytes(plot_id_hex), k, sub_k);
+    plotter.setValidate(true);
     PlotData plot = plotter.run();
     timer.stop();
     std::cout << "Plotting completed.\n";
@@ -67,6 +69,25 @@ int main(int argc, char *argv[])
     bool validate = true;
     if (validate)
     {
+        ProofParams params = plotter.getProofParams();
+        ProofValidator validator(params);
+
+        // first validate all xs in T3
+        timer.start("Validating Table 3 - Final");
+        for (const auto& xs_array : plot.xs_correlating_to_encrypted_xs) {
+            auto result = validator.validate_table_3_pairs(xs_array.data());
+            if (!result.has_value()) {
+                std::cerr << "Validation failed for Table 3 pair: ["
+                          << xs_array[0] << ", " << xs_array[1] << ", " << xs_array[2] << ", " << xs_array[3] 
+                          << ", " << xs_array[4] << ", " << xs_array[5] << ", " << xs_array[6] << ", " << xs_array[7]
+                          << "]\n";
+                return {};
+            }
+        }
+        std::cout << "Table 3 pairs validated successfully." << std::endl;
+        timer.stop();
+
+
         XsEncryptor xs_encryptor = plotter.getXsEncryptor();
         timer.start("Validating Table 5 - Final");
         int total_validated = 0;
@@ -81,6 +102,16 @@ int main(int argc, char *argv[])
                 uint64_t back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].encx_index_r;
                 uint64_t encrypted_xs_l = plot.t3_encrypted_xs[back_l];
                 uint64_t encrypted_xs_r = plot.t3_encrypted_xs[back_r];
+                auto res = validator.validate_table_5_pairs(plot.t5_to_t4_back_pointers[partition_id][i].xs);
+                if (!res)
+                {
+                    std::cerr << "Validation failed for T5 x-values: [";
+                    for (int i = 0; i < 16; i++)
+                    {
+                        std::cerr << plot.t5_to_t4_back_pointers[partition_id][i].xs[i] << ", ";
+                    }
+                    exit(23);
+                }
                 bool valid_l = xs_encryptor.validate_encrypted_xs(encrypted_xs_l, plot.t5_to_t4_back_pointers[partition_id][i].xs);
                 bool valid_r = xs_encryptor.validate_encrypted_xs(encrypted_xs_r, plot.t5_to_t4_back_pointers[partition_id][i].xs + 8);
                 if (!valid_l || !valid_r)
@@ -93,6 +124,7 @@ int main(int argc, char *argv[])
                     std::cerr << std::endl;
                     exit(23);
                 }
+
                 back_pointer_index = plot.t5_to_t4_back_pointers[partition_id][i].t4_index_r;
                 back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].encx_index_l;
                 back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].encx_index_r;
@@ -121,27 +153,32 @@ int main(int argc, char *argv[])
     bool writeToFile = true;
     if (writeToFile)
     {
+        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k);
         #ifdef RETAIN_X_VALUES_TO_T3
-        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k) + "_xvalues_" + plot_id_hex + ".bin";
-        #else
-        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k) + '_' + plot_id_hex + ".bin";
+        filename += "_xvalues";
         #endif
+        #ifdef NON_BIPARTITE_BEFORE_T3
+        filename += "_nonbipartitebeforet3";
+        #else
+        filename += "_bipartite";
+        #endif
+        filename += '_' + plot_id_hex + ".bin";
         timer.start("Writing plot file: " + filename);
-        PlotFile::writeData(filename, plot);
+        PlotFile::writeData(filename, plot, plotter.getProofParams());
         timer.stop();
 
         // test read
         // if we have x values the comparison function won't be valid since plot does not store x values.
-        PlotData read_plot = PlotFile::readData(filename);
+        std::cout << "Reading plot file: " << filename << std::endl;
+        PlotFile::PlotFileContents read_plot = PlotFile::readData(filename);
        
-        if (read_plot == plot)
+        if ((read_plot.data == plot) && (read_plot.params == plotter.getProofParams()))
         {
             std::cout << "Plot read/write successful." << std::endl;
         }
         else
         {
             std::cerr << "Read plot does not match original." << std::endl;
-            exit(23);
         }
     }
 
