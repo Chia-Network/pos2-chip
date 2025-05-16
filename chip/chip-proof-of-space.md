@@ -736,7 +736,7 @@ Since increasing the Proof Fragment Scan Filter also reduces disk activity, it c
 
 ![Proof Fragment Scan Filter Resistance Gain](./assets/fragment-scan-filter-resistance-gain.png)
 
-As we can see there are diminishing returns for raising Proof Fragment Scan Filter, expecially beyond 32. It also begins to more significantly reduce t3 grinding resistance as we can no longer decrease the Plot ID Filter proportionally to the increase in the Proof Fragment Scan Filter. We have shown that we can use a Proof Fragment Scan Filter of around 4 without weakening security. Beyond that, we must be careful not to weaken too much against the T3 grinding attack.
+As we can see there are diminishing returns for raising Proof Fragment Scan Filter, especially beyond 32. It also begins to more significantly reduce t3 grinding resistance as we can no longer decrease the Plot ID Filter proportionally to the increase in the Proof Fragment Scan Filter. We have shown that we can use a Proof Fragment Scan Filter of around 4 without weakening security. Beyond that, we must be careful not to weaken too much against the T3 grinding attack.
 
 This is highlighted again in the calculation of **relative effort** (how much W/TB an attacker spends relative to an honest farm's W/TB) expended using various Proof Fragment Scan Filter settings paired with minimum Plot ID Filter settings to support our HDD timing requirements. 
 ![Proof Fragment Scan Filter Relative Effort](./assets/fragment-plotid-effort.png)
