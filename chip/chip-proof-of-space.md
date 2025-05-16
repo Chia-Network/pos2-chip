@@ -23,7 +23,7 @@ Requires      | None
   - [Easing Transition](#easing-transition)
 - [Rationale](#rationale)
   - [Theoretical foundation and trade-offs](#theoretical-foundation-and-trade-offs)
-- [Comparison to Original Proof of Space](#comparison-to-original-proof-of-space)
+  - [Comparison to Original Proof of Space](#comparison-to-original-proof-of-space)
   - [Design Overview of Proof of Space](#design-overview-of-proof-of-space)
     - [From Challenge to Proofs](#from-challenge-to-proofs)
     - [Plot Format](#plot-format)
@@ -84,6 +84,8 @@ Requires      | None
       - [Number of Chain Links](#number-of-chain-links)
       - [Combinatorial analysis](#combinatorial-analysis)
     - [Statistical Attacks](#statistical-attacks)
+      - [Removing Underperforming Partitions](#removing-underperforming-partitions)
+      - [Favoring Larger Plots](#favoring-larger-plots)
     - [Further Attack Mitigation](#further-attack-mitigation)
   - [Non-Viable Attacks](#non-viable-attacks)
     - [Theoretical Compression](#theoretical-compression)
@@ -214,7 +216,7 @@ Finally, the baseline system's processing power is determined by the largest k-s
 
 The **Quality Chain** underpins all subsequent design choices in this proposal.
 
-## Comparison to Original Proof of Space
+### Comparison to Original Proof of Space
 
 The previous Proof of Space offered only moderate protection against attacker compression. DrPlotter produced 22.1 GiB plots, ≈ 22 % of the 101.4 GiB original. Our new Proof of Space shows no economically viable compression on today’s hardware, and adds safeguards to keep that edge as hardware advances.
 
@@ -932,15 +934,62 @@ One caveat to using longer chains is the distribution of results is affected, so
 
 #### Statistical Attacks
 
-Partitions will exhibit a small amount of variance of Chain Links that will used in the Quality Chain construction. For a k28 with sub_k 20, our analysis has shown that the average cardinal of Chain Link sets from a given partition to all other partitions can differ from the expected value by up to 1%.
+##### Removing Underperforming Partitions
 
-Example: Our expected cardinal is 6516, and a given partition averages only 6457 to other partitions. We remove this as it will underperform on proofs by:
+Partitions may exhibit slight variance in the number of Chain Links used for Quality Chain construction. For example, in a `k = 28` plot with `sub_k = 20`, our analysis shows that the average number of Chain Link connections (cardinality) from a given partition to all others can differ by up to 1% from the expected value.
 
-(avg/expected)^(chain size) = relative proofs
+We calculate the **relative proof effectiveness** of that partition using:
 
-(6457/6516)^16 = 0.86
+$$
+\left( \frac{\text{Number of Quality Links in Partition}}{\text{Expected Number of Quality Links}} \right)^{\text{Quality Chain length}} = \text{Relative Proof Effectiveness}
+$$
 
-If an attacker drops the least performing partition, they improve their average proof performance by (1-0.86)/512 = 0.0273%. However, they then lose 1/512 of challenges, as if another partition starts the challenge process, it will fail Proof Fragments that would otherwise have pointed to the dropped partition. So, even though the attacker has dropped 1/512 of their plot and improved their average proof performance by 0.0273%, they reduced their remaining overall performance by 1/512 or 0.195%, which is less effective than the honest plot.
+**Example:**
+
+- Expected average cardinality: `6516`
+- Observed underperforming partition: `6457`
+
+$$
+\left( \frac{6457}{6516} \right)^{16} = 0.86
+$$
+
+This means the underperforming partition would produce only **86% as many Quality Chains** as the average partition.
+
+If an attacker drops this partition to improve average performance, they:
+
+- Improve proof performance by:
+
+  $$
+  \frac{1 - 0.86}{512} = 0.0273\%
+  $$
+
+- But lose `1/512` of all challenge opportunities because any challenge involving that partition will now fail.
+
+So, while gaining 0.0273% efficiency, they sacrifice:
+
+$$
+\frac{1}{512} = 0.1953\% 
+$$
+
+The net result is worse than honest plotting — dropping partitions decreases total performance.
+
+##### Favoring Larger Plots
+
+Plot entry counts can vary slightly due to statistical distribution. In the Quality Chain design, **output variance compounds with the number of chains**, making small deviations in entry count more impactful.
+
+A plot deviating from the mean expected number of entries will produce a number of proofs approximately proportional to:
+
+$$
+\frac{\text{Length of Quality Chain}^{(\frac{\text{Number of Entries in Plot}}{\text{Expected Number of Entries}})} }{ \text{Length of Quality Chain} } = \text{Relative Output}
+$$
+
+Because of their smaller size, **k=28 plots** exhibit the largest potential deviation. Early estimates suggest that:
+
+- Raw plot size could be up to `0.1%` smaller or larger than the expected plot size.
+- Compounded variance from chaining could raise proof output by up to `0.3%` by selecting only the larger plots.
+
+Further empirical testing is needed to validate these estimates across many real-world plots. In any case, farmers wanting to free up space by removing plots should start by selecting the smallest plots to remove.
+
 
 #### Further Attack Mitigation
 
