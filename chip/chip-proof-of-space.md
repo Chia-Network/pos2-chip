@@ -89,12 +89,12 @@ Requires      | None
     - [Further Attack Mitigation](#further-attack-mitigation)
   - [Non-Viable Attacks](#non-viable-attacks)
     - [Theoretical Compression](#theoretical-compression)
-    - [Block Difficulty Attacks](#block-difficulty-attacks)
+    - [Block Difficulty Filtering](#block-difficulty-filtering)
     - [Proof Fragment Compression](#proof-fragment-compression)
-      - [Why k/2 bits dropped?](#why-k2-bits-dropped)
-    - [Hellman attack analysis](#hellman-attack-analysis)
-    - [Table Restructuring Analysis](#table-restructuring-analysis)
-    - [Underweighted data](#underweighted-data)
+      - [Why Limit to 2k Bits?](#why-limit-to-2k-bits)
+    - [Hellman Attacks](#hellman-attacks)
+    - [Table Restructuring](#table-restructuring)
+    - [Underweighted Data](#underweighted-data)
   - [Summary and Conclusions](#summary-and-conclusions)
     - [Summary of Parameters and their Effects](#summary-of-parameters-and-their-effects)
     - [Parameter Tuning for Optimal Settings](#parameter-tuning-for-optimal-settings)
@@ -998,55 +998,63 @@ Further empirical testing is needed to validate these estimates across many real
 
 ### Non-Viable Attacks
 
-In this section we summarize findings across attack methods that we deem non-viable.
+This section summarizes attack strategies we have evaluated and determined to be infeasible under the proposed Proof of Space design.
 
 #### Theoretical Compression
 
-We do not believe further compression for storing plot data is achievable by any significant amount. 
-- Benes compression achieves maximum theoretical compression in T4 and T5, saving more bits than the most optimal ANS implementations.
-- ANS achieves close to maximum theoretical compression in T3 on sorted Proof Fragments. Benes compression only works on permutations, and cannot be applied to T3.
+We believe there is no meaningful room for further plot data compression:
 
-#### Block Difficulty Attacks
+- **Benes compression** reaches near-theoretical efficiency in T4 and T5, outperforming optimal ANS implementations.
+- **ANS compression** is already near-optimal in T3 on sorted Proof Fragments. Benes cannot be applied to T3 due to its requirement for permutation-based encoding.
 
-A block difficulty attack was present in the original Proof of Space, whereby an attacker filters false positives from their recompute effort for quality strings by checking against a high difficulty and discarding results.  This attack is not possible on the Quality Chain, as a full proof recompute is needed, so one cannot prune branches based on child leaves.
+#### Block Difficulty Filtering
+
+In the original Proof of Space, attackers could filter false positives by testing partial proofs against the global difficulty, avoiding full recompute. In the Quality Chain design, full proof recompute is required for each candidate, making such pruning attacks impossible.
 
 #### Proof Fragment Compression
 
-Proof Fragments have mapping [L partition][2 order bits]...[R partition] in T3, that contain data to indicate which partitions in T4 point back to it. It's worth noting, these bits are not redundant, as they are removed from T4 and reconstructed with a scan of T3 to find the matching R partition bits.
+Each Proof Fragment encodes:
+- A lateral partition (`L`) using the top `partition_bits`
+- Two ordering bits
+- A cross-over partition (`R`) using the bottom `partition_bits`
 
-The L bits are high order bits; removing these from L will not allow for dropping of bits since they don't take part in the deltas that form the ANS compression.
+These bits are *not redundant*. T4 no longer stores `R` partition information—it is reconstructed via T3 scan. Dropping or reassigning bits across tables provides no advantage:
 
-However, one could remove R partition bits from Proof Fragments and instead add them to T4. If T4 has fewer entries than T3, we could save bits there. However, since T4 and T3 are pruned to have the same number of entries, this offers no benefits.
+- The `L` bits are high-order and do not participate in the ANS delta compression.
+- Moving `R` partition bits from Proof Fragments to T4 would save nothing, as T3 and T4 are pruned to the same size.
 
-##### Why k/2 bits dropped?
+##### Why Limit to 2k Bits?
 
-With only 4 of the 8 total Xs that comprise a Proof Fragment with only k/2 bits, we reach 2k bits. At >2k bits it would be possible to replace the Proof Fragment with two back pointers of k bits each, and store only 2 of the 8 Xs with k/2 bits in a different table. The overall compression would be slightly better, but would impose too high a load on HDDs to be practical. To prevent attackers with high performance SSDs from being able to compress this way, we thus stay within our 2k limit.
+Each Proof Fragment encodes 4 of 8 x-values with `k/2` bits, totaling `2k` bits. Exceeding this would make it more efficient to store two `k`-bit back-pointers instead, defeating the compression intent. While such a structure may compress slightly better, it would impose unacceptable HDD load and enable attackers with high-speed SSDs to gain an edge.
 
-In addition, due to the high level of bit dropping, reconstructing a Proof Fragment creates on average about (1/e)*4 = 1.47 false pairings. This forces an attacker to resolve an additional sibling Proof Fragments to remove the false positives, which is more expensive and also completely prohibitive on HDDs as it reaches across partitions to incur more disk seeks.
+Further, because of aggressive bit dropping, reconstructing a Proof Fragment yields ~1.47 false pairings (≈ 4 × 1/e). Attackers must resolve sibling fragments to eliminate these, incurring additional compute and cross-partition disk seeks—prohibitive on HDDs.
 
-#### Hellman attack analysis
+#### Hellman Attacks
 
-It would be extremely difficult or impractical to apply a Hellman attack in any form. Hellman attacks work best either on early tables, which are already dropped in our PoS, or using final output values in the last table, which is not used in our PoS. Through the Quality Chain, an attack would additionally have to employ thousands of recompute passes.
+Hellman attacks work best either on early tables, which are already dropped in our PoS, or using final output values in the last table, which is not used in our PoS. It would be extremely difficult or impractical to apply a Hellman attack. The Quality Chain requirements would also force thousands of Hellman recompute passes, erasing any precomputation benefit.
 
-#### Table Restructuring Analysis
+#### Table Restructuring
 
-We looked at attacks where an attempt to restructure the table could open up improvements to compression. However, with tables being of equal size there is little incentive to move the theoretical maximum compression of bits around.
+We evaluated whether reordering or splitting tables could yield better compression:
 
-Breaking up Proof Fragments into their decrypted form could be sorted by Xs, and an attacker could scan the entire T3 table to find Proof Fragments that pass the Proof Fragment Scan Filter. In addition to adding large scanning costs, grouping data to reduce bits requires a reconstruction in order to do the scan, or storing additional bits for the scan. None of these approaches seem viable.
+- With T3–T5 sized equally, redistributing compression across tables offers no benefit.
+- Splitting Proof Fragments into decrypted x-values to group by similarities adds prohibitive scan/reconstruction overhead or requires storing extra bits.
 
-Assume an attacker has disk storage with free random access: they could split up the decrypted Xs, and move their data to earlier tables as just k bits instead of 2k bits. Back pointers would then go from T3 to T2 (similar to the original Proof of Space). The T2 table can be compressed by sorting to almost 0 bits. However, the back pointers will be 2k bits, same as the original Proof Fragment, that compress down to k bits, so ultimately splitting up the Proof Fragment cannot yield better compression.
+Even assuming free random access, attempts to relocate decrypted data to earlier tables (e.g., T2) fail:
+- Back-pointers to T2 would still be `2k` bits.
+- T2 could be compressed to near-zero using sorting, but the overall size after including back-pointers remains equal or worse than current Proof Fragments.
 
-Trying to drop bits falls into the bit saturation trap -- reconstruction of the Quality Chains would be more expensive than simply re-grinding to T3. 
+Any attempt to drop bits runs into the **bit saturation limit**, where reconstructing Quality Chains becomes more expensive than replotting to T3—and thus less viable than using a grinding attack.
 
-#### Underweighted data
+#### Underweighted Data
 
-If some data is used less frequently than other data, it could be dropped or occasionally reconstructed from the plot data to save space. 
+If certain plot data were rarely used, attackers might hope to drop it and reconstruct on-demand to save space. However:
 
-We highlight one such (failed) attempt with the Statistical Attack on a partition (see [Security](#statistical-attacks)).
+- Partition routing explicitly avoids reuse: no partition ever points to itself for both `L` and `R`, or receives both.
+- This disjoint design ensures all data is actively used during challenges.
+- Statistical attempts to exploit underused partitions (see [Security – Statistical Attacks](#statistical-attacks)) were ineffective.
 
-The partition data has also been deliberately designed so that the L and R pointers point to disjointed partitions. This means a challenge in partition (A) will never have the second partition also be partition (A), and pointers from partition (A) will also never have R pointers that point to partition (A). This removes any exploits that could have targeted removal of data not used in challenges.
-
-We see no redundant data.
+In short, the plot format avoids storing any redundant or underused data.
 
 ### Summary and Conclusions
 
