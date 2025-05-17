@@ -238,9 +238,9 @@ A simplified view of the PoS system is shown below.
 
 1. A challenge from the network defines a **Proof Fragment Scan Filter** to perform, which is a range in a partition (A) with a defined probability to pass.
 2. Proof Fragments that pass the filter are found by scanning the sorted elements in partition (A) in table T3. These are child nodes of a proof, and other sibling Proof Fragments tell us which other partition (B) they match with.
-3. We find all paths for proofs that share child Proof Fragments present in both partition (A) and partition (B). Each path links three sibling Proof Fragments, called a **Chain Link**.
-4. We collect the set of Chain Links. 
-5. We use the first Chain Link found in step (2), to seed the first element in a **Quality Chain**. We add links to this chain by testing a chaining filter hash on each Chain Link in the set from (4). This could produce multiple forks of chains if more than one Chain Link passes each round.
+3. We find all paths for proofs that share child Proof Fragments present in both partition (A) and partition (B). Each path links three sibling Proof Fragments, called a **Quality Link**.
+4. We collect the set of Quality Links. 
+5. We use the first Quality Link found in step (2), to seed the first element in a **Quality Chain**. We add links to this chain by testing a chaining filter hash on each Quality Link in the set from (4). This could produce multiple forks of chains if more than one Quality Link passes each round.
 6. Each Quality Chain is then checked if it passes the block difficulty (or pool partial difficulty). If it passes, congratulations, we have a good Proof of Space.
 7. We fetch one more Proof Fragment in T3 for each Quality Link to complete the set of four Proof Fragments for a proof. We then decrypt each Proof Fragment to find bit-dropped x-values. These need a recompute reconstruction of the full x-values in proofs using the Solver.
 8. The final full proof is all the solved x-values in the chaining sequence.
