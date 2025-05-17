@@ -68,6 +68,7 @@ Requires      | None
     - [T4 Partition Grinding Attack](#t4-partition-grinding-attack)
       - [Attack variant (1)](#attack-variant-1)
       - [Attack variant (2)](#attack-variant-2)
+      - [Attack variant (3)](#attack-variant-3)
       - [T4 Grinding Attack Analysis](#t4-grinding-attack-analysis)
     - [Overall Grinding Attack Analysis](#overall-grinding-attack-analysis)
     - [Mitigation](#mitigation)
@@ -630,10 +631,10 @@ From the above, we can see that a 256 Plot ID Filter mandates almost a 6 second 
 
 #### T3 Grinding Attack
 
-Similar to Rental Attack Grind, except instead of pre-filtering by the Plot ID, it filters full grind by T3 EncryptedXs Scan Filter. It has additional storage cost, which is T3 (approximately 47% of plot size). However, if the T3 EncryptedXs Scan filter is set high enough, it becomes more economical than the rental attack.
+Similar to Rental Attack Grind, except instead of pre-filtering by the Plot ID, it filters full grind by T3 Proof Fragment Scan Filter. It has additional storage cost, which is T3 (approximately 47% of plot size). However, if the T3 Proof Fragment Scan filter is set high enough, it becomes more economical than the rental attack.
 
 $$
-\text{Time to grind} = \frac{\text{T3 reconstruction time} + \text{T4 and T5 Filtered Partitions}}{\text{EncryptedXs Scan Filter} \times \text{Plot ID Filter}}
+\text{Time to grind} = \frac{\text{T3 reconstruction time} + \text{T4 and T5 Filtered Partitions}}{\text{Proof Fragment Scan Filter} \times \text{Plot ID Filter}}
 $$
 
 Here an attack only retains the T3 from the plot format. When a challenge comes in, the attacker performs the first Proof Fragment Scan as normal. If the Proof Fragment Scan Filter passes, the attacker then performs a **full grind** up to T3 to get all the metadata and then just reconstructs the T4 and T5 partitions required for the challenge.
@@ -643,10 +644,11 @@ Here an attack only retains the T3 from the plot format. When a challenge comes 
 ![Partition grinding attack](./assets/security-partition-grinding-attack.png)
 *A visual representation of a small sample plot showing source of all endpoints for collecting x's into a T4 grinding partition for an attacker.*
 
-A challenge works between two (or more) partitions.  The first partition originates from a defined range of EncryptedXs candidates. An attacker groups data required to generate partitions used in the challenge. There are two viable options for an attacker:
+A challenge works between two (or more) partitions.  The first partition originates from a defined range of Proof Fragment candidates. An attacker groups data required to generate partitions used in the challenge. Below are viable options for an attacker:
 
-- (1) group all x's required for the encryptedXs scan and the x values required to regenerate a T4 and T5 partition all together.
-- (2) generate a filtered T3 encryptedXs table that only includes R pointers that don't overlap with L pointers, and group all x values required to generate a T4 and T5 partition.
+- (1) group all x's required for the Proof Fragment Scan and the x-values required to regenerate a T4 and T5 partition all together.
+- (2) generate a filtered T3 Proof Fragment table that only includes R pointers that don't overlap with L pointers, and group all x values required to generate a T4 and T5 partition.
+- (3) same as the above, except store T2 match indexes instead of x-values.
 
 Attack variant (1) compresses more for higher bit dropping on x-values but requires more compute to reconstruct due to increased number of x-values, and (2) uses less storage for lower bit dropping values and has lower reconstruction costs due to less x-values.
 
@@ -657,29 +659,33 @@ Note that it is not sufficient to collect x's solely from T3 partitioned data. A
 ![Partition mappings](./assets/security-partition-grinding-collect.png)
 *Collecting x's from source data to store partition grinding attack.*
 
-Once x's are collected, they are sorted (with any duplicates removed) and compressed. These form the basis for all data required to reconstruct the encryptedXs for the T3 partition in which a challenge initiates an encryptedXs' scan. Critical is also the inclusion of the R' pointers, which originate from the same encryptedX's pointed to by the L pointers. However, due to pruning and match filtering, there will be a set of R' encryptedXs entries that aren't pointed to by the L pointers, so these must additionally be included in the list of xs for proper reconstruction to respond to a challenge successfully.
+Once x's are collected, they are sorted (with any duplicates removed) and compressed. These form the basis for all data required to reconstruct the Proof Fragment for the T3 partition in which a challenge initiates an Proof Fragment Scan. Critical is also the inclusion of the R' pointers, which originate from the same encryptedX's pointed to by the L pointers. However, due to pruning and match filtering, there will be a set of R' Proof Fragments that aren't pointed to by the L pointers, so these must additionally be included in the list of xs for proper reconstruction to respond to a challenge successfully.
 
 ![Partition mappings](./assets/security-partition-grinding-rebuild.png)
 *Reconstructing tables T3 to T5 focused on first partition required for challenge.*
 
-When a challenge comes in and finds a particular encryptedXs range to scan, the attacker immediately reconstructs the plot using the xs list for that partition. This will result in a full set of encryptedXs used in the scan. The attacker completes the encryptedXs scan to find the filtered list of R' pointers to follow, which will be in other partitions. The attacker then does an additional full reconstruction of all other partition data from the x lists of the destination partitions. Now the attacker has all partitions required for the challenge chaining filter.
+When a challenge comes in and finds a particular Proof Fragment range to scan, the attacker immediately reconstructs the plot using the xs list for that partition. This will result in a full set of Proof Fragments used in the scan. The attacker completes the Proof Fragment Scan to find the filtered list of R' pointers to follow, which will be in other partitions. The attacker then does an additional full reconstruction of all other partition data from the x lists of the destination partitions. Now the attacker has all partitions required for the challenge chaining filter.
 
 ##### Attack variant (2)
 
 ![Partition mappings](./assets/security-partition-grinding-collect-fragments.png)
-*Collecting x's from source data to store partition grinding attack, and filtering list of encryptedXs for unique R scan values.*
+*Collecting x's from source data to store partition grinding attack, and filtering list of Proof Fragments for unique R scan values.*
 
-Similar to approach (1), except we maintain a seperate list of encryptedXs fitlered to only those with unique R pointers that don't overlap with any L pointers, and only include x values necessary to generate the T4 and T5 partition.
+Similar to approach (1), except we maintain a seperate list of Proof Fragment fitlered to only those with unique R pointers that don't overlap with any L pointers, and only include x values necessary to generate the T4 and T5 partition.
 
 ![Partition mappings](./assets/security-partition-grinding-rebuild-fragments.png)
-*Using filtered encryptedXs and reconstructing tables T3 to T5 focused on first partition required for challenge.*
+*Using filtered Proof Fragments and reconstructing tables T3 to T5 focused on first partition required for challenge.*
 
-In constract to approach (1) we interleave our list of filtered encryptedXs with the encryptedXs reconstructed from the partioned x's list.
+In constract to approach (1) we interleave our list of filtered Proof Fragments with the Proof Fragments reconstructed from the partioned x's list.
+
+##### Attack variant (3)
+
+Instead of collecting x-values from T1, an attacker could instead collect indexes from pairings in T2 to reduce their stored data. This would, however, require an attacker to grind T1 to then filter out T2 by those indexes. More analysis needs to be done as to the feasibility of this approach, and adjustments to the T1 Match Key Bits could be necessary in the future.
 
 
 ##### T4 Grinding Attack Analysis
 
-There is significant benefit to dropping all tables and sparing just the list of x's required to reconstruct the fully dropped tables (approach (1)) or including just a list of encryptedXs needed for the scan but not the reconstruction (approach (2)). The attacker additionally can trade additional compute for reduced storage by bit dropping on each x. Approach (2) would only bit drop on the x-values used in the T4 partitioned x's, and not on the T3 filtered list of encryptedXs, as the scan would otherwise increase the number of candidate partitions the R pointers would reach, which would incur additional partitions to solve for the attacker that would generate additional work and result in increased chaining paths as well as false candidates that would be discarded when validating a proof.
+There is significant benefit to dropping all tables and sparing just the list of x's required to reconstruct the fully dropped tables (approach (1)) or including just a list of Proof Fragments needed for the scan but not the reconstruction (approach (2)). The attacker additionally can trade additional compute for reduced storage by bit dropping on each x. Approach (2) would only bit drop on the x-values used in the T4 partitioned x's, and not on the T3 filtered list of Proof Fragments, as the scan would otherwise increase the number of candidate partitions the R pointers would reach, which would incur additional partitions to solve for the attacker that would generate additional work and result in increased chaining paths as well as false candidates that would be discarded when validating a proof.
 
 The goal for the attacker is to reduce the number of bits so that the collective partitioned x's are smaller than an honest plot. Results below are estimated with T4 Partition Attack at 85% of plot size with 4090 @ $1600 350W.
 
