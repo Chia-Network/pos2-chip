@@ -56,7 +56,8 @@ Requires      | None
   - [HDD Activity](#hdd-activity)
   - [Proof of Space Specification](#proof-of-space-specification)
   - [Pooling Protocol Specification](#pooling-protocol-specification)
-    - [Options](#options)
+    - [Optional](#optional)
+  - [Transition Period](#transition-period)
 - [Test Cases](#test-cases)
 - [Reference Implementation](#reference-implementation)
 - [Security](#security)
@@ -480,7 +481,7 @@ The new Proof of Space format allows plots as small as 1.6GiB. Due to the symmet
 CPU plotting will be possible but will be less efficient than GPU. All times shown are for all-RAM plotting, although farmers can trade cpu RAM for temporary SSD storage, which results in slightly slower performance.
 
 > [!NOTE]
-> Subject to change, aim will be for 3060 to plot >20TiB/day, CPU will be <1TiB/day
+> Pending Plot ID Filter and Plot Difficulty settings. Aim will be for 3060 to plot >20TiB/day
 
 (TBD)
 
@@ -503,9 +504,9 @@ After a proof of sufficiently high quality is found it needs to be _solved_, whi
 
 | Plot Size | Raspberry Pi 5 | Ryzen 5600 (6-core)  | Threadripper | Nvidia 3060 |
 |-----------|----------------|----------------------|--------------|-------------|
-| k28       | ~6.8 seconds   | ~1 seconds           | <1 second    | 60 ms       |
-| k30       | ~15.6 seconds  | ~3.3 seconds         | <3 seconds   | 240 ms      |
-| k32       | N/A            | ~11.7 seconds        | <8 seconds   | 960 ms      |
+| k28       | ~6.8 seconds   | ~1 seconds           | < 1 second    | 60 ms       |
+| k30       | ~15.6 seconds  | ~3.3 seconds         | < 3 seconds   | 240 ms      |
+| k32       | N/A            | ~11.7 seconds        | < 8 seconds   | 960 ms      |
 
 ### HDD Activity
 
@@ -524,7 +525,6 @@ Lower k-sizes increase disk activity but reduce minimum hardware requirements fo
 > Current work in progress on the formal specifications. The PoS has been finished, although parts of the specification here are pending implementations and testing.
 
 * [Proof of Space specification](./assets/chip-specification-pos.md)
-* [Quality Chain specification](./assets/chip-specification-chaining.md)
 * Proof of Space construction: pending. See reference plotter code.
 * Proof of Space solving: see reference Solver code.
 
@@ -532,21 +532,20 @@ Lower k-sizes increase disk activity but reduce minimum hardware requirements fo
 ### Pooling Protocol Specification
 
 > [!NOTE]
-> Pooling Protocol is not part of the hard fork, and is currently still incomplete.
+> Pooling Protocol is not part of the hard fork, and is currently still a work-in-progress.
 
 - The pooling protocol should only accept 1 proof from the same plot ID (group) for a given challenge.
     - helps reduce farmer solving requirements
 - Pools should also accept that solving timings should be relaxed if a farmer wins more than 1 pool partial for a challenge, so that a farmer isn't forced to overload their proof recomputes to respond within a given time. 
-- software will prioritize block wins for solving
+- Software will prioritize block wins for solving
 
-#### Options
+#### Optional
 
 Pooling operator could accept only the Quality Chain and save the farmer doing full proof recomputes. This would require the pooling operator to trust or verify as a service.
 
-</details>
-<br>
+### Transition Period
 
-The **Transition Period** where new plots are accepted and old plots are phased out are proposed in a separate CHIP: [link]
+The **Transition Period** where new plots are accepted and old plots are phased out are proposed in a separate CHIP.
 
 
 ## Test Cases
@@ -559,8 +558,8 @@ A suite of tests can be found in the [github repository for the chip](https://gi
 Full reference implementations for this chip are in:
 [https://github.com/Chia-Network/pos2-chip](https://github.com/Chia-Network/pos2-chip)
 
-* C/C++ cpu based plotter. Generates test plot (uncompressed). Available.
-* C/C++ cpu based solver. Soon.
+* C/C++ cpu based plotter. Generates test plot (uncompressed). 
+* C/C++ cpu based solver. 
 * C/C++ prover : responds to challenge and provides proofs from stored plot. Soon.
 * C/C++ benes compressed plot: TBD.
 * C/C++ cuda (nvidia) plotter. TBD.
