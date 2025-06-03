@@ -44,12 +44,13 @@ This repository provides a **public reference implementation** of the new ProofÂ
 ```
 #### Installing TBB library
 
-If you see linker errors, you may need to install the TBB library for multi-threading support.
+If you see linker errors, make sure you have essential build tools. You may also need to install the TBB library for multi-threading support.
 
 ##### Ubuntu / Debian
 
 ```bash
 sudo apt update
+sudo apt install build-essential
 sudo apt install -y libtbb-dev
 ```
 
@@ -73,7 +74,7 @@ sudo apt install -y libtbb-dev
 From the root of your build directory, invoke the plotter executable:
 
 ```
-./tools/plotter/plotter <k> [sub_k]
+./build/src/tools/plotter/plotter <k> [sub_k]
 ```
 
 By default it uses the sample plot ID and parameters defined in tools/plotter/src/main.cpp. To customize, edit that file or supply your own main() implementation.
@@ -87,10 +88,10 @@ k=32 sub_k=22
 
 ```bash
 # Use k=18, default sub_k=20
-./src/tools/plotter/plotter 18
+./build/src/tools/plotter/plotter 18
 
 # Use k=28 and sub_k=16
-./src/tools/plotter/plotter 28 16
+./build/src/tools/plotter/plotter 28 16
 ```
 
 ## Running the Solver
@@ -99,13 +100,13 @@ Run the solver executable with one of the two modes:
 
 ### Benchmark Mode
 
-    ./src/tools/solver/solver benchmark <k-size>
+    ./build/src/tools/solver/solver benchmark <k-size>
 
 - `<k-size>`: integer value for the solverâ€™s k parameter (e.g. 28).
 
 Example:
 
-    ./src/tools/solver/solver benchmark 32
+    ./build/src/tools/solver/solver benchmark 32
 
 Outputs timing and performance metrics for reconstructing proofs.
 
@@ -116,13 +117,13 @@ Reads the plot, prints its parameters, and runs the a chaining test for getting 
 > [!NOTE]
 > Currently the solver does not accept a challenge to choose a proof from the plot. Coming soon (TM).
 
-    ./src/tools/solver/solver prove <plot-file>
+    ./build/src/tools/solver/solver prove <plot-file>
 
 - `<plot-file>`: path to a plot file to test.
 
 Example:
 
-    ./src/tools/solver/solver prove /path/to/plot.bin
+    ./build/src/tools/solver/solver prove /path/to/plot.bin
 
 > [!NOTE]
 > Plot files are changing frequently, so use the plotter to generate a new plot to then test it.
