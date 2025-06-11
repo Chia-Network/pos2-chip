@@ -1,5 +1,6 @@
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
+#include "common/Utils.hpp"
 
 
 TEST_SUITE_BEGIN("plot-file");
@@ -15,7 +16,7 @@ TEST_CASE("plot-read-write")
     Timer timer{};
     timer.start("");
 
-    Plotter  plotter(PLOT_ID_HEX, K, SUB_K);
+    Plotter  plotter(Utils::hexToBytes(PLOT_ID_HEX), K, SUB_K);
     PlotData plot = plotter.run();
     timer.stop();
 

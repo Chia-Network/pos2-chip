@@ -49,13 +49,16 @@ public:
 
         ProofFragmentScanFilter scan_filter(plot.params, challenge_, scan_filter_);
         std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.scan(plot.data.t3_encrypted_xs);
+        stats_.num_scan_filter_passed++;
+        stats_.num_fragments_passed_scan_filter += filtered_fragments.size();
+        
 
         XsEncryptor xs_encryptor(plot.params);
 
         if (filtered_fragments.size() > 0)
         {
             std::cout << "Found fragments passing filter: " << filtered_fragments.size() << std::endl;
-            for (size_t i = 0; i < filtered_fragments.size(); i++)
+            /*for (size_t i = 0; i < filtered_fragments.size(); i++)
             {
                 uint64_t fragment = filtered_fragments[i].fragment;
                 std::cout << "  Fragment: " << std::hex << fragment << std::dec << std::endl;
@@ -69,7 +72,7 @@ public:
                 std::vector<QualityLink> links = getQualityLinks(l_partition, r_partition);
                 std::cout << " # Link: " << links.size() << std::endl;
                 
-            }
+            }*/
         }
         else
         {
@@ -78,6 +81,7 @@ public:
         
         
         std::vector<QualityChain> all_chains;
+        /*
         if (filtered_fragments.size() > 0)
         {
             // 2) Create chains
@@ -94,7 +98,7 @@ public:
                 all_chains.push_back(chain);
             }
             
-        }
+        }*/
         return all_chains;
     }
 
@@ -133,9 +137,21 @@ public:
         challenge_ = challenge;
     }
 
+    void showStats() const
+    {
+        std::cout << "Prover Stats:" << std::endl;
+        std::cout << "  Number of scan filter passed: " << stats_.num_scan_filter_passed << std::endl;
+        std::cout << "  Number of fragments passed scan filter: " << stats_.num_fragments_passed_scan_filter << " (" << (stats_.num_fragments_passed_scan_filter * 100.0 / stats_.num_scan_filter_passed) << "%)" << std::endl;
+    }
+
 private:
     std::optional<PlotFile::PlotFileContents> plot_;  
     int scan_filter_;
     std::array<uint8_t, 32> challenge_;
     std::string plot_file_name_;
+
+    struct stats {
+        int num_scan_filter_passed = 0;
+        int num_fragments_passed_scan_filter = 0;
+    } stats_;
 };

@@ -1,1 +1,1 @@
-option(CP_ENABLE_TESTS "Enable tests" OFF)
+option(CP_ENABLE_TESTS "Enable tests" ON)

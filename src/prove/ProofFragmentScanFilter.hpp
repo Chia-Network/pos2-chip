@@ -43,7 +43,7 @@ public:
 
         double t3_expected_entries = proof_core_.num_expected_pruned_entries_for_t3();
         std::cout << "Expected T3 entries: " << (uint64_t)t3_expected_entries << std::endl;
-        double t3_expected_num_entries_per_range = t3_expected_entries / (1ULL << PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS);
+        double t3_expected_num_entries_per_range = t3_expected_entries / numScanRanges();
         std::cout << "Expected T3 entries per range: " << t3_expected_num_entries_per_range << std::endl;
 
         double filter = 1 / (t3_expected_num_entries_per_range * (double)scan_filter_);
@@ -105,35 +105,49 @@ public:
         uint64_t lsb = 0;
         for (int i = 0; i < num_bits; ++i)
         {
-            lsb |= ((challenge_[i / 8] >> (i % 8)) & 1) << i;
+            uint64_t bit = (challenge_[i / 8] >> (i % 8)) & 1;
+            lsb |= (bit << i);
         }
 
         return lsb;
     }
 
+    // The span (or range) of values for proof fragment scan filters
+    uint64_t getScanSpan()
+    {
+        return (1ULL << (params_.get_k() + PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS));
+    }
+
+    uint64_t numScanRanges() 
+    {
+        // The number of scan ranges is 2^(k - PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS)
+        return (1ULL << (params_.get_k() - PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS));
+    }
+
     ScanRange getScanRangeForFilter()
     {
         // Calculate the scan range based on the filter
-        // The scan range filter bits determine the msb of the fragment
-        // The number of possible scan ranges is the rest of the 2k bits
-        //   aka the scan_range_selection_bits
-        // We get the scan_range_selection_bits by looking at the lsb of the challenge
-        // The scan range becomes those msb range of bits after the selection
+        // A filter range of PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS (set to 13, value 8192) means we want to scan approximately 8192 entries (before pruning metric) at a time.
+        // To find the range across approximately 2^k entries that span across proof fragment values 0..2^(2k) - 1, then the number of possible scan ranges is 2^k / 8192, or 2^(k - 13)
+        //   -> this becomes scan_range_filter_bits = k - 13.
+        // and thus the value of that span is 2^(2k) / (2^k / 8192) = 2^k * 8192 = 2^(k + 13).
+        int scan_range_filter_bits = params_.get_k() - PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS;
 
-        int scan_range_filter_bits = 2 * params_.get_k() - PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS;
+        // scan range id should be 0..(2^scan_range_filter_bits - 1)
         uint64_t scan_range_id = getLSBFromChallenge(scan_range_filter_bits);
+
+        uint64_t scan_span = getScanSpan();
 
         // TODO: make sure k32 doesn't overflow
         ScanRange range;
-        range.start = scan_range_id << scan_range_filter_bits;
-        range.end = ((scan_range_id + 1) << scan_range_filter_bits) - 1;
-
+        range.start = scan_span * scan_range_id;
+        range.end = scan_span * (scan_range_id + 1) - 1;
         // debug out
         if (true)
         {
+            std::cout << "Scan range id: " << scan_range_id << std::endl;
             std::cout << "Scan range: " << range.start << " - " << range.end << std::endl;
             std::cout << "Scan range filter bits: " << scan_range_filter_bits << std::endl;
-            std::cout << "Scan range id: " << scan_range_id << std::endl;
             std::cout << "Scan range selection bits: " << PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS << std::endl;
         }
         return range;
