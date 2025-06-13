@@ -65,7 +65,82 @@ public:
             blake_hash.set_data(i, block_word);
         }
        
-        for (size_t i = 0; i < fragments.size(); ++i)
+        // smart seek start of range, given we have a uniform distribution of fragments
+        size_t n = fragments.size();
+        uint64_t full_range = (1ULL << (2 * params_.get_k()));
+        double perc_position_start = (double)range.start / (double) (full_range);
+        double estimated_position = perc_position_start * (double) n;
+        size_t start_index = static_cast<size_t>(estimated_position);
+
+        std::cout << "N Fragments: " << n << std::endl;
+        std::cout << "Full range: " << full_range << std::endl;
+        std::cout << "Percentage of range start: " << perc_position_start << std::endl;
+        std::cout << "Estimated position: " << estimated_position << std::endl;
+        std::cout << "Range start: " << range.start << ", end: " << range.end << std::endl;
+        std::cout << "Percentage position start: " << perc_position_start << std::endl;
+        std::cout << "Start index: " << start_index << std::endl;
+
+        // check start_index, and then adjust position to find first fragment in beginning of range
+        if (start_index >= n)
+        {
+            start_index = n - 1; // Ensure we don't go out of bounds
+        }
+        if (fragments[start_index] < range.start)
+        {
+            // Move forward until we find a fragment within the range
+            while (start_index < n && fragments[start_index] < range.start)
+            {
+                ++start_index;
+            }
+        }
+        else if (fragments[start_index] > range.start)
+        {
+            // Move back until we find a fragment for start of range
+            while (start_index > 0 && fragments[start_index] > range.start)
+            {
+                --start_index;
+            }
+            start_index++; // Move to the next fragment that is within the range
+        }
+
+        std::cout << "Adjusted start index: " << start_index << std::endl;
+        std::cout << "Fragment at adjusted start index: " << fragments[start_index] << std::endl;
+        
+        // Now we can start scanning from the adjusted start_index
+        uint64_t pos = start_index;
+        int test_num_fragments_scanned = 0;
+        while (pos < n && fragments[pos] < range.end)
+        {
+            uint64_t fragment = fragments[pos];
+            // Check if the fragment is within the scan range
+            if (fragment >= range.start && fragment < range.end)
+            {
+                // now we check if the fragment passes the filter
+                blake_hash.set_data(4, fragment >> 32);
+                blake_hash.set_data(5, fragment & 0xFFFFFFFF);
+                uint32_t hash_result = blake_hash.generate_hash().r0;
+                if (hash_result < hash_threshold)
+                {
+                    // If it passes, add it to the filtered fragments
+                    ScanResult result;
+                    result.fragment = fragment;
+                    result.index = pos;
+                    filtered_fragments.push_back(result);
+                }
+                test_num_fragments_scanned++;
+            }
+            else {
+                // error
+                std::cerr << "Fragment out of range: " << fragment << " at position " << pos << std::endl;
+            }
+            ++pos;
+        }
+
+        std::cout << "Total fragments scanned: " << test_num_fragments_scanned << std::endl;
+        std::cout << "Filtered fragments found: " << filtered_fragments.size() << std::endl;
+        
+
+        /*for (size_t i = 0; i < fragments.size(); ++i)
         {
             uint64_t fragment = fragments[i];
             // Check if the fragment is within the scan range
@@ -88,7 +163,7 @@ public:
             {
                 break; // No need to check further if the fragment is out of range
             }
-        }
+        }*/
 
         return filtered_fragments;
     }

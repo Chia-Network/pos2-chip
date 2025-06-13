@@ -16,6 +16,14 @@ int main(int argc, char *argv[])
 
     std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
 
+    if (false) {
+        ProofParams params(challenge.data(), 28, 20);
+        ProofCore proof_core(params);
+        uint64_t chaining_hash_pass_threshold = proof_core.quality_chain_pass_threshold();
+        std::cout << "Chaining hash pass threshold: " << std::dec << chaining_hash_pass_threshold << std::endl;
+        exit(23);
+    }
+
     Prover prover(challenge, argv[2], 2);
 
     // set random seed
@@ -25,15 +33,15 @@ int main(int argc, char *argv[])
     for (int i = 0; i < total_trials; i++)
     {
         std::cout << "----------- Trial " << i << "/" << total_trials << " ------ " << std::endl;
-        //std::cout << std::hex << (int)challenge[0] << std::dec << std::endl;
-
+        // std::cout << std::hex << (int)challenge[0] << std::dec << std::endl;
 
         challenge[0] = i & 0xFF;
         challenge[1] = (i >> 8) & 0xFF;
         challenge[2] = (i >> 16) & 0xFF;
         challenge[3] = (i >> 24) & 0xFF;
 
-        for (int i = 0; i < 32; i++) {
+        for (int i = 0; i < 32; i++)
+        {
             int randseed = rand() % 65536;
             challenge[i] = randseed;
         }

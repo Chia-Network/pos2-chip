@@ -5,6 +5,7 @@
 #include <tuple>
 #include <iostream>
 #include <optional>
+#include <limits>
 
 #include "ProofParams.hpp"
 #include "ProofHashing.hpp"
@@ -31,6 +32,9 @@
 
 const uint32_t FINAL_TABLE_FILTER = 855570511; // out of 2^32
 const double FINAL_TABLE_FILTER_D = 0.19920303275; 
+
+constexpr double CHAINING_FACTOR = 1.1;
+constexpr int NUM_CHAIN_LINKS = 16;
 
 struct T1Pairing
 {
@@ -428,8 +432,41 @@ public:
     double num_expected_pruned_entries_for_t3() {
         double k_entries = (double) (1UL << params_.get_k());
         double t3_entries = (FINAL_TABLE_FILTER_D / 0.25)*k_entries;
-
         return t3_entries;
+    }
+
+    double expected_quality_links_set_size() {
+        double entries_per_partition = num_expected_pruned_entries_for_t3() / (double) params_.get_num_partitions();
+        return 2.0 * entries_per_partition / (double) params_.get_num_partitions();
+    }
+
+    uint64_t quality_chain_pass_threshold() {
+        // 1) compute pass probability
+        double chance = CHAINING_FACTOR / expected_quality_links_set_size();
+
+        // 2) use long double for extra precision
+        long double max_uint64 = static_cast<long double>(std::numeric_limits<uint64_t>::max());
+
+        // 3) compute raw threshold
+        long double raw = chance * max_uint64;
+
+        // 4) clamp to avoid overflow
+        if (raw >= max_uint64) {
+            raw = max_uint64;
+        }
+
+        if (false) {
+            // debug output
+            std::cout << "Num expected links for t3: " << (int) num_expected_pruned_entries_for_t3() << std::endl;
+            std::cout << "num_partitions: " << params_.get_num_partitions() << std::endl;
+            std::cout << "expected_quality_links_set_size: " << (int) expected_quality_links_set_size() << std::endl;
+            std::cout << "chance: " << chance << std::endl;
+            std::cout << "raw threshold: " << raw << std::endl;
+            std::cout << "clamped threshold: " << raw << std::endl;
+        }
+
+        // 5) round to nearest integer and return
+        return static_cast<uint64_t>(raw + 0.5L);
     }
 
 private:

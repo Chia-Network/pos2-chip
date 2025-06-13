@@ -112,6 +112,15 @@ public:
         return true;
     }
 
+    std::array<uint32_t, 4> get_x_bits_from_encrypted_xs(uint64_t encrypted_xs) const {
+        size_t half_k = params_.get_k() / 2;
+        uint32_t x1 = static_cast<uint32_t>((encrypted_xs >> (half_k * 3)) & ((uint64_t(1) << half_k) - 1));
+        uint32_t x3 = static_cast<uint32_t>((encrypted_xs >> (half_k * 2)) & ((uint64_t(1) << half_k) - 1));
+        uint32_t x5 = static_cast<uint32_t>((encrypted_xs >> (half_k * 1)) & ((uint64_t(1) << half_k) - 1));
+        uint32_t x7 = static_cast<uint32_t>(encrypted_xs & ((uint64_t(1) << half_k) - 1));
+        return {x1, x3, x5, x7};
+    }
+
 private:
     ProofParams params_;
     FeistelCipher cipher_;
