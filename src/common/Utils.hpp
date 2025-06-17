@@ -29,4 +29,8 @@ class Utils
         oss << std::hex << std::setw(width) << std::setfill('0') << value;
         return oss.str();
     }
+
+    static uint32_t fromHex(const std::string& hex) {
+        return static_cast<uint32_t>(std::strtoul(hex.c_str(), nullptr, 16));
+    }
 };

@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
 
         for (int i = 0; i < 32; i++)
         {
-            int randseed = rand() % 65536;
+            int randseed = 23;//rand() % 65536;
             challenge[i] = randseed;
         }
 
@@ -60,13 +60,17 @@ int main(int argc, char *argv[])
             XsEncryptor xs_encryptor(params);
             // convert proof fragments to xbits hex
             std::string xbits_hex;
+            std::vector<uint32_t> xbits_list;
             for (const auto &fragment : proof_fragments)
             {
+                std::cout << "ProofFragment: " << fragment << std::endl;
                 std::array<uint32_t, 4> x_bits = xs_encryptor.get_x_bits_from_encrypted_xs(fragment);
                 for (const auto &x_bit : x_bits)
                 {
                     // at most 16 bits = 4 x 4 bits
                     xbits_hex += Utils::toHex(x_bit, 4);
+                    xbits_list.push_back(x_bit);
+                    std::cout << " " << x_bit;
                 }
             }
 
@@ -75,6 +79,17 @@ int main(int argc, char *argv[])
             std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
 
             std::cout << "./solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << std::endl;
+            for (size_t j = 0; j < xbits_list.size(); j++)
+            {
+                std::cout << j << ": " << xbits_list[j] << std::endl;
+            }
+
+            const uint8_t *plot_id_bytes = params.get_plot_id_bytes();
+            std::cout << "Plot ID: ";
+            for (int j = 0; j < 32; j++)
+            {
+                std::cout << (int)plot_id_bytes[j] << std::endl;
+            }
             exit(23);
         }
         else

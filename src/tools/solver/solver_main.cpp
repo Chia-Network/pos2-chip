@@ -166,7 +166,12 @@ int chain_test(PlotFile::PlotFileContents &plot)
 {
     XsEncryptor xs_encryptor(plot.params);
 
-    int num_chains = 16;
+    //T5 indices: 7126,11699,19124,23993,25291,21053,17607,6303,21934,10168,25165,16573,18375,18911,20855,3427,
+//T5 partitions: 10,29,29,29,10,29,29,29,29,29,10,29,10,29,29,10,
+    uint32_t t5_indices[16] = {14093,3008,12267,11083,6608,13914,8476,10771,13391,24153,10114,14980,9355,19421,18049,19421};
+    uint32_t t5_partitions[16] = {2,18,18,18,2,18,2,2,2,2,2,2,2,2,2,2};
+
+    int num_chains = NUM_CHAIN_LINKS;
     std::cout << "Number of chains: " << num_chains << std::endl;
 
     int failed_count = 0;
@@ -180,7 +185,9 @@ int chain_test(PlotFile::PlotFileContents &plot)
         std::vector<uint32_t> xs_full_solution;
         for (int chain = 0; chain < num_chains; chain++)
         {
-            T5Pairing t5_pairing = plot.data.t5_to_t4_back_pointers[partition][chain]; // now get t4 L and R pairings
+            partition = t5_partitions[chain];
+            int t5_index = t5_indices[chain];
+            T5Pairing t5_pairing = plot.data.t5_to_t4_back_pointers[partition][t5_index]; // now get t4 L and R pairings
             T4BackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_l];
             T4BackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_r];
             uint64_t encrypted_xs_LL = plot.data.t3_encrypted_xs[t4_to_t3_L.encx_index_l];
@@ -192,6 +199,34 @@ int chain_test(PlotFile::PlotFileContents &plot)
             uint64_t decrypted_xs_LR = xs_encryptor.decrypt(encrypted_xs_LR);
             uint64_t decrypted_xs_RL = xs_encryptor.decrypt(encrypted_xs_RL);
             uint64_t decrypted_xs_RR = xs_encryptor.decrypt(encrypted_xs_RR);
+
+            std::array<uint32_t, 4>  x_bits_ll = xs_encryptor.get_x_bits_from_encrypted_xs(encrypted_xs_LL);
+            std::array<uint32_t, 4>  x_bits_lr = xs_encryptor.get_x_bits_from_encrypted_xs(encrypted_xs_LR);
+            std::array<uint32_t, 4>  x_bits_rl = xs_encryptor.get_x_bits_from_encrypted_xs(encrypted_xs_RL);
+            std::array<uint32_t, 4>  x_bits_rr = xs_encryptor.get_x_bits_from_encrypted_xs(encrypted_xs_RR);
+
+            std::cout << "Quality Link: " << std::endl
+            << " Partition: " << partition << std::endl
+            << " T5 Index: " << t5_index << std::endl
+            << " T4 Index L: " << t5_pairing.t4_index_l << std::endl
+            << " T4 Index R: " << t5_pairing.t4_index_r << std::endl
+            << " T3 Index LL: " << t4_to_t3_L.encx_index_l << std::endl
+            << " T3 Index LR: " << t4_to_t3_L.encx_index_r << std::endl
+            << " T3 Index RL: " << t4_to_t3_R.encx_index_l << std::endl
+            << " T3 Index RR: " << t4_to_t3_R.encx_index_r << std::endl
+            << " Encrypted xs LL: " << std::hex << encrypted_xs_LL << std::endl
+            << "   LL xbits: " << std::dec
+            << " [" << x_bits_ll[0] << ", " << x_bits_ll[1] << ", " << x_bits_ll[2] << ", " << x_bits_ll[3] << "]" << std::endl
+            << " Encrypted xs LR: " << std::hex << encrypted_xs_LR << std::endl
+            << "   LR xbits: " << std::dec
+            << " [" << x_bits_lr[0] << ", " << x_bits_lr[1] << ", " << x_bits_lr[2] << ", " << x_bits_lr[3] << "]" << std::endl
+            << " Encrypted xs RL: " << std::hex << encrypted_xs_RL << std::endl
+            << "   RL xbits: " << std::dec
+            << " [" << x_bits_rl[0] << ", " << x_bits_rl[1] << ", " << x_bits_rl[2] << ", " << x_bits_rl[3] << "]" << std::endl
+            << " Encrypted xs RR: " << std::hex << encrypted_xs_RR << std::endl
+            << "   RR xbits: " << std::dec
+            << " [" << x_bits_rr[0] << ", " << x_bits_rr[1] << ", " << x_bits_rr[2] << ", " << x_bits_rr[3] << "]" << std::endl
+            << std::endl << std::dec;
             int half_k = plot.params.get_k() / 2;
             x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_LL >> (half_k * 3)) & ((uint64_t(1) << half_k) - 1)));
             x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_LL >> (half_k * 2)) & ((uint64_t(1) << half_k) - 1)));
@@ -229,6 +264,7 @@ int chain_test(PlotFile::PlotFileContents &plot)
             }
 #endif
         }
+
         std::cout << "Xs solution: ";
         for (size_t i = 0; i < xs_full_solution.size(); i++)
         {
@@ -349,7 +385,16 @@ int prove(const std::string& plot_file) {
 int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_list, int k) {
     // convert plot_id_hex to bytes
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
-    ProofParams params(plot_id.data(), k, 16);
+    int sub_k = 16;
+    if (k == 28) {
+        sub_k = 20;
+    }
+    ProofParams params(plot_id.data(), k, sub_k);
+    const uint8_t *plot_id_bytes = params.get_plot_id_bytes();
+    for (size_t i = 0; i < 32; i++) {
+        std::cout << "Plot ID Byte " << i << ": " << (int) plot_id_bytes[i] << std::endl;
+    }
+
     params.show();
 
     Solver solver(params);
@@ -447,9 +492,10 @@ int main(int argc, char* argv[]) {
         std::cout << "Running xbits with k-size = " << k << " plot id: " << plot_id_hex << " and xbits = " << xbits_hex << std::endl;
         // convert xbits_hex to uint32_t array
         std::vector<uint32_t> x_bits_list;
-        for (size_t i = 0; i < 64; i++) {
-            std::string byte_str = xbits_hex.substr(i * 2, 2);
-            x_bits_list.push_back(std::stoul(byte_str, nullptr, 16));
+        for (size_t i = 0; i < 256; i++) {
+            std::string hexStr = xbits_hex.substr(i * 4, 4);
+            x_bits_list.push_back(Utils::fromHex(hexStr));
+            std::cout << i << ": " << x_bits_list.back() << std::endl;
         }
         return xbits(plot_id_hex, x_bits_list, k);
 
