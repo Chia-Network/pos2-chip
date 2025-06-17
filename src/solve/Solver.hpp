@@ -576,6 +576,10 @@ public:
     // full proof is all t5 x-value collections, should be in same sequence order as quality chain
     std::vector<std::vector<uint32_t>> constructProofs(const std::vector<std::vector<T5_match>> &t5_matches)
     {
+        if (t5_matches.empty())
+        {
+            return {}; // return empty if no matches
+        }
         std::vector<std::vector<uint32_t>> all_proofs;
 
         std::vector<uint32_t> full_proof;
@@ -588,6 +592,10 @@ public:
                     full_proof.push_back(match.x_values[x_pos]);
                 }
             }
+        }
+        if (full_proof.empty())
+        {
+            return {}; // return empty if no matches
         }
         all_proofs.push_back(full_proof);
         return all_proofs;

@@ -219,6 +219,7 @@ public:
         chain.chain_links[0] = firstLink; // the first link is always the first in the chain
         chain.chain_hash = chainHash(0, firstLink, blake_hash);
         quality_chains.push_back(chain);
+        stats_.num_first_chain_links++;
 
         std::cout << "Initial chain hash: " << std::hex << chain.chain_hash << std::dec << std::endl;
 
@@ -266,6 +267,8 @@ public:
             // swap in the newly grown set
             quality_chains.swap(new_chains);
         }
+
+        stats_.num_quality_chains += quality_chains.size();
 
         return quality_chains;
     }
@@ -412,6 +415,35 @@ public:
         return links;
     }
 
+    std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain chain) {
+        std::vector<uint64_t> proof_fragments;
+        std::cout << "Getting all proof fragments for chain with " << chain.chain_links.size() << " links." << std::endl;
+        for (const auto &link : chain.chain_links)
+        {
+            if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
+            {
+                proof_fragments.push_back(link.fragments[0]); // LL
+                proof_fragments.push_back(link.fragments[1]); // LR
+                proof_fragments.push_back(link.fragments[2]); // RL
+                uint64_t outside_fragment = plot_.value().data.t3_encrypted_xs[link.outside_t3_index]; // RR
+                proof_fragments.push_back(outside_fragment); // RR
+            }
+            else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
+            {
+                proof_fragments.push_back(link.fragments[0]); // LL
+                uint64_t outside_fragment = plot_.value().data.t3_encrypted_xs[link.outside_t3_index]; // LR
+                proof_fragments.push_back(outside_fragment); // LR
+                proof_fragments.push_back(link.fragments[1]); // RL
+                proof_fragments.push_back(link.fragments[2]); // RR
+            }
+            else
+            {
+                std::cerr << "Unknown fragment pattern: " << static_cast<int>(link.pattern) << std::endl;
+            }
+        }
+        return proof_fragments;
+    }
+
     void setChallenge(const std::array<uint8_t, 32> &challenge)
     {
         challenge_ = challenge;
@@ -422,7 +454,22 @@ public:
         std::cout << "Prover Stats:" << std::endl;
         std::cout << "  Number of scan filter passed: " << stats_.num_scan_filter_passed << std::endl;
         std::cout << "  Number of fragments passed scan filter: " << stats_.num_fragments_passed_scan_filter << " (" << (stats_.num_fragments_passed_scan_filter * 100.0 / stats_.num_scan_filter_passed) << "%)" << std::endl;
+        std::cout << "  Number of first chain links: " << stats_.num_first_chain_links << " (" << (stats_.num_first_chain_links * 100.0 / stats_.num_fragments_passed_scan_filter) << "%)" << std::endl;
+        std::cout << "  Number of quality chains found: " << stats_.num_quality_chains << " (" << (stats_.num_quality_chains * 100.0 / stats_.num_first_chain_links) << "%)" << std::endl;
     }
+
+    ProofParams getProofParams() const
+    {
+        if (plot_.has_value())
+        {
+            return plot_.value().params;
+        }
+        else
+        {
+            throw std::runtime_error("Plot file not loaded.");
+        }
+    }
+
 
 private:
     std::optional<PlotFile::PlotFileContents> plot_;
@@ -434,5 +481,7 @@ private:
     {
         int num_scan_filter_passed = 0;
         int num_fragments_passed_scan_filter = 0;
+        int num_first_chain_links = 0;
+        int num_quality_chains = 0;
     } stats_;
 };

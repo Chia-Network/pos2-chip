@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
     // set random seed
     srand(static_cast<unsigned int>(time(nullptr)));
     int num_chains_found = 0;
-    int total_trials = 100; // 2^8
+    int total_trials = 1000; // 2^8
     for (int i = 0; i < total_trials; i++)
     {
         std::cout << "----------- Trial " << i << "/" << total_trials << " ------ " << std::endl;
@@ -52,6 +52,30 @@ int main(int argc, char *argv[])
         {
             std::cout << "Found " << chains.size() << " chains." << std::endl;
             num_chains_found += chains.size();
+
+            std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chains[0]);
+            std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
+
+            ProofParams params = prover.getProofParams();
+            XsEncryptor xs_encryptor(params);
+            // convert proof fragments to xbits hex
+            std::string xbits_hex;
+            for (const auto &fragment : proof_fragments)
+            {
+                std::array<uint32_t, 4> x_bits = xs_encryptor.get_x_bits_from_encrypted_xs(fragment);
+                for (const auto &x_bit : x_bits)
+                {
+                    // at most 16 bits = 4 x 4 bits
+                    xbits_hex += Utils::toHex(x_bit, 4);
+                }
+            }
+
+            std::array<uint8_t, 32> plot_id_arr;
+            std::memcpy(plot_id_arr.data(), params.get_plot_id_bytes(), 32);
+            std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
+
+            std::cout << "./solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << std::endl;
+            exit(23);
         }
         else
         {

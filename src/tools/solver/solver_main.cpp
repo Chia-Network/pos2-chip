@@ -346,6 +346,39 @@ int prove(const std::string& plot_file) {
     return 0;
 }
 
+int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_list, int k) {
+    // convert plot_id_hex to bytes
+    std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
+    ProofParams params(plot_id.data(), k, 16);
+    params.show();
+
+    Solver solver(params);
+    solver.setBitmaskShift(0); // with large chaining of 16 bitmask shift doesn't help much (if at all).
+#ifdef NON_BIPARTITE_BEFORE_T3
+    solver.setUsePrefetching(true);
+    std::cout << "Using prefetching." << std::endl;
+#else
+    solver.setUsePrefetching(false);
+    std::cout << "Not using prefetching." << std::endl;
+#endif
+
+    const std::vector<uint32_t> x_solution;
+    std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list, x_solution);
+
+    std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
+    for (size_t i = 0; i < all_proofs.size(); i++)
+    {
+        std::cout << "Proof " << i << ": ";
+        for (size_t j = 0; j < all_proofs[i].size(); j++)
+        {
+            std::cout << all_proofs[i][j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <mode> <arg>\n"
@@ -380,6 +413,46 @@ int main(int argc, char* argv[]) {
         std::string plot_file = argv[2];
         std::cout << "Running proof on plot file: " << plot_file << std::endl;
         return prove(plot_file);
+
+    } else if (mode == "xbits") {
+        int k = 0;
+        try {
+            k = std::stoi(argv[2]);
+            // k must be 28,30, or 32
+            //if (!(k == 28 || k == 30 | k == 32)) {
+            //    std::cerr << "Error: k-size must be 28, 30, or 32." << std::endl;
+            //    return 1;
+            //}
+        } catch (const std::invalid_argument& e) {
+            std::cerr << "Error: k-size must be an integer." << std::endl;
+            return 1;
+        } catch (const std::out_of_range& e) {
+            std::cerr << "Error: k-size out of range." << std::endl;
+            return 1;
+        }
+
+        // then get plot id hex string
+        std::string plot_id_hex = argv[3];
+        if (plot_id_hex.length() != 64) {
+            std::cerr << "Error: plot_id must be a 64-hex-character string." << std::endl;
+            return 1;
+        }
+
+        // then get string of 256 hex characters for xbits
+        std::string xbits_hex = argv[4];
+        if (xbits_hex.length() != 1024) {
+            std::cerr << "Error: xbits must be a 1024-hex-character string. (" << xbits_hex.length() << " found)" << std::endl;
+            return 1;
+        }
+        std::cout << "Running xbits with k-size = " << k << " plot id: " << plot_id_hex << " and xbits = " << xbits_hex << std::endl;
+        // convert xbits_hex to uint32_t array
+        std::vector<uint32_t> x_bits_list;
+        for (size_t i = 0; i < 64; i++) {
+            std::string byte_str = xbits_hex.substr(i * 2, 2);
+            x_bits_list.push_back(std::stoul(byte_str, nullptr, 16));
+        }
+        return xbits(plot_id_hex, x_bits_list, k);
+
 
     } else {
         std::cerr << "Unknown mode: " << mode << "\n"
