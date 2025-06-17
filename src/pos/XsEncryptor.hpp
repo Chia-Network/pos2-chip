@@ -31,6 +31,16 @@ public:
         return cipher_.encrypt(all_x_bits);
     }
 
+    uint64_t encrypt(const uint32_t x_values[8]) {
+        // Combine the upper halves of x1, x3, x5, and x7 into a single 2*k bit value.
+        uint64_t all_x_bits = 0;
+        size_t half_k = params_.get_k() / 2;  // Each x-value is k bits, so its high half is k/2 bits.
+        for (size_t i = 0; i < 4; ++i) {
+            all_x_bits |= (static_cast<uint64_t>(x_values[i * 2]) << (half_k * (3 - i)));
+        }
+        return cipher_.encrypt(all_x_bits);
+    }
+
     // Decrypt: Given a ciphertext (2*k bits) returns the decrypted value as a uint64_t.
     uint64_t decrypt(uint64_t ciphertext) {
         return cipher_.decrypt(ciphertext);

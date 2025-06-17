@@ -419,6 +419,7 @@ int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_li
             std::cout << all_proofs[i][j] << " ";
         }
         std::cout << std::endl;
+        std::cout << "Proof hex: " << Utils::proofToHex(params.get_k(), all_proofs[i]) << std::endl;
     }
 
     return 0;

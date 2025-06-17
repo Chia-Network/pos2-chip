@@ -84,12 +84,7 @@ int main(int argc, char *argv[])
                 std::cout << j << ": " << xbits_list[j] << std::endl;
             }
 
-            const uint8_t *plot_id_bytes = params.get_plot_id_bytes();
-            std::cout << "Plot ID: ";
-            for (int j = 0; j < 32; j++)
-            {
-                std::cout << (int)plot_id_bytes[j] << std::endl;
-            }
+            std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
             exit(23);
         }
         else
