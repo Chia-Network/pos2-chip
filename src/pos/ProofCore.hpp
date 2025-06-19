@@ -35,6 +35,55 @@ const double FINAL_TABLE_FILTER_D = 0.19920303275;
 
 constexpr double CHAINING_FACTOR = 1.1;
 constexpr int NUM_CHAIN_LINKS = 16;
+constexpr double PROOF_FRAGMENT_SCAN_FILTER = 2.0; // 1 / expected number of fragments to pass scan filter.
+
+
+enum class FragmentsPattern : uint8_t
+{
+    OUTSIDE_FRAGMENT_IS_LR = 0, // outside t3 index is RL
+    OUTSIDE_FRAGMENT_IS_RR = 1  // outside t3 index is RR
+};
+
+enum class FragmentsParent : uint8_t
+{
+    PARENT_NODE_IN_CHALLENGE_PARTITION = 0, // challenge partition is the partition in t3 for proof fragment scan filter
+    PARENT_NODE_IN_OTHER_PARTITION = 1      // other partition, is the r-side partition of the proof fragment passing the scan filter
+};
+
+#define DEBUG_QUALITY_LINK 1
+
+enum class QualityLinkProofFragmentPositions : int
+{
+    LL = 0, // left left
+    LR = 1, // left right
+    RL = 2, // right left
+    RR = 3  // right right
+};
+
+struct QualityLink
+{
+    // there are 2 patterns: either LR or RR is included in the fragment, but never both.
+    uint64_t fragments[3]; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
+    FragmentsPattern pattern;
+    FragmentsParent parent; // path of the fragment, either parent node in A or B
+    uint64_t outside_t3_index;
+    #ifdef DEBUG_QUALITY_LINK
+    uint64_t t3_ll_index;
+    uint64_t t3_lr_index;
+    uint64_t t3_rl_index;
+    uint64_t t3_rr_index;
+    uint64_t t4_l_index;
+    uint64_t t4_r_index;
+    uint64_t t5_index;
+    uint32_t partition;
+    #endif
+};
+
+struct QualityChain
+{
+    std::array<QualityLink, NUM_CHAIN_LINKS> chain_links;
+    uint64_t chain_hash;
+};
 
 struct T1Pairing
 {
@@ -217,11 +266,13 @@ public:
 
         uint64_t all_x_bits = (static_cast<uint64_t>(x_bits_l) << params_.get_k()) | x_bits_r;
         uint64_t encrypted_xs = xs_encryptor.encrypt(all_x_bits);
-        uint32_t order_bits = xs_encryptor.get_t3_order_bits(encrypted_xs);
+        uint32_t order_bits = xs_encryptor.extract_t3_order_bits(encrypted_xs);
         uint32_t top_order_bit = order_bits >> 1;
         uint32_t lower_partition, upper_partition;
 
-        if (top_order_bit == 0)
+        xs_encryptor.get_lower_and_upper_partitions(encrypted_xs, lower_partition, upper_partition);
+
+        /*if (top_order_bit == 0)
         {
             lower_partition = xs_encryptor.get_t3_l_partition(encrypted_xs);
             upper_partition = xs_encryptor.get_t3_r_partition(encrypted_xs) + params_.get_num_partitions();
@@ -230,7 +281,7 @@ public:
         {
             lower_partition = xs_encryptor.get_t3_r_partition(encrypted_xs);
             upper_partition = xs_encryptor.get_t3_l_partition(encrypted_xs) + params_.get_num_partitions();
-        }
+        }*/
 
         PairingResult lower_partition_pair = hashing.pairing(3, meta_l, meta_r,
                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
@@ -467,6 +518,10 @@ public:
 
         // 5) round to nearest integer and return
         return static_cast<uint64_t>(raw + 0.5L);
+    }
+
+    ProofParams getProofParams() const {
+        return params_;
     }
 
 private:

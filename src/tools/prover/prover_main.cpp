@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
             std::vector<uint32_t> xbits_list;
             for (const auto &fragment : proof_fragments)
             {
-                std::cout << "ProofFragment: " << fragment << std::endl;
+                std::cout << "ProofFragment: " << std::hex << fragment << std::dec;
                 std::array<uint32_t, 4> x_bits = xs_encryptor.get_x_bits_from_encrypted_xs(fragment);
                 for (const auto &x_bit : x_bits)
                 {
@@ -72,6 +72,7 @@ int main(int argc, char *argv[])
                     xbits_list.push_back(x_bit);
                     std::cout << " " << x_bit;
                 }
+                std::cout << std::endl;
             }
 
             std::array<uint8_t, 32> plot_id_arr;
@@ -79,10 +80,6 @@ int main(int argc, char *argv[])
             std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
 
             std::cout << "./solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << std::endl;
-            for (size_t j = 0; j < xbits_list.size(); j++)
-            {
-                std::cout << j << ": " << xbits_list[j] << std::endl;
-            }
 
             std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
             exit(23);

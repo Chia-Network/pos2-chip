@@ -3,8 +3,9 @@
 #include "pos/ProofCore.hpp"
 #include "plot/PlotFile.hpp"
 #include "common/Utils.hpp"
-#include "prove/ProofFragmentScanFilter.hpp"
+#include "pos/ProofFragmentScanFilter.hpp"
 #include "pos/XsEncryptor.hpp"
+#include "pos/QualityChainer.hpp"
 #include <bitset>
 #include <set>
 #include <optional>
@@ -14,52 +15,13 @@
 #include <iostream>
 #include <string>
 
-// these will go into proof core once done testing
 
-enum class FragmentsPattern : uint8_t
-{
-    OUTSIDE_FRAGMENT_IS_LR = 0, // outside t3 index is RL
-    OUTSIDE_FRAGMENT_IS_RR = 1  // outside t3 index is RR
-};
-
-enum class FragmentsParent : uint8_t
-{
-    PARENT_NODE_IN_CHALLENGE_PARTITION = 0, // challenge partition is the partition in t3 for proof fragment scan filter
-    PARENT_NODE_IN_OTHER_PARTITION = 1      // other partition, is the r-side partition of the proof fragment passing the scan filter
-};
-
-#define DEBUG_QUALITY_LINK 1
-
-struct QualityLink
-{
-    // there are 2 patterns: either LR or RR is included in the fragment, but never both.
-    uint64_t fragments[3]; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
-    FragmentsPattern pattern;
-    FragmentsParent parent; // path of the fragment, either parent node in A or B
-    uint64_t outside_t3_index;
-    #ifdef DEBUG_QUALITY_LINK
-    uint64_t t3_ll_index;
-    uint64_t t3_lr_index;
-    uint64_t t3_rl_index;
-    uint64_t t3_rr_index;
-    uint64_t t4_l_index;
-    uint64_t t4_r_index;
-    uint64_t t5_index;
-    uint32_t partition;
-    #endif
-};
-
-struct QualityChain
-{
-    std::array<QualityLink, NUM_CHAIN_LINKS> chain_links;
-    uint64_t chain_hash;
-};
 
 class Prover
 {
 public:
     Prover(const std::array<uint8_t, 32> &challenge, const std::string &plot_file_name, const int scan_filter)
-        : challenge_(challenge), plot_file_name_(plot_file_name), scan_filter_(scan_filter)
+        : challenge_(challenge), plot_file_name_(plot_file_name)
     {
     }
     ~Prover() = default;
@@ -88,7 +50,7 @@ public:
         PlotFile::PlotFileContents plot = plot_.value();
 
         // 2) Scan the plot data for fragments that pass the Proof Fragment Scan Filter
-        ProofFragmentScanFilter scan_filter(plot.params, challenge_, scan_filter_);
+        ProofFragmentScanFilter scan_filter(plot.params, challenge_);
         std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.scan(plot.data.t3_encrypted_xs);
         stats_.num_scan_filter_passed++;
         stats_.num_fragments_passed_scan_filter += filtered_fragments.size();
@@ -115,6 +77,19 @@ public:
             std::cout << "          Partition R(R): " << r_partition << std::endl;
 
             std::vector<QualityLink> firstLinks = getQualityLinks(FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION, filtered_fragments[i].index, r_partition);
+            
+            // output first links fragemnts in hex
+            std::cout << " # First Quality Links: " << firstLinks.size() << std::endl;
+            for (const auto &link : firstLinks)
+            {
+                std::cout << "  First Link Fragments: "
+                          << std::hex << link.fragments[0] << ", "
+                          << link.fragments[1] << ", "
+                          << link.fragments[2] << std::dec
+                          << " | Pattern: " << static_cast<int>(link.pattern)
+                          << " | Parent: " << static_cast<int>(link.parent) << std::endl;
+            }
+            
             std::vector<QualityLink> links = getQualityLinks(l_partition, r_partition);
             std::cout << " # First Quality Links: " << firstLinks.size() << std::endl;
             std::cout << " # Links: " << links.size() << std::endl;
@@ -625,7 +600,6 @@ public:
 
 private:
     std::optional<PlotFile::PlotFileContents> plot_;
-    int scan_filter_;
     std::array<uint8_t, 32> challenge_;
     std::string plot_file_name_;
 

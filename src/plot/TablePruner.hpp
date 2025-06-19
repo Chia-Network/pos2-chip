@@ -227,8 +227,8 @@ public:
     {
 
         XsEncryptor xs_encryptor(params_);
-        t3_lateral_t4_partition_index_start.resize(params_.get_num_partitions() * 2);
-        t3_lateral_t4_partition_index_end.resize(params_.get_num_partitions() * 2);
+        //t3_lateral_t4_partition_index_start.resize(params_.get_num_partitions() * 2);
+        //t3_lateral_t4_partition_index_end.resize(params_.get_num_partitions() * 2);
 
         // as we go through and finalize our t3 entries, also mark the start and end indexes for the lateral t3 boundaries
         size_t last_used_t3_index = 0;
@@ -239,9 +239,9 @@ public:
                 t3_encrypted_xs[last_used_t3_index] = t3_encrypted_xs[i];
                 last_used_t3_index++;
 
-                uint32_t lateral_partition = xs_encryptor.get_t3_l_partition(t3_encrypted_xs[i]);
-                t3_lateral_t4_partition_index_start[lateral_partition] = std::min(t3_lateral_t4_partition_index_start[lateral_partition], (uint64_t)i);
-                t3_lateral_t4_partition_index_end[lateral_partition] = std::max(t3_lateral_t4_partition_index_end[lateral_partition], (uint64_t)i);
+                //uint32_t lateral_partition = xs_encryptor.get_lateral_to_t4_partition(t3_encrypted_xs[i]);
+                //t3_lateral_t4_partition_index_start[lateral_partition] = std::min(t3_lateral_t4_partition_index_start[lateral_partition], (uint64_t)i);
+                //t3_lateral_t4_partition_index_end[lateral_partition] = std::max(t3_lateral_t4_partition_index_end[lateral_partition], (uint64_t)i);
             }
         }
         // std::cout << "Cropping t3 from " << t3_encrypted_xs.size()
@@ -250,6 +250,6 @@ public:
     }
 
     // these get set when finalizing t3 entries
-    std::vector<uint64_t> t3_lateral_t4_partition_index_start;
-    std::vector<uint64_t> t3_lateral_t4_partition_index_end;
+    //std::vector<uint64_t> t3_lateral_t4_partition_index_start;
+    //std::vector<uint64_t> t3_lateral_t4_partition_index_end;
 };

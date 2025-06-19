@@ -33,11 +33,15 @@ public:
 
     uint64_t encrypt(const uint32_t x_values[8]) {
         // Combine the upper halves of x1, x3, x5, and x7 into a single 2*k bit value.
+        uint32_t x1 = x_values[0] >> (params_.get_k() / 2);
+        uint32_t x3 = x_values[2] >> (params_.get_k() / 2);
+        uint32_t x5 = x_values[4] >> (params_.get_k() / 2);
+        uint32_t x7 = x_values[6] >> (params_.get_k() / 2);
         uint64_t all_x_bits = 0;
-        size_t half_k = params_.get_k() / 2;  // Each x-value is k bits, so its high half is k/2 bits.
-        for (size_t i = 0; i < 4; ++i) {
-            all_x_bits |= (static_cast<uint64_t>(x_values[i * 2]) << (half_k * (3 - i)));
-        }
+        all_x_bits |= (static_cast<uint64_t>(x1) << (params_.get_k() * 3 / 2));
+        all_x_bits |= (static_cast<uint64_t>(x3) << (params_.get_k() * 2 / 2));
+        all_x_bits |= (static_cast<uint64_t>(x5) << (params_.get_k() * 1 / 2));
+        all_x_bits |= (static_cast<uint64_t>(x7) << (params_.get_k() * 0 / 2));
         return cipher_.encrypt(all_x_bits);
     }
 
@@ -53,48 +57,62 @@ public:
         return (encx >> (total_bits - start_bits_incl - len)) & ((uint64_t(1) << len) - 1);
     }
 
-    // Extracts the T3 left partition bits (from the MSB side) as a uint32_t.
-    uint32_t get_t3_l_partition(uint64_t encx) const {
-        return static_cast<uint32_t>(
-            get_encx_bits_with_msb_as_zero(encx, 0, params_.get_num_partition_bits())
-        );
-    }
-
     // Extracts 2 order bits following the partition as a uint32_t.
-    uint32_t get_t3_order_bits(uint64_t encx) const {
+    uint32_t extract_t3_order_bits(uint64_t encx) const {
         return static_cast<uint32_t>(
             get_encx_bits_with_msb_as_zero(encx, params_.get_num_partition_bits(), 2)
         );
     }
 
     // Extracts the T3 right partition bits (the LSB partition) as a uint32_t.
-    uint32_t get_t3_r_partition(uint64_t encx) const {
+    uint32_t extract_t3_r_partition_bits(uint64_t encx) const {
         return static_cast<uint32_t>(
             encx & ((uint64_t(1) << params_.get_num_partition_bits()) - 1)
         );
     }
 
-    uint32_t get_lateral_to_t4_partition(uint64_t encrypted_xs) const {
-        uint32_t top_order_bit = get_t3_order_bits(encrypted_xs) >> 1;
+    // Extracts the T3 left partition bits (from the MSB side) as a uint32_t.
+    uint32_t extract_t3_l_partition_bits(uint64_t encx) const {
+        return static_cast<uint32_t>(
+            get_encx_bits_with_msb_as_zero(encx, 0, params_.get_num_partition_bits())
+        );
+    }
+
+    void get_lower_and_upper_partitions(uint64_t encx, uint32_t &lower, uint32_t upper) const {
+        uint32_t top_order_bit = extract_t3_order_bits(encx) >> 1;
         if (top_order_bit == 0)
         {
-            return get_t3_l_partition(encrypted_xs);
+            lower = extract_t3_l_partition_bits(encx);
+            upper = extract_t3_r_partition_bits(encx) + params_.get_num_partitions();
         }
         else
         {
-            return get_t3_l_partition(encrypted_xs) + params_.get_num_partitions();
+            lower = extract_t3_r_partition_bits(encx);
+            upper = extract_t3_l_partition_bits(encx) + params_.get_num_partitions();
+        }
+    }
+
+    uint32_t get_lateral_to_t4_partition(uint64_t encrypted_xs) const {
+        uint32_t top_order_bit = extract_t3_order_bits(encrypted_xs) >> 1;
+        if (top_order_bit == 0)
+        {
+            return extract_t3_l_partition_bits(encrypted_xs);
+        }
+        else
+        {
+            return extract_t3_l_partition_bits(encrypted_xs) + params_.get_num_partitions();
         }
     }
 
     uint32_t get_r_t4_partition(uint64_t encrypted_xs) const {
-        uint32_t top_order_bit = get_t3_order_bits(encrypted_xs) >> 1;
+        uint32_t top_order_bit = extract_t3_order_bits(encrypted_xs) >> 1;
         if (top_order_bit == 0)
         {
-            return get_t3_r_partition(encrypted_xs) + params_.get_num_partitions();
+            return extract_t3_r_partition_bits(encrypted_xs) + params_.get_num_partitions();
         }
         else
         {
-            return get_t3_r_partition(encrypted_xs);
+            return extract_t3_r_partition_bits(encrypted_xs);
         }
     }
 

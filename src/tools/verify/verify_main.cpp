@@ -44,35 +44,14 @@ int main(int argc, char *argv[])
     std::vector<uint32_t> proof = Utils::hexToProof(k, proof_hex);
 
     // get all sub-proofs, which are collections of 32 x-values
-    size_t num_sub_proofs = proof.size() / 32;
-    for (size_t i = 0; i < num_sub_proofs; ++i)
+    if (proof_validator.validate_full_proof(proof, challenge))
     {
-        // extract the 32 x-values from the proof
-        uint32_t x_values[32];
-        for (size_t j = 0; j < 32; ++j)
-        {
-            x_values[j] = proof[i * 32 + j];
-        }
-
-        // validate the x-values
-        if (!proof_validator.validate_table_5_pairs(x_values))
-        {
-            std::cerr << "Validation failed for sub-proof " << i << std::endl;
-            return 1;
-        }
-        else {
-            std::cout << "Sub-proof " << i << " validated successfully." << std::endl;
-        }
-
-        // Now test correct chaining. Take x-values and create 4 proof fragments
-        for (int fragment_id = 0; fragment_id < 4; ++fragment_id)
-        {
-            // create a sub-proof fragment
-            uint64_t proof_fragment = proof_core.xs_encryptor.encrypt(x_values + fragment_id * 8);
-
-            // TODO: validate the proof fragment in chain
-        }
-        
+        std::cout << "Proof is valid." << std::endl;
+    }
+    else
+    {
+        std::cerr << "Proof validation failed." << std::endl;
+        return 1;
     }
 
     
