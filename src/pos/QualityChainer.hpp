@@ -6,6 +6,7 @@
 #include "ProofParams.hpp"
 #include "BlakeHash.hpp"
 #include "ProofCore.hpp"
+#include "XsEncryptor.hpp"
 
 class QualityChainer {
 public:
@@ -14,6 +15,7 @@ public:
     QualityChainer(const ProofParams& proof_params, const std::array<uint8_t, 32> &challenge, uint64_t chaining_hash_pass_threshold)
         : challenge_(challenge), 
         chaining_hash_pass_threshold_(chaining_hash_pass_threshold),
+        xs_encryptor_(proof_params),
         blake_hash_(proof_params.get_plot_id_bytes(), 0) // k not used in retrieval of hash bits
     {
     }
@@ -38,12 +40,117 @@ public:
         uint64_t new_hash;
     };
 
-    std::vector<NewLinksResult> getNewLinksForChain(uint64_t current_hash, const std::vector<QualityLink> &link_set)
+    std::vector<QualityLink> filterLinkSetToPartitions(const std::vector<QualityLink> &link_set, uint32_t lower_partition, uint32_t upper_partition)
+    {
+        std::vector<QualityLink> filtered_links;
+        for (const auto &link : link_set)
+        {
+            if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
+            {
+                uint32_t lateral_partition = xs_encryptor_.get_lateral_to_t4_partition(link.fragments[2]); // the RR fragment
+                uint32_t cross_partition = xs_encryptor_.get_r_t4_partition(link.fragments[2]); // the RR fragment
+                if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
+                {
+                    filtered_links.push_back(link);
+                }
+                else if ((lateral_partition == upper_partition) && (cross_partition == lower_partition))
+                {
+                    filtered_links.push_back(link);
+                }
+            }
+            else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
+            {
+                uint32_t lateral_partition = xs_encryptor_.get_lateral_to_t4_partition(link.fragments[1]); // the LR fragment
+                uint32_t cross_partition = xs_encryptor_.get_r_t4_partition(link.fragments[1]); // the LR fragment
+                if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
+                {
+                    filtered_links.push_back(link);
+                }
+                else if ((lateral_partition == upper_partition) && (cross_partition == lower_partition))
+                {
+                    filtered_links.push_back(link);
+                }
+            }
+            else
+            {
+                throw std::runtime_error("Unknown fragments pattern in filterLinkSetToPartitions");
+            }
+        }
+        return filtered_links;
+    }
+
+    std::vector<NewLinksResult> getNewLinksForChain(uint64_t current_hash, const std::vector<QualityLink> &link_set) // , uint32_t lower_partition, uint32_t upper_partition)
     {
         std::vector<NewLinksResult> new_links;
         for (int i = 0; i < link_set.size(); ++i)
         {
             const QualityLink &link = link_set[i];
+
+            /*if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
+            {
+                uint32_t verify_lateral_partition;
+                uint32_t lateral_partition = xs_encryptor_.get_lateral_to_t4_partition(link.fragments[2]); // the RR fragment
+                uint32_t cross_partition = xs_encryptor_.get_r_t4_partition(link.fragments[2]); // the RR fragment
+                if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
+                {
+                    verify_lateral_partition = lower_partition;
+                }
+                else if ((lateral_partition == upper_partition) && (cross_partition == lower_partition))
+                {
+                    verify_lateral_partition = upper_partition;
+                }
+                else {
+                    // this link is not in the expected partitions, skip it
+                    continue;
+                }
+                uint32_t lateral_partition_ll = xs_encryptor_.get_lateral_to_t4_partition(link.fragments[0]); // the LL fragment
+                if (lateral_partition_ll != verify_lateral_partition)
+                {
+                    // this link is not in the expected partitions, skip it
+                    continue;
+                }
+                uint32_t lateral_partition_rl = xs_encryptor_.get_lateral_to_t4_partition(link.fragments[1]); // the RL fragment
+                if (lateral_partition_rl != verify_lateral_partition)
+                {
+                    // this link is not in the expected partitions, skip it
+                    continue;
+                }
+                
+            }
+            else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
+            {
+                uint32_t verify_lateral_partition;
+                uint32_t lateral_partition = xs_encryptor_.get_lateral_to_t4_partition(link.fragments[1]); // the LR fragment
+                uint32_t cross_partition = xs_encryptor_.get_r_t4_partition(link.fragments[1]); // the LR fragment
+                if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
+                {
+                    verify_lateral_partition = lower_partition;
+                }
+                else if ((lateral_partition == upper_partition) && (cross_partition == lower_partition))
+                {
+                    verify_lateral_partition = upper_partition;
+                }
+                else {
+                    // this link is not in the expected partitions, skip it
+                    continue;
+                }
+                uint32_t lateral_partition_ll = xs_encryptor_.get_lateral_to_t4_partition(link.fragments[0]); // the LL fragment
+                if (lateral_partition_ll != verify_lateral_partition)
+                {
+                    // this link is not in the expected partitions, skip it
+                    continue;
+                }
+                uint32_t lateral_partition_rl = xs_encryptor_.get_lateral_to_t4_partition(link.fragments[2]); // the RL fragment
+                if (lateral_partition_rl != verify_lateral_partition)
+                {
+                    // this link is not in the expected partitions, skip it
+                    continue;
+                }
+            }
+            else
+            {
+                throw std::runtime_error("Unknown fragments pattern in getNewLinksForChain");
+            }*/
 
             // test the hash
             uint64_t new_hash = chainHash(current_hash, link);
@@ -78,6 +185,7 @@ public:
 
 private:
     BlakeHash blake_hash_; 
+    XsEncryptor xs_encryptor_; // encryptor for handling partitions
     uint64_t chaining_hash_pass_threshold_; // threshold for chain hash to pass
     std::array<uint8_t, 32> challenge_; // 32-byte challenge
     std::vector<QualityChain> quality_chains_;
