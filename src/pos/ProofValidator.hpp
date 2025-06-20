@@ -311,8 +311,8 @@ public:
         }
         std::cout << "Filtered fragments after scan filter: " << filtered_fragments.size() << std::endl; 
 
-        QualityChainer quality_chainer(params_, challenge, proof_core_.quality_chain_pass_threshold());
-        if (verifyDepth(0, 0, full_proof_fragments, quality_chainer))
+        //QualityChainer quality_chainer(params_, challenge, proof_core_.quality_chain_pass_threshold());
+        if (verifyDepth(0, 0, full_proof_fragments))
         {
             std::cout << "Chain verified successfully." << std::endl;
             return true; // if we reach here, the chain is valid
@@ -320,7 +320,7 @@ public:
         return false;
     }
 
-    bool verifyDepth(int depth, uint64_t current_hash, const std::vector<uint64_t> &proof_fragments, QualityChainer &chainer, uint32_t partition_A = 0, uint32_t partition_B = 0)
+    bool verifyDepth(int depth, uint64_t current_hash, const std::vector<uint64_t> &proof_fragments, uint32_t partition_A = 0, uint32_t partition_B = 0)
     {
         if (depth == NUM_CHAIN_LINKS)
         {
@@ -354,7 +354,7 @@ public:
         rr_outside_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR; 
 
         // TODO: partition check, we can invalidate a fragment if not part of partitions
-        std::vector<QualityChainer::NewLinksResult> new_links;
+        std::vector<ProofCore::NewLinksResult> new_links;
         if (depth == 0)
         {
             // For the first depth, we only have the first link. We extract the lateral and cross partitions, and run depth on each of them making sure their partitions align in subsequent fragments.
@@ -362,7 +362,8 @@ public:
             // First test if the rl_link passes, and if not, then return result for rr_link.
             uint32_t partition_A = proof_core_.xs_encryptor.get_lateral_to_t4_partition(lr_outside_link.fragments[2]); // rr fragment
             uint32_t partition_B = proof_core_.xs_encryptor.get_r_t4_partition(lr_outside_link.fragments[2]);
-            bool success = verifyDepth(depth + 1, chainer.firstLinkHash(lr_outside_link), proof_fragments, chainer, partition_A, partition_B);
+            //bool success = verifyDepth(depth + 1, chainer.firstLinkHash(lr_outside_link), proof_fragments, chainer, partition_A, partition_B);
+            bool success = verifyDepth(depth + 1, proof_core_.firstLinkHash(lr_outside_link), proof_fragments, partition_A, partition_B);
             if (success)
             {
                 return true; // if we reach here, the chain is valid
@@ -370,13 +371,16 @@ public:
             // If rl_outside_link failed, we try rr_outside_link
             partition_A = proof_core_.xs_encryptor.get_lateral_to_t4_partition(rr_outside_link.fragments[1]); // lr fragment
             partition_B = proof_core_.xs_encryptor.get_r_t4_partition(rr_outside_link.fragments[1]);
-            return verifyDepth(depth + 1, chainer.firstLinkHash(rr_outside_link), proof_fragments, chainer, partition_A, partition_B);
+            //return verifyDepth(depth + 1, chainer.firstLinkHash(rr_outside_link), proof_fragments, chainer, partition_A, partition_B);
+            return verifyDepth(depth + 1, proof_core_.firstLinkHash(rr_outside_link), proof_fragments, partition_A, partition_B);
         }
         else
         {
             // first filter QualityLinks by partition pattern (faster than hash). In most cases this will reduce number of links to 1 instead of 2.
-            auto filtered_links = chainer.filterLinkSetToPartitions({lr_outside_link, rr_outside_link}, partition_A, partition_B);
-            new_links = chainer.getNewLinksForChain(current_hash, filtered_links);
+            //auto filtered_links = chainer.filterLinkSetToPartitions({lr_outside_link, rr_outside_link}, partition_A, partition_B);
+            //new_links = chainer.getNewLinksForChain(current_hash, filtered_links);
+            auto filtered_links = proof_core_.filterLinkSetToPartitions({lr_outside_link, rr_outside_link}, partition_A, partition_B);
+            new_links = proof_core_.getNewLinksForChain(current_hash, filtered_links);
             
             std::cout << "new links count: " << new_links.size() << std::endl;
             std::cout << "filtered links count: " << filtered_links.size() << std::endl;
@@ -396,7 +400,7 @@ public:
                       << " | Pattern: " << static_cast<int>(new_link.link.pattern)
                       << " | New Hash: " << new_link.new_hash << std::endl;
             // Recursively verify the next depth
-            if (verifyDepth(depth + 1, new_link.new_hash, proof_fragments, chainer, partition_A, partition_B))
+            if (verifyDepth(depth + 1, new_link.new_hash, proof_fragments, partition_A, partition_B))
             {
                 return true; // if recursive depth succeeds, return true
             }

@@ -51,6 +51,44 @@ public:
     // Prepares Blake hash data for pairing.
     void set_data_for_pairing(uint32_t salt, uint64_t meta_l, uint64_t meta_r, int num_meta_bits);
 
+    uint64_t challengeWithPlotIdHash(const uint8_t *challenge_32_bytes)
+    {
+        // Set the data for the hash.
+        for (int i = 0; i < 8; i++) {
+            blake_.set_data(i, static_cast<uint32_t>(challenge_32_bytes[i * 4 + 0]) |
+                            (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 1]) << 8) |
+                            (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 2]) << 16) |
+                            (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 3]) << 24));
+        }
+
+        // Generate the hash.
+        auto h = blake_.generate_hash();
+        uint64_t hash_value = (static_cast<uint64_t>(h.r0) << 32) | h.r1;
+
+        return hash_value;
+    }
+
+    uint64_t chainHash(uint64_t prev_chain_hash, const uint64_t *link_fragments)
+    {
+        // TODO: top and bottom partition bits will be frequently re-used across fragments, so could
+        // increase chain_hash bits and reduce fragment bits for hash.
+        // 1) Set the data for the hash
+        blake_.set_data(0, prev_chain_hash & 0xFFFFFFFF);
+        blake_.set_data(1, prev_chain_hash >> 32);
+        blake_.set_data(2, link_fragments[0] & 0xFFFFFFFF);
+        blake_.set_data(3, link_fragments[0] >> 32);
+        blake_.set_data(4, link_fragments[1] & 0xFFFFFFFF);
+        blake_.set_data(5, link_fragments[1] >> 32);
+        blake_.set_data(6, link_fragments[2] & 0xFFFFFFFF);
+        blake_.set_data(7, link_fragments[2] >> 32);
+
+        // 2) Generate the hash
+        auto h = blake_.generate_hash();
+        uint64_t hash_value = (static_cast<uint64_t>(h.r0) << 32) | h.r1;
+
+        return hash_value;
+    }
+
 private:
     // Prepares Blake hash data for computing the matching target.
     void _set_data_for_matching_target(uint32_t salt, uint32_t match_key, uint64_t meta, int num_meta_bits);

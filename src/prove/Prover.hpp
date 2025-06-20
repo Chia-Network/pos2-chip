@@ -5,7 +5,6 @@
 #include "common/Utils.hpp"
 #include "pos/ProofFragmentScanFilter.hpp"
 #include "pos/XsEncryptor.hpp"
-#include "pos/QualityChainer.hpp"
 #include <bitset>
 #include <set>
 #include <optional>
@@ -177,17 +176,18 @@ public:
 
     std::vector<QualityChain> createQualityChains(const QualityLink &firstLink, const std::vector<QualityLink> &link_set, uint64_t chaining_hash_pass_threshold, BlakeHash &blake_hash)
     {
-        QualityChainer quality_chainer(plot_.value().params, challenge_, chaining_hash_pass_threshold);
+        //QualityChainer quality_chainer(plot_.value().params, challenge_, chaining_hash_pass_threshold);
 
         std::vector<QualityChain> quality_chains;
+
+        ProofCore proof_core_(plot_.value().params);
 
         // First, create new chain for each first link
         QualityChain chain;
         chain.chain_links[0] = firstLink; // the first link is always the first in the chain
-        chain.chain_hash = quality_chainer.chainHash(0, firstLink);
-        quality_chains.push_back(chain);
 
-        quality_chainer.addFirstQualityLink(firstLink);
+        chain.chain_hash = proof_core_.firstLinkHash(firstLink); // set the hash for the first link
+        quality_chains.push_back(chain);
 
         stats_.num_first_chain_links++;
 
@@ -213,7 +213,7 @@ public:
             // For each chain-so-far, try appending every possible link
             for (auto &qc : quality_chains)
             {
-                auto new_links = quality_chainer.getNewLinksForChain(qc.chain_hash, link_set);
+                auto new_links = proof_core_.getNewLinksForChain(qc.chain_hash, link_set);
 
                 // if we have new links, create new chains
                 for (const auto &new_link_result : new_links)
@@ -265,17 +265,6 @@ public:
                             link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;       // this is an LR link, so outside index is RR
                             link.outside_t3_index = other_entry.encx_index_r;              // RR
 
-                            #ifdef DEBUG_QUALITY_LINK
-                            link.parent = parent; // a first quality link always starts from t3 challenge partition into the other partition
-                            link.partition = t4_partition; // partition of the T4 entry
-                            link.t3_ll_index = entry.encx_index_l; // LL
-                            link.t3_lr_index = entry.encx_index_r; // LR
-                            link.t3_rl_index = other_entry.encx_index_l; // RL
-                            link.t3_rr_index = other_entry.encx_index_r; // RR
-                            link.t4_l_index = t4_index; // T4 index of the L side
-                            link.t4_r_index = t5_entry.t4_index_r; // T4 index of the R side
-                            link.t5_index = t5_index; // T5 index of the pairing
-                            #endif
                             links.push_back(link);
                         }
                         else
@@ -288,17 +277,7 @@ public:
                             link.fragments[2] = t3_encrypted_xs[entry.encx_index_r];       // RR
                             link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;       // this is an RR link, so outside index is LR
                             link.outside_t3_index = other_entry.encx_index_r;              // LR
-                            #ifdef DEBUG_QUALITY_LINK
-                            link.parent = parent; // a first quality link always starts from t3 challenge partition into the other partition
-                            link.partition = t4_partition; // partition of the T4 entry
-                            link.t3_ll_index = other_entry.encx_index_l; // LL
-                            link.t3_lr_index = other_entry.encx_index_r; // LR
-                            link.t3_rl_index = entry.encx_index_l; // RL
-                            link.t3_rr_index = entry.encx_index_r; // RR
-                            link.t4_l_index = t5_entry.t4_index_l; // T4 index of the L side
-                            link.t4_r_index = t4_index; // T4 index of the R side
-                            link.t5_index = t5_index; // T5 index of the pairing
-                            #endif
+                            
                             links.push_back(link);
                         }
                     }
@@ -372,18 +351,6 @@ public:
                         link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;       // this is an LR link, so outside index is RR
                         link.outside_t3_index = other_entry.encx_index_r;              // RR
 
-                        #ifdef DEBUG_QUALITY_LINK
-                        link.parent = parent; // this is a link from partition B
-                        link.partition = partition_parent_t4; // partition of the T4 entry
-                        link.t3_ll_index = entry.encx_index_l; // LL
-                        link.t3_lr_index = entry.encx_index_r; // LR
-                        link.t3_rl_index = other_entry.encx_index_l; // RL
-                        link.t3_rr_index = other_entry.encx_index_r; // RR
-                        link.t4_l_index = t4_index; // T4 index of the L side
-                        link.t4_r_index = t5_entry.t4_index_r; // T4 index of the R side
-                        link.t5_index = t5_index; // T5 index of the pairing
-                        #endif
-
                         links.push_back(link);
                     }
                     if (t5_entry.t4_index_r == t4_index)
@@ -399,17 +366,6 @@ public:
                         link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;       // this is an RR link, so outside index is LR
                         link.outside_t3_index = other_entry.encx_index_r;              // LR
 
-                        #ifdef DEBUG_QUALITY_LINK
-                        link.parent = parent; // this is a link from partition B
-                        link.partition = partition_parent_t4; // partition of the T4 entry
-                        link.t3_ll_index = other_entry.encx_index_l; // LL
-                        link.t3_lr_index = other_entry.encx_index_r; // LR
-                        link.t3_rl_index = entry.encx_index_l; // RL
-                        link.t3_rr_index = entry.encx_index_r; // RR
-                        link.t4_l_index = t5_entry.t4_index_l; // T4 index of the L side
-                        link.t4_r_index = t4_index; // T4 index of the R side
-                        link.t5_index = t5_index; // T5 index of the pairing
-                        #endif
                         links.push_back(link);
                     }
                 }
@@ -425,20 +381,12 @@ public:
 
     std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain chain) {
         std::vector<uint64_t> proof_fragments;
-        #ifdef DEBUG_QUALITY_LINK
-        std::vector<int> t5_indices;
-        std::vector<int> t5_partitions;
-        #endif
         std::cout << "Getting all proof fragments for chain with " << chain.chain_links.size() << " links." << std::endl;
         for (int link_id = 0; link_id < chain.chain_links.size(); link_id++)
         //for (const auto &link : chain.chain_links)
         {
             const QualityLink &link = chain.chain_links[link_id];
         
-            #ifdef DEBUG_QUALITY_LINK
-            t5_indices.push_back(link.t5_index);
-            t5_partitions.push_back(link.partition);
-            #endif
             if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
             {
                 proof_fragments.push_back(link.fragments[0]); // LL
@@ -450,40 +398,6 @@ public:
                 std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_LR " << outside_fragment << "]" << std::dec << std::endl;
                 
                 
-                #ifdef DEBUG_QUALITY_LINK
-                std::cout << "Pattern: OUTSIDE_FRAGMENT_IS_LR" << std::endl;
-                std::cout << "T5 index: " << link.t5_index << std::endl
-                          << "T4 L index: " << link.t4_l_index << std::endl
-                          << "T4 R index: " << link.t4_r_index << std::endl
-                          << "T3 LL index: " << link.t3_ll_index << std::endl
-                          << "T3 LR index: " << link.t3_lr_index << std::endl
-                          << "T3 RL index: " << link.t3_rl_index << std::endl
-                          << "T3 RR index: " << link.t3_rr_index << std::endl;
-                std::cout << "Proof fragments: " << std::hex;
-                uint64_t ll = proof_fragments[proof_fragments.size() - 4];
-                uint64_t lr = proof_fragments[proof_fragments.size() - 3];
-                uint64_t rl = proof_fragments[proof_fragments.size() - 2];
-                uint64_t rr = proof_fragments[proof_fragments.size() - 1];
-                std::cout << "LL: " << ll << ", LR: " << lr << ", RL: " << rl << ", RR: " << rr << std::dec << std::endl;
-                if (ll != plot_.value().data.t3_encrypted_xs[link.t3_ll_index] ||
-                    lr != plot_.value().data.t3_encrypted_xs[link.t3_lr_index] ||
-                    rl != plot_.value().data.t3_encrypted_xs[link.t3_rl_index] ||
-                    rr != plot_.value().data.t3_encrypted_xs[link.t3_rr_index])
-                {
-                    std::cerr << "Error: Fragment mismatch!" << std::endl;
-                    std::cout << "Link pattern: " << static_cast<int>(link.pattern) << std::endl;
-                    std::cout << "Expected: LL: " << plot_.value().data.t3_encrypted_xs[link.t3_ll_index]
-                              << ", LR: " << plot_.value().data.t3_encrypted_xs[link.t3_lr_index]
-                              << ", RL: " << plot_.value().data.t3_encrypted_xs[link.t3_rl_index]
-                              << ", RR: " << plot_.value().data.t3_encrypted_xs[link.t3_rr_index] << std::endl;
-                    std::cout << "Got: LL: " << ll
-                              << ", LR: " << lr
-                              << ", RL: " << rl
-                              << ", RR: " << rr << std::endl;
-                    exit(23);
-                }
-                std::cout << "OK!" << std::endl;
-                #endif
             }
             else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
             {
@@ -495,40 +409,6 @@ public:
 
                 std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_RR " << outside_fragment << "]" << std::dec << std::endl;
 
-                #ifdef DEBUG_QUALITY_LINK
-                std::cout << "Pattern: OUTSIDE_FRAGMENT_IS_RR" << std::endl;
-                std::cout << "T5 index: " << link.t5_index << std::endl
-                          << "T4 L index: " << link.t4_l_index << std::endl
-                          << "T4 R index: " << link.t4_r_index << std::endl
-                          << "T3 LL index: " << link.t3_ll_index << std::endl
-                          << "T3 LR index: " << link.t3_lr_index << std::endl
-                          << "T3 RL index: " << link.t3_rl_index << std::endl
-                          << "T3 RR index: " << link.t3_rr_index << std::endl;
-                std::cout << "Proof fragments: " << std::hex;
-                uint64_t ll = proof_fragments[proof_fragments.size() - 4];
-                uint64_t lr = proof_fragments[proof_fragments.size() - 3];
-                uint64_t rl = proof_fragments[proof_fragments.size() - 2];
-                uint64_t rr = proof_fragments[proof_fragments.size() - 1];
-                std::cout << "LL: " << ll << ", LR: " << lr << ", RL: " << rl << ", RR: " << rr << std::dec << std::endl;
-                if (ll != plot_.value().data.t3_encrypted_xs[link.t3_ll_index] ||
-                    lr != plot_.value().data.t3_encrypted_xs[link.t3_lr_index] ||
-                    rl != plot_.value().data.t3_encrypted_xs[link.t3_rl_index] ||
-                    rr != plot_.value().data.t3_encrypted_xs[link.t3_rr_index])
-                {
-                    std::cerr << "Error: Fragment mismatch!" << std::endl;
-                    std::cout << "Link pattern: " << static_cast<int>(link.pattern) << std::endl;
-                    std::cout << "Expected: LL: " << plot_.value().data.t3_encrypted_xs[link.t3_ll_index]
-                              << ", LR: " << plot_.value().data.t3_encrypted_xs[link.t3_lr_index]
-                              << ", RL: " << plot_.value().data.t3_encrypted_xs[link.t3_rl_index]
-                              << ", RR: " << plot_.value().data.t3_encrypted_xs[link.t3_rr_index] << std::endl;
-                    std::cout << "Got: LL: " << ll
-                              << ", LR: " << lr
-                              << ", RL: " << rl
-                              << ", RR: " << rr << std::endl;
-                    exit(23);
-                }
-                std::cout << "OK!" << std::endl;
-                #endif
             }
             else
             {
@@ -536,21 +416,6 @@ public:
             }
         }
 
-        // output t5 indices and partitions for debugging
-        #ifdef DEBUG_QUALITY_LINK
-        std::cout << "T5 indices: ";
-        for (const auto &t5_index : t5_indices)
-        {
-            std::cout << t5_index << ",";
-        }
-        std::cout << std::endl;
-        std::cout << "T5 partitions: ";
-        for (const auto &t5_partition : t5_partitions)
-        {
-            std::cout << t5_partition << ",";
-        }
-        std::cout << std::endl;
-        #endif
         return proof_fragments;
     }
 

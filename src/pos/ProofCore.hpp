@@ -50,8 +50,6 @@ enum class FragmentsParent : uint8_t
     PARENT_NODE_IN_OTHER_PARTITION = 1      // other partition, is the r-side partition of the proof fragment passing the scan filter
 };
 
-#define DEBUG_QUALITY_LINKx 1
-
 enum class QualityLinkProofFragmentPositions : int
 {
     LL = 0, // left left
@@ -66,17 +64,6 @@ struct QualityLink
     uint64_t fragments[3]; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
     FragmentsPattern pattern;
     uint64_t outside_t3_index;
-    #ifdef DEBUG_QUALITY_LINK
-    FragmentsParent parent; // path of the fragment, either parent node in A or B
-    uint64_t t3_ll_index;
-    uint64_t t3_lr_index;
-    uint64_t t3_rl_index;
-    uint64_t t3_rr_index;
-    uint64_t t4_l_index;
-    uint64_t t4_r_index;
-    uint64_t t5_index;
-    uint32_t partition;
-    #endif
 };
 
 struct QualityChain
@@ -520,10 +507,91 @@ public:
         return static_cast<uint64_t>(raw + 0.5L);
     }
 
+    // Quality Chaining functions
+    uint64_t firstLinkHash(const QualityLink &link, const uint8_t *challenge_32_bytes)
+    {
+        uint64_t challenge_hash = hashing.challengeWithPlotIdHash(challenge_32_bytes);
+        // Calculate the hash for the first link in the chain
+        return hashing.chainHash(challenge_hash, link.fragments);
+    }
+
+    uint64_t firstLinkHash(const QualityLink &link)
+    {
+        // Calculate the hash for the first link in the chain
+        return hashing.chainHash(0, link.fragments);
+    }
+
+    struct NewLinksResult {
+        QualityLink link;
+        uint64_t new_hash;
+    };
+
+    std::vector<QualityLink> filterLinkSetToPartitions(const std::vector<QualityLink> &link_set, uint32_t lower_partition, uint32_t upper_partition)
+    {
+        std::vector<QualityLink> filtered_links;
+        for (const auto &link : link_set)
+        {
+            if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
+            {
+                uint32_t lateral_partition = xs_encryptor.get_lateral_to_t4_partition(link.fragments[2]); // the RR fragment
+                uint32_t cross_partition = xs_encryptor.get_r_t4_partition(link.fragments[2]); // the RR fragment
+                if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
+                {
+                    filtered_links.push_back(link);
+                }
+                else if ((lateral_partition == upper_partition) && (cross_partition == lower_partition))
+                {
+                    filtered_links.push_back(link);
+                }
+            }
+            else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
+            {
+                uint32_t lateral_partition = xs_encryptor.get_lateral_to_t4_partition(link.fragments[1]); // the LR fragment
+                uint32_t cross_partition = xs_encryptor.get_r_t4_partition(link.fragments[1]); // the LR fragment
+                if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
+                {
+                    filtered_links.push_back(link);
+                }
+                else if ((lateral_partition == upper_partition) && (cross_partition == lower_partition))
+                {
+                    filtered_links.push_back(link);
+                }
+            }
+            else
+            {
+                throw std::runtime_error("Unknown fragments pattern in filterLinkSetToPartitions");
+            }
+        }
+        return filtered_links;
+    }
+
+    std::vector<NewLinksResult> getNewLinksForChain(uint64_t current_hash, const std::vector<QualityLink> &link_set) // , uint32_t lower_partition, uint32_t upper_partition)
+    {
+        // initialize threshold on first use
+        if (quality_chain_pass_threshold_ == 0) {
+            quality_chain_pass_threshold_ = quality_chain_pass_threshold();
+        }
+
+        std::vector<NewLinksResult> new_links;
+        for (int i = 0; i < link_set.size(); ++i)
+        {
+            const QualityLink &link = link_set[i];
+
+            // test the hash
+            uint64_t new_hash = hashing.chainHash(current_hash, link.fragments);
+            if (new_hash < quality_chain_pass_threshold_)
+            {
+                new_links.push_back({link, new_hash});
+            }
+        }
+        return new_links;
+    }
+
     ProofParams getProofParams() const {
         return params_;
     }
 
 private:
+    uint64_t quality_chain_pass_threshold_ = 0;
     ProofParams params_;
 };
