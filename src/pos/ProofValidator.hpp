@@ -311,6 +311,9 @@ public:
         }
         std::cout << "Filtered fragments after scan filter: " << filtered_fragments.size() << std::endl; 
 
+        QualityChainer quality_chainer(params_, challenge, proof_core_.quality_chain_pass_threshold());
+        
+
         for (const auto &frag : filtered_fragments)
         {
             std::cout << "Fragment: " << std::hex << frag.fragment << " at index: " << std::dec << frag.index << std::endl;
@@ -321,90 +324,106 @@ public:
                 first_link.fragments[0] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LL)]; // LL
                 first_link.fragments[1] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LR)]; // LR
                 first_link.fragments[2] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RL)]; // RL
-                first_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR; // RL is outside LR
+                first_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR; // LR is inside, RR is outside
                 std::cout << "First Quality Link created with fragments: "
                           << std::hex << first_link.fragments[0] << ", "
                           << first_link.fragments[1] << ", "
                           << first_link.fragments[2] << std::dec << std::endl;
                 std::cout << "Pattern: " << static_cast<int>(first_link.pattern) << std::endl;
+
+                uint64_t chain_hash = quality_chainer.firstLinkHash(first_link);
+                if (verifyDepth(1, chain_hash, full_proof_fragments, quality_chainer))
+                {
+                    std::cout << "Chain verified successfully." << std::endl;
+                    return true; // if we reach here, the chain is valid
+                }
+                
             }
             else if (frag.index == static_cast<int>(QualityLinkProofFragmentPositions::RR))
             {
                 std::cout << "This is the RR fragment." << std::endl;
                 QualityLink first_link;
-                first_link.fragments[0] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LL)]; // LL
-                first_link.fragments[1] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LR)]; // LR
-                first_link.fragments[2] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RR)]; // RR
-                first_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR; // RL is outside RR
+                first_link.fragments[0] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LL)]; 
+                first_link.fragments[1] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LR)]; 
+                first_link.fragments[2] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RR)]; 
+                first_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR; // RR is inside, LR is outside
                 std::cout << "First Quality Link created with fragments: "
                           << std::hex << first_link.fragments[0] << ", "
                           << first_link.fragments[1] << ", "
                           << first_link.fragments[2] << std::dec << std::endl;
                 std::cout << "Pattern: " << static_cast<int>(first_link.pattern) << std::endl;
+
+                uint64_t chain_hash = quality_chainer.firstLinkHash(first_link);
+                if (verifyDepth(1, chain_hash, full_proof_fragments, quality_chainer))
+                {
+                    std::cout << "Chain verified successfully." << std::endl;
+                    return true; // if we reach here, the chain is valid
+                }
+            }
+        }                                                       
+        return false;
+    }
+
+    bool verifyDepth(int depth, uint64_t current_hash, const std::vector<uint64_t> &proof_fragments, QualityChainer &chainer)
+    {
+        if (depth == NUM_CHAIN_LINKS)
+        {
+            return true; // if we are at end of chain, we've validated everything
+        }
+
+        // get the proof fragments for the current depth
+        if (depth < 0 || depth >= NUM_CHAIN_LINKS)
+        {
+            std::cerr << "Invalid depth: " << depth << std::endl;
+            throw std::out_of_range("Depth out of range");
+        }
+        if (proof_fragments.size() < 4 * (depth + 1))
+        {
+            std::cerr << "Not enough proof fragments for depth " << depth << ": "
+                      << proof_fragments.size() << std::endl;
+            throw std::invalid_argument("Not enough proof fragments for depth");
+        }
+        // Extract the proof fragments for the current depth
+        std::vector<uint64_t> current_depth_fragments(proof_fragments.begin() + depth * 4,
+                                                     proof_fragments.begin() + (depth + 1) * 4);
+
+
+        // Build RL and RR Quality Links from the proof fragments
+        QualityLink rl_link;
+        rl_link.fragments[0] = current_depth_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LL)]; 
+        rl_link.fragments[1] = current_depth_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RL)]; 
+        rl_link.fragments[2] = current_depth_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RR)];
+        rl_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR; // RL is outside LR
+        QualityLink rr_link;
+        rr_link.fragments[0] = current_depth_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LL)];
+        rr_link.fragments[1] = current_depth_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LR)];
+        rr_link.fragments[2] = current_depth_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RL)];
+        rr_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR; // RL is outside RR
+
+        // TODO: partition check, we can invalidate a fragment if not part of partitions
+        std::vector<QualityChainer::NewLinksResult> new_links = chainer.getNewLinksForChain(current_hash, {rl_link, rr_link});
+        if (new_links.empty())
+        {
+            std::cerr << "No new links found for depth " << depth << " with current hash: " << current_hash << std::endl;
+            return false;
+        }
+
+        for (const auto &new_link : new_links)
+        {
+            std::cout << "New link at depth " << depth << ": "
+                      << "Fragment LL: " << std::hex << new_link.link.fragments[0] << ", "
+                      << "Fragment LR: " << new_link.link.fragments[1] << ", "
+                      << "Fragment RL: " << new_link.link.fragments[2] << std::dec
+                      << " | Pattern: " << static_cast<int>(new_link.link.pattern)
+                      << " | New Hash: " << new_link.new_hash << std::endl;
+            // Recursively verify the next depth
+            if (verifyDepth(depth + 1, new_link.new_hash, proof_fragments, chainer))
+            {
+                return true; // if recursive depth succeeds, return true
             }
         }
 
-        exit(23);
-
-        
-        // index in the full_proof_fragments vector
-        // test if 1st fragment with LR passes filter
-       /* std::vector<uint64_t> t3_proof_fragments;
-        t3_proof_fragments.push_back(full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LR)]); 
-        std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.filterFragmentsByHash(t3_proof_fragments);
-        uint32_t l_partition = proof_core_.xs_encryptor.get_lateral_to_t4_partition(t3_proof_fragments[0]);
-        uint32_t r_partition = proof_core_.xs_encryptor.get_r_t4_partition(t3_proof_fragments[0]);
-        if (!filtered_fragments.empty())
-        {
-            std::cout << "LR fragment passed scan filter." << std::endl;
-
-            QualityLink first_link;
-            first_link.fragments[0] = full_proof_fragments[0 + static_cast<int>(QualityLinkProofFragmentPositions::LL)]; 
-            first_link.fragments[1] = full_proof_fragments[0 + static_cast<int>(QualityLinkProofFragmentPositions::LR)]; 
-            first_link.fragments[2] = full_proof_fragments[0 + static_cast<int>(QualityLinkProofFragmentPositions::RL)]; 
-            first_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;                                           // RL is outside RR
-            uint64_t first_fragment = first_link.fragments[2];
-            
-            // get the two partitions defined by the first fragment
-            
-            exit(23);
-        }
-        else {
-            std::cout << "LR fragment did not pass scan filter: " << std::hex << t3_proof_fragments[0] << std::dec << std::endl;
-            std::cout << "LR fragment partitions: " << l_partition << ", " << r_partition << std::endl;
-        }
-        // test 2nd fragment with RR passes filter
-        t3_proof_fragments.clear();
-        t3_proof_fragments.push_back(full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RR)]); // RR
-        filtered_fragments = scan_filter.scan(t3_proof_fragments);
-        if (!filtered_fragments.empty())
-        {
-            std::cout << "2nd RR fragment passed scan filter." << std::endl;
-            exit(23);
-        }
-        else {
-            std::cout << "2nd RR fragment did not pass scan filter: " << std::hex << t3_proof_fragments[0] << std::dec << std::endl;
-            std::cout << "RR fragment partitions: " << proof_core_.xs_encryptor.get_lateral_to_t4_partition(t3_proof_fragments[0]) << ", "
-                      << proof_core_.xs_encryptor.get_r_t4_partition(t3_proof_fragments[0]) << std::endl;
-        }*/
-
-        // Get first possible Quality Links and check if passes ProofFragmentScanFilter
-        /*QualityLink link_LR_outside;
-        link_LR_outside.fragments[0] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LL)]; // LL
-        link_LR_outside.fragments[1] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RL)]; // LR
-        link_LR_outside.fragments[2] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RR)]; // RR
-        link_LR_outside.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;                                           // RL is outside LR
-        uint64_t first_fragment = link_LR_outside.fragments[2];
-                                                                                    // will be calculated later
-
-        QualityLink link_RR_outside;
-        link_RR_outside.fragments[0] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LL)]; // RL
-        link_RR_outside.fragments[1] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LR)]; // RR
-        link_RR_outside.fragments[2] = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RL)]; // RL
-        link_RR_outside.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;                                           // RL is outside RR
-        first_fragment = link_RR_outside.fragments[2];     */                                                           // RL
-
-        return true;
+        return false;
     }
 
     // Validate chain hashes for chains produced by Prover

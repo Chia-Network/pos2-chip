@@ -50,7 +50,7 @@ enum class FragmentsParent : uint8_t
     PARENT_NODE_IN_OTHER_PARTITION = 1      // other partition, is the r-side partition of the proof fragment passing the scan filter
 };
 
-#define DEBUG_QUALITY_LINK 1
+#define DEBUG_QUALITY_LINKx 1
 
 enum class QualityLinkProofFragmentPositions : int
 {
@@ -65,9 +65,9 @@ struct QualityLink
     // there are 2 patterns: either LR or RR is included in the fragment, but never both.
     uint64_t fragments[3]; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
     FragmentsPattern pattern;
-    FragmentsParent parent; // path of the fragment, either parent node in A or B
     uint64_t outside_t3_index;
     #ifdef DEBUG_QUALITY_LINK
+    FragmentsParent parent; // path of the fragment, either parent node in A or B
     uint64_t t3_ll_index;
     uint64_t t3_lr_index;
     uint64_t t3_rl_index;

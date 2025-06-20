@@ -86,8 +86,7 @@ public:
                           << std::hex << link.fragments[0] << ", "
                           << link.fragments[1] << ", "
                           << link.fragments[2] << std::dec
-                          << " | Pattern: " << static_cast<int>(link.pattern)
-                          << " | Parent: " << static_cast<int>(link.parent) << std::endl;
+                          << " | Pattern: " << static_cast<int>(link.pattern);
             }
             
             std::vector<QualityLink> links = getQualityLinks(l_partition, r_partition);
@@ -176,36 +175,20 @@ public:
         return BlakeHash(seed_bytes.data(), 32);
     }
 
-    uint64_t chainHash(uint64_t prev_chain_hash, const QualityLink &link, BlakeHash &blake_hash)
-    {
-        // TODO: top and bottom partition bits will be frequently re-used across fragments, so could
-        // increase chain_hash bits and reduce fragment bits for hash.
-        // 1) Set the data for the hash
-        blake_hash.set_data(0, prev_chain_hash & 0xFFFFFFFF);
-        blake_hash.set_data(1, prev_chain_hash >> 32);
-        blake_hash.set_data(2, link.fragments[0] & 0xFFFFFFFF);
-        blake_hash.set_data(3, link.fragments[0] >> 32);
-        blake_hash.set_data(4, link.fragments[1] & 0xFFFFFFFF);
-        blake_hash.set_data(5, link.fragments[1] >> 32);
-        blake_hash.set_data(6, link.fragments[2] & 0xFFFFFFFF);
-        blake_hash.set_data(7, link.fragments[2] >> 32);
-
-        // 2) Generate the hash
-        auto h = blake_hash.generate_hash();
-        uint64_t hash_value = (static_cast<uint64_t>(h.r0) << 32) | h.r1;
-
-        return hash_value;
-    }
-
     std::vector<QualityChain> createQualityChains(const QualityLink &firstLink, const std::vector<QualityLink> &link_set, uint64_t chaining_hash_pass_threshold, BlakeHash &blake_hash)
     {
+        QualityChainer quality_chainer(plot_.value().params, challenge_, chaining_hash_pass_threshold);
+
         std::vector<QualityChain> quality_chains;
 
         // First, create new chain for each first link
         QualityChain chain;
         chain.chain_links[0] = firstLink; // the first link is always the first in the chain
-        chain.chain_hash = chainHash(0, firstLink, blake_hash);
+        chain.chain_hash = quality_chainer.chainHash(0, firstLink);
         quality_chains.push_back(chain);
+
+        quality_chainer.addFirstQualityLink(firstLink);
+
         stats_.num_first_chain_links++;
 
         std::cout << "Initial chain hash: " << std::hex << chain.chain_hash << std::dec << std::endl;
@@ -230,27 +213,17 @@ public:
             // For each chain-so-far, try appending every possible link
             for (auto &qc : quality_chains)
             {
-                for (int i = 0; i < link_set.size(); ++i)
+                auto new_links = quality_chainer.getNewLinksForChain(qc.chain_hash, link_set);
+
+                // if we have new links, create new chains
+                for (const auto &new_link_result : new_links)
                 {
-                    const QualityLink &link = link_set[i];
-                    // update the hash
-                    qc.chain_hash = chainHash(qc.chain_hash, link, blake_hash);
-                    //std::cout << "   Chain hash: " << qc.chain_hash << std::endl << 
-                    //             "    Threshold: " << chaining_hash_pass_threshold << std::endl << 
-                    //             "    pass: " << (qc.chain_hash < chaining_hash_pass_threshold) << std::endl;
-
-                    // if it passes, spawn a new extended chain
-                    if (qc.chain_hash < chaining_hash_pass_threshold)
-                    {
-                        QualityChain qc2 = qc; // copy old chain
-                        qc2.chain_links[depth] = link;
-                        new_chains.push_back(std::move(qc2));
-
-                        std::cout << "  New chain hash: " << qc2.chain_hash << " Passed threshold: " << std::dec << chaining_hash_pass_threshold << std::endl;
-                    }
+                    QualityChain qc2 = qc; // copy old chain
+                    qc2.chain_links[depth] = new_link_result.link;
+                    qc2.chain_hash = new_link_result.new_hash; // update the hash
+                    new_chains.push_back(std::move(qc2));
                 }
             }
-
             // swap in the newly grown set
             quality_chains.swap(new_chains);
         }
@@ -284,7 +257,6 @@ public:
                         if (t5_entry.t4_index_l == t4_index)
                         {
                             QualityLink link;
-                            link.parent = parent; // a first quality link always starts from t3 challenge partition into the other partition
                             // LR link
                             link.fragments[0] = t3_encrypted_xs[entry.encx_index_l]; // LL
                             link.fragments[1] = t3_encrypted_xs[entry.encx_index_r]; // LR
@@ -294,6 +266,7 @@ public:
                             link.outside_t3_index = other_entry.encx_index_r;              // RR
 
                             #ifdef DEBUG_QUALITY_LINK
+                            link.parent = parent; // a first quality link always starts from t3 challenge partition into the other partition
                             link.partition = t4_partition; // partition of the T4 entry
                             link.t3_ll_index = entry.encx_index_l; // LL
                             link.t3_lr_index = entry.encx_index_r; // LR
@@ -309,7 +282,6 @@ public:
                         {
                             // RR link
                             QualityLink link;
-                            link.parent = parent; // a first quality link always starts from t3 challenge partition into the other partition
                             T4BackPointers other_entry = t4_to_t3_back_pointers[t5_entry.t4_index_l];
                             link.fragments[0] = t3_encrypted_xs[other_entry.encx_index_l]; // LL
                             link.fragments[1] = t3_encrypted_xs[entry.encx_index_l];       // RL
@@ -317,6 +289,7 @@ public:
                             link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;       // this is an RR link, so outside index is LR
                             link.outside_t3_index = other_entry.encx_index_r;              // LR
                             #ifdef DEBUG_QUALITY_LINK
+                            link.parent = parent; // a first quality link always starts from t3 challenge partition into the other partition
                             link.partition = t4_partition; // partition of the T4 entry
                             link.t3_ll_index = other_entry.encx_index_l; // LL
                             link.t3_lr_index = other_entry.encx_index_r; // LR
@@ -386,7 +359,7 @@ public:
                     if (t5_entry.t4_index_l == t4_index)
                     {
                         QualityLink link;
-                        link.parent = parent; // this is a link from partition B
+                        
 
                         // if t4 is the left pointer of t4 index, then the t3 entry is an LR link.
                         // and fragments will be 0:LL, 1:LR, 2:RL with outside index being RR.
@@ -400,6 +373,7 @@ public:
                         link.outside_t3_index = other_entry.encx_index_r;              // RR
 
                         #ifdef DEBUG_QUALITY_LINK
+                        link.parent = parent; // this is a link from partition B
                         link.partition = partition_parent_t4; // partition of the T4 entry
                         link.t3_ll_index = entry.encx_index_l; // LL
                         link.t3_lr_index = entry.encx_index_r; // LR
@@ -416,7 +390,7 @@ public:
                     {
                         // if t4 is the right pointer of t4 index, then the t3 entry is an RR link.
                         QualityLink link;
-                        link.parent = parent; // this is a link from partition B
+                        
                         // get other side child node
                         T4BackPointers other_entry = t4_b_to_t3[t5_entry.t4_index_l];
                         link.fragments[0] = t3_encrypted_xs[other_entry.encx_index_l]; // LL
@@ -426,6 +400,7 @@ public:
                         link.outside_t3_index = other_entry.encx_index_r;              // LR
 
                         #ifdef DEBUG_QUALITY_LINK
+                        link.parent = parent; // this is a link from partition B
                         link.partition = partition_parent_t4; // partition of the T4 entry
                         link.t3_ll_index = other_entry.encx_index_l; // LL
                         link.t3_lr_index = other_entry.encx_index_r; // LR
@@ -455,8 +430,11 @@ public:
         std::vector<int> t5_partitions;
         #endif
         std::cout << "Getting all proof fragments for chain with " << chain.chain_links.size() << " links." << std::endl;
-        for (const auto &link : chain.chain_links)
+        for (int link_id = 0; link_id < chain.chain_links.size(); link_id++)
+        //for (const auto &link : chain.chain_links)
         {
+            const QualityLink &link = chain.chain_links[link_id];
+        
             #ifdef DEBUG_QUALITY_LINK
             t5_indices.push_back(link.t5_index);
             t5_partitions.push_back(link.partition);
@@ -468,6 +446,9 @@ public:
                 proof_fragments.push_back(outside_fragment); // LR
                 proof_fragments.push_back(link.fragments[1]); // RL
                 proof_fragments.push_back(link.fragments[2]); // RR
+
+                std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_LR " << outside_fragment << "]" << std::dec << std::endl;
+                
                 
                 #ifdef DEBUG_QUALITY_LINK
                 std::cout << "Pattern: OUTSIDE_FRAGMENT_IS_LR" << std::endl;
@@ -511,7 +492,9 @@ public:
                 proof_fragments.push_back(link.fragments[2]); // RL
                 uint64_t outside_fragment = plot_.value().data.t3_encrypted_xs[link.outside_t3_index]; // RR
                 proof_fragments.push_back(outside_fragment); // RR
-                
+
+                std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_RR " << outside_fragment << "]" << std::dec << std::endl;
+
                 #ifdef DEBUG_QUALITY_LINK
                 std::cout << "Pattern: OUTSIDE_FRAGMENT_IS_RR" << std::endl;
                 std::cout << "T5 index: " << link.t5_index << std::endl
