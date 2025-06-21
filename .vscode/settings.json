@@ -93,6 +93,7 @@
         "thread": "cpp",
         "cfenv": "cpp",
         "cinttypes": "cpp",
-        "coroutine": "cpp"
+        "coroutine": "cpp",
+        "__config": "cpp"
     }
 }

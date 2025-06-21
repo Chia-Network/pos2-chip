@@ -508,17 +508,10 @@ public:
     }
 
     // Quality Chaining functions
-    uint64_t firstLinkHash(const QualityLink &link, const uint8_t *challenge_32_bytes)
+    uint64_t firstLinkHash(const QualityLink &link, const std::array<uint8_t, 32> &challenge)
     {
-        uint64_t challenge_hash = hashing.challengeWithPlotIdHash(challenge_32_bytes);
-        // Calculate the hash for the first link in the chain
-        return hashing.chainHash(challenge_hash, link.fragments);
-    }
-
-    uint64_t firstLinkHash(const QualityLink &link)
-    {
-        // Calculate the hash for the first link in the chain
-        return hashing.chainHash(0, link.fragments);
+        uint64_t challenge_plotid_hash = hashing.challengeWithPlotIdHash(challenge.data());
+        return hashing.chainHash(challenge_plotid_hash, link.fragments);
     }
 
     struct NewLinksResult {

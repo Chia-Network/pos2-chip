@@ -130,7 +130,7 @@ public:
     }
 
     // Build a BlakeHash pre-loaded with a 32-byte digest of (plotID||challenge)
-    static BlakeHash makeSeedBlake(const ProofParams &params,
+    /*static BlakeHash makeSeedBlake(const ProofParams &params,
                                    const std::array<uint8_t, 32> &challenge)
     {
         // 1) First Blake round: compress plot-ID||challenge → 32-byte digest
@@ -172,7 +172,7 @@ public:
 
         // 3) Final BlakeHash is seeded with those 32 bytes
         return BlakeHash(seed_bytes.data(), 32);
-    }
+    }*/
 
     std::vector<QualityChain> createQualityChains(const QualityLink &firstLink, const std::vector<QualityLink> &link_set, uint64_t chaining_hash_pass_threshold, BlakeHash &blake_hash)
     {
@@ -186,7 +186,7 @@ public:
         QualityChain chain;
         chain.chain_links[0] = firstLink; // the first link is always the first in the chain
 
-        chain.chain_hash = proof_core_.firstLinkHash(firstLink); // set the hash for the first link
+        chain.chain_hash = proof_core_.firstLinkHash(firstLink, challenge_); // set the hash for the first link
         quality_chains.push_back(chain);
 
         stats_.num_first_chain_links++;

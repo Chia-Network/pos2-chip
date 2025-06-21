@@ -9,6 +9,8 @@ const uint64_t PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS = 13; // 2^13 = 8192
 
 class ProofFragmentScanFilter
 {
+private:
+    static constexpr int NUM_SEED_BLAKE_WORDS = 2;
 public:
     struct ScanRange
     {
@@ -22,6 +24,17 @@ public:
           proof_core_(proof_params),
           blake_hash_(params_.get_plot_id_bytes(), 32)
     {
+
+        /*uint64_t challenge_plot_id_hash = proof_core_.hashing.challengeWithPlotIdHash(challenge_.data());
+
+        // TODO: blake hash should update with the 256-bit result of the challenge plot id hash
+        // set the first 64 bits of the challenge plot id hash
+        blake_hash_.set_data(0, static_cast<uint32_t>(challenge_plot_id_hash & 0xFFFFFFFF));
+        blake_hash_.set_data(1, static_cast<uint32_t>(challenge_plot_id_hash >> 32));
+
+        // if changes are made to the number of seed words, update this constant
+        static_assert(NUM_SEED_BLAKE_WORDS == 2, "NUM_SEED_BLAKE_WORDS must be 2");*/
+
         // Initialize the first 4 words (32*4 = 128 bits) of the Blake hash with the challenge
         // TODO: may want to make a blake hash seed from full hash of plot and all 256 bits of challenge
         for (int i = 0; i < 4; ++i)
@@ -67,6 +80,8 @@ public:
         std::vector<ScanResult> filtered;
         for (auto &r : candidates)
         {
+            //blake_hash_.set_data(NUM_SEED_BLAKE_WORDS + 0, r.fragment >> 32);
+            //blake_hash_.set_data(NUM_SEED_BLAKE_WORDS + 1, r.fragment & 0xFFFFFFFF);
             blake_hash_.set_data(4, r.fragment >> 32);
             blake_hash_.set_data(5, r.fragment & 0xFFFFFFFF);
             uint32_t h = blake_hash_.generate_hash().r0;
