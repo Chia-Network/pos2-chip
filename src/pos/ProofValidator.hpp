@@ -139,18 +139,18 @@ public:
         }
 
         // make sure encrypted xs are valid
-        if (!proof_core_.xs_encryptor.validate_encrypted_xs(result_l->encrypted_xs, l_xs))
+        if (!proof_core_.fragment_codec.validate_proof_fragment(result_l->proof_fragment, l_xs))
         {
-            std::cerr << "Validation failed for left encrypted_xs: ["
-                      << result_l->encrypted_xs << "] vs ["
+            std::cerr << "Validation failed for left proof_fragment: ["
+                      << result_l->proof_fragment << "] vs ["
                       << show_xs(l_xs, 8) << "]\n";
             return t4_pairs; // std::nullopt;
         }
 
-        if (!proof_core_.xs_encryptor.validate_encrypted_xs(result_r->encrypted_xs, r_xs))
+        if (!proof_core_.fragment_codec.validate_proof_fragment(result_r->proof_fragment, r_xs))
         {
-            std::cerr << "Validation failed for right encrypted_xs: ["
-                      << result_r->encrypted_xs << "] vs ["
+            std::cerr << "Validation failed for right proof_fragment: ["
+                      << result_r->proof_fragment << "] vs ["
                       << show_xs(r_xs, 8) << "]\n";
             return t4_pairs; // std::nullopt;
         }
@@ -273,7 +273,7 @@ public:
             for (int fragment_id = 0; fragment_id < 4; ++fragment_id)
             {
                 // create a sub-proof fragment
-                uint64_t proof_fragment = proof_core_.xs_encryptor.encrypt(x_values + fragment_id * 8);
+                ProofFragment proof_fragment = proof_core_.fragment_codec.encode(x_values + fragment_id * 8);
                 full_proof_fragments.push_back(proof_fragment);
                 std::cout << "Sub-proof fragment " << fragment_id << " for sub-proof " << i << ": "
                           << "x-values: [";
@@ -360,16 +360,16 @@ public:
             // For the first depth, we only have the first link. We extract the lateral and cross partitions, and run depth on each of them making sure their partitions align in subsequent fragments.
 
             // First test if the rl_link passes, and if not, then return result for rr_link.
-            uint32_t partition_A = proof_core_.xs_encryptor.get_lateral_to_t4_partition(lr_outside_link.fragments[2]); // rr fragment
-            uint32_t partition_B = proof_core_.xs_encryptor.get_r_t4_partition(lr_outside_link.fragments[2]);
+            uint32_t partition_A = proof_core_.fragment_codec.get_lateral_to_t4_partition(lr_outside_link.fragments[2]); // rr fragment
+            uint32_t partition_B = proof_core_.fragment_codec.get_r_t4_partition(lr_outside_link.fragments[2]);
             bool success = verifyDepth(depth + 1, proof_core_.firstLinkHash(lr_outside_link, challenge), proof_fragments, challenge, partition_A, partition_B);
             if (success)
             {
                 return true; // if we reach here, the chain is valid
             }
             // If rl_outside_link failed, we try rr_outside_link
-            partition_A = proof_core_.xs_encryptor.get_lateral_to_t4_partition(rr_outside_link.fragments[1]); // lr fragment
-            partition_B = proof_core_.xs_encryptor.get_r_t4_partition(rr_outside_link.fragments[1]);
+            partition_A = proof_core_.fragment_codec.get_lateral_to_t4_partition(rr_outside_link.fragments[1]); // lr fragment
+            partition_B = proof_core_.fragment_codec.get_r_t4_partition(rr_outside_link.fragments[1]);
             return verifyDepth(depth + 1, proof_core_.firstLinkHash(rr_outside_link, challenge), proof_fragments, challenge, partition_A, partition_B);
         }
         else

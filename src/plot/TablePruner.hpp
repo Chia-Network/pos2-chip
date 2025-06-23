@@ -9,11 +9,11 @@ class TablePruner
 {
 public:
     #ifdef RETAIN_X_VALUES_TO_T3
-    std::vector<std::array<uint32_t, 8>> &xs_correlating_to_encrypted_xs;
+    std::vector<std::array<uint32_t, 8>> &xs_correlating_to_proof_fragments;
     #endif
 private:
     // t3 encrypted xs data (to be pruned later)
-    std::vector<uint64_t> &t3_encrypted_xs;
+    std::vector<uint64_t> &t3_proof_fragments;
 
    
 
@@ -45,18 +45,18 @@ public:
     #ifdef RETAIN_X_VALUES_TO_T3
     TablePruner(const ProofParams &proof_params, std::vector<uint64_t> &t3, std::vector<std::array<uint32_t, 8>> &xs)
     : params_(proof_params),
-      t3_encrypted_xs(t3),
-        xs_correlating_to_encrypted_xs(xs)
+      t3_proof_fragments(t3),
+        xs_correlating_to_proof_fragments(xs)
 {
-    size_t num_bitmask_bytes = (t3_encrypted_xs.size() + 7) / 8;
+    size_t num_bitmask_bytes = (t3_proof_fragments.size() + 7) / 8;
     t3_used_entries_bitmask.assign(num_bitmask_bytes, 0);
 }
     #else
     TablePruner(const ProofParams &proof_params, std::vector<uint64_t> &t3)
     : params_(proof_params),
-      t3_encrypted_xs(t3)
+      t3_proof_fragments(t3)
 {
-    size_t num_bitmask_bytes = (t3_encrypted_xs.size() + 7) / 8;
+    size_t num_bitmask_bytes = (t3_proof_fragments.size() + 7) / 8;
     t3_used_entries_bitmask.assign(num_bitmask_bytes, 0);
 }
     #endif
@@ -133,8 +133,8 @@ public:
             if (isUsed(t4_used_entries_bitmask, i))
             {
                 // Mark the referenced t3 entries as used.
-                setBitmask(t3_used_entries_bitmask, t4_partition_back_pointers_to_t3[i].encx_index_l);
-                setBitmask(t3_used_entries_bitmask, t4_partition_back_pointers_to_t3[i].encx_index_r);
+                setBitmask(t3_used_entries_bitmask, t4_partition_back_pointers_to_t3[i].fragment_index_l);
+                setBitmask(t3_used_entries_bitmask, t4_partition_back_pointers_to_t3[i].fragment_index_r);
                 // Move this t4 pointer to the next position in the compacted array.
                 t4_partition_back_pointers_to_t3[last_used_t4_index] = t4_partition_back_pointers_to_t3[i];
                 last_used_t4_index++;
@@ -162,25 +162,25 @@ public:
     {
         int64_t t3_pruned_index = 0;
         t3_new_mapping.clear();
-        t3_new_mapping.resize(t3_encrypted_xs.size(), -1);
+        t3_new_mapping.resize(t3_proof_fragments.size(), -1);
 
         // Prepare lateral partition ranges
-        T4ToT3LateralPartitionRanges ranges(params_.get_num_partitions() * 2, {t3_encrypted_xs.size(), 0});
-        XsEncryptor xs_encryptor(params_);
+        T4ToT3LateralPartitionRanges ranges(params_.get_num_partitions() * 2, {t3_proof_fragments.size(), 0});
+        ProofFragmentCodec fragment_codec(params_);
 
-        for (size_t i = 0; i < t3_encrypted_xs.size(); ++i)
+        for (size_t i = 0; i < t3_proof_fragments.size(); ++i)
         {
             
             if (isUsed(t3_used_entries_bitmask, i))
             {
                 t3_new_mapping[i] = t3_pruned_index;
-                t3_encrypted_xs[t3_pruned_index] = t3_encrypted_xs[i];
+                t3_proof_fragments[t3_pruned_index] = t3_proof_fragments[i];
                 #ifdef RETAIN_X_VALUES_TO_T3
-                xs_correlating_to_encrypted_xs[t3_pruned_index] = xs_correlating_to_encrypted_xs[i];
+                xs_correlating_to_proof_fragments[t3_pruned_index] = xs_correlating_to_proof_fragments[i];
                 #endif
 
                 // classify lateral partition
-                uint32_t lateral = xs_encryptor.get_lateral_to_t4_partition(t3_encrypted_xs[t3_pruned_index]);
+                uint32_t lateral = fragment_codec.get_lateral_to_t4_partition(t3_proof_fragments[t3_pruned_index]);
                 
                 // update this partition's range at new index
                 // ranges are inclusive
@@ -196,9 +196,9 @@ public:
             }
         }
 
-        t3_encrypted_xs.resize(t3_pruned_index);
+        t3_proof_fragments.resize(t3_pruned_index);
         #ifdef RETAIN_X_VALUES_TO_T3
-        xs_correlating_to_encrypted_xs.resize(t3_pruned_index);
+        xs_correlating_to_proof_fragments.resize(t3_pruned_index);
         #endif
 
         return ranges;
@@ -213,8 +213,8 @@ public:
     {
         for (auto &bp : t4_partition_back_pointers_to_t3)
         {
-            bp.encx_index_l = t3_new_mapping[bp.encx_index_l];
-            bp.encx_index_r = t3_new_mapping[bp.encx_index_r];
+            bp.fragment_index_l = t3_new_mapping[bp.fragment_index_l];
+            bp.fragment_index_r = t3_new_mapping[bp.fragment_index_r];
         }
     }
 
@@ -226,27 +226,27 @@ public:
     void finalize_t3_entries()
     {
 
-        XsEncryptor xs_encryptor(params_);
+        ProofFragmentCodec fragment_codec(params_);
         //t3_lateral_t4_partition_index_start.resize(params_.get_num_partitions() * 2);
         //t3_lateral_t4_partition_index_end.resize(params_.get_num_partitions() * 2);
 
         // as we go through and finalize our t3 entries, also mark the start and end indexes for the lateral t3 boundaries
         size_t last_used_t3_index = 0;
-        for (size_t i = 0; i < t3_encrypted_xs.size(); ++i)
+        for (size_t i = 0; i < t3_proof_fragments.size(); ++i)
         {
             if (isUsed(t3_used_entries_bitmask, i))
             {
-                t3_encrypted_xs[last_used_t3_index] = t3_encrypted_xs[i];
+                t3_proof_fragments[last_used_t3_index] = t3_proof_fragments[i];
                 last_used_t3_index++;
 
-                //uint32_t lateral_partition = xs_encryptor.get_lateral_to_t4_partition(t3_encrypted_xs[i]);
+                //uint32_t lateral_partition = fragment_codec.get_lateral_to_t4_partition(t3_encrypted_xs[i]);
                 //t3_lateral_t4_partition_index_start[lateral_partition] = std::min(t3_lateral_t4_partition_index_start[lateral_partition], (uint64_t)i);
                 //t3_lateral_t4_partition_index_end[lateral_partition] = std::max(t3_lateral_t4_partition_index_end[lateral_partition], (uint64_t)i);
             }
         }
         // std::cout << "Cropping t3 from " << t3_encrypted_xs.size()
         //           << " to " << last_used_t3_index << std::endl;
-        t3_encrypted_xs.resize(last_used_t3_index);
+        t3_proof_fragments.resize(last_used_t3_index);
     }
 
     // these get set when finalizing t3 entries

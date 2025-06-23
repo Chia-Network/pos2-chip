@@ -19,7 +19,7 @@ public:
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
     Plotter(const std::array<uint8_t, 32> plot_id, int k, int sub_k)
       : plot_id_(plot_id), k_(k), sub_k_(sub_k),
-        proof_params_(plot_id_.data(), k_, sub_k_), xs_encryptor_(proof_params_), validator_(proof_params_) {}
+        proof_params_(plot_id_.data(), k_, sub_k_), fragment_codec_(proof_params_), validator_(proof_params_) {}
 
     // Execute the plotting pipeline
     PlotData run() {
@@ -82,11 +82,11 @@ public:
         timer_.start("Constructing Table 3");
         T3_Partitions_Results t3_results = t3_ctor.construct(t2_pairs);
         timer_.stop();
-        std::cout << "Constructed " << t3_results.encrypted_xs.size() << " Table 3 entries." << std::endl;
+        std::cout << "Constructed " << t3_results.proof_fragments.size() << " Table 3 entries." << std::endl;
 
         #ifdef RETAIN_X_VALUES
         if (validate_) {
-            for (const auto& xs_array : t3_results.xs_correlating_to_encrypted_xs) {
+            for (const auto& xs_array : t3_results.xs_correlating_to_proof_fragments) {
                 auto result = validator_.validate_table_3_pairs(xs_array.data());
                 if (!result.has_value()) {
                     std::cerr << "Validation failed for Table 3 pair: ["
@@ -103,9 +103,9 @@ public:
         // 5) Prepare pruner
         
         #ifdef RETAIN_X_VALUES_TO_T3
-        TablePruner pruner(proof_params_, t3_results.encrypted_xs, t3_results.xs_correlating_to_encrypted_xs);
+        TablePruner pruner(proof_params_, t3_results.proof_fragments, t3_results.xs_correlating_to_proof_fragments);
         #else
-        TablePruner pruner(proof_params_, t3_results.encrypted_xs);
+        TablePruner pruner(proof_params_, t3_results.proof_fragments);
         #endif
 
         // 6) Partitioned Table4 + Table5
@@ -171,12 +171,12 @@ public:
         timer_.stop();
 
         return {
-            .t3_encrypted_xs = t3_results.encrypted_xs,
+            .t3_proof_fragments = t3_results.proof_fragments,
             .t4_to_t3_lateral_ranges = t4_to_t3_lateral_partition_ranges,
             .t4_to_t3_back_pointers = all_t4,
             .t5_to_t4_back_pointers = all_t5,
             #ifdef RETAIN_X_VALUES_TO_T3
-            .xs_correlating_to_encrypted_xs = t3_results.xs_correlating_to_encrypted_xs,
+            .xs_correlating_to_proof_fragments = t3_results.xs_correlating_to_proof_fragments,
             #endif
         };
     }
@@ -185,8 +185,8 @@ public:
         return proof_params_;
     }
 
-    XsEncryptor getXsEncryptor() const {
-        return xs_encryptor_;
+    ProofFragmentCodec getProofFragment() const {
+        return fragment_codec_;
     }
 
     void setValidate(bool validate) {
@@ -211,7 +211,7 @@ private:
 
     // Core PoSpace objects
     ProofParams proof_params_;
-    XsEncryptor xs_encryptor_;
+    ProofFragmentCodec fragment_codec_;
 
     // Timing utility
     Timer timer_;

@@ -9,7 +9,7 @@
 
 #include "ProofParams.hpp"
 #include "ProofHashing.hpp"
-#include "XsEncryptor.hpp"
+#include "ProofFragment.hpp"
 
 //------------------------------------------------------------------------------
 // Structs for pairing results
@@ -17,8 +17,8 @@
 
 // use retain x values to t3 to make a plot and save x values to disk for analysis
 // use BOTH includes to for deeper validation of results
-//#define RETAIN_X_VALUES_TO_T3 true
-//#define RETAIN_X_VALUES true
+#define RETAIN_X_VALUES_TO_T3 true
+#define RETAIN_X_VALUES true
 
 // T4 and T5 are bipartite for optimal compression, T3 links back to T2 and T2 to T1 are omitted
 // so bipartite is optional. Some notes as to which mode is best:
@@ -90,7 +90,7 @@ struct T2Pairing
 
 struct T3Pairing
 {
-    uint64_t encrypted_xs;               // 2k-bit encrypted x-values.
+    ProofFragment proof_fragment;               // 2k-bit encrypted x-values.
     uint64_t meta_lower_partition;                       // 2k-bit meta.
     uint64_t meta_upper_partition;
     uint32_t match_info_lower_partition; // sub_k bits (from lower partition).
@@ -107,7 +107,7 @@ struct T3Pairing
 struct T3PartitionedPairing
 {
     uint64_t meta;
-    uint64_t encx_index;
+    uint64_t fragment_index;
     uint32_t match_info; // sub_k bits
     uint32_t order_bits;
 #ifdef RETAIN_X_VALUES
@@ -118,8 +118,8 @@ struct T3PartitionedPairing
 struct T4Pairing
 {
     uint64_t meta; // 2k-bit meta value.
-    uint64_t encx_index_l;
-    uint64_t encx_index_r;
+    uint64_t fragment_index_l;
+    uint64_t fragment_index_r;
     uint32_t match_info; // sub_k-bit match info.
 #ifdef RETAIN_X_VALUES
     uint32_t xs[16];
@@ -128,8 +128,8 @@ struct T4Pairing
 
 struct T4BackPointers
 {
-    uint64_t encx_index_l;
-    uint64_t encx_index_r;
+    uint64_t fragment_index_l;
+    uint64_t fragment_index_r;
 #ifdef RETAIN_X_VALUES
     uint32_t xs[16];
 #endif
@@ -166,13 +166,13 @@ class ProofCore
 {
 public:
     ProofHashing hashing;
-    XsEncryptor xs_encryptor;
+    ProofFragmentCodec fragment_codec;
 
-    // Constructor: Initializes internal ProofHashing and XsEncryptor objects.
+    // Constructor: Initializes internal ProofHashing and ProofFragmentCodec objects.
     ProofCore(const ProofParams &proof_params)
         : params_(proof_params),
           hashing(proof_params),
-          xs_encryptor(proof_params)
+          fragment_codec(proof_params)
     {
     }
 
@@ -252,23 +252,12 @@ public:
             return std::nullopt;
 
         uint64_t all_x_bits = (static_cast<uint64_t>(x_bits_l) << params_.get_k()) | x_bits_r;
-        uint64_t encrypted_xs = xs_encryptor.encrypt(all_x_bits);
-        uint32_t order_bits = xs_encryptor.extract_t3_order_bits(encrypted_xs);
+        ProofFragment proof_fragment = fragment_codec.encode(all_x_bits);
+        uint32_t order_bits = fragment_codec.extract_t3_order_bits(proof_fragment);
         uint32_t top_order_bit = order_bits >> 1;
         uint32_t lower_partition, upper_partition;
 
-        xs_encryptor.get_lower_and_upper_partitions(encrypted_xs, lower_partition, upper_partition);
-
-        /*if (top_order_bit == 0)
-        {
-            lower_partition = xs_encryptor.get_t3_l_partition(encrypted_xs);
-            upper_partition = xs_encryptor.get_t3_r_partition(encrypted_xs) + params_.get_num_partitions();
-        }
-        else
-        {
-            lower_partition = xs_encryptor.get_t3_r_partition(encrypted_xs);
-            upper_partition = xs_encryptor.get_t3_l_partition(encrypted_xs) + params_.get_num_partitions();
-        }*/
+        fragment_codec.get_lower_and_upper_partitions(proof_fragment, lower_partition, upper_partition);
 
         PairingResult lower_partition_pair = hashing.pairing(3, meta_l, meta_r,
                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
@@ -283,7 +272,7 @@ public:
         // TODO: this can be bitpacked much better
         T3Pairing result;
 
-        result.encrypted_xs = encrypted_xs;
+        result.proof_fragment = proof_fragment;
         result.order_bits = order_bits;
 
         result.lower_partition = lower_partition;
@@ -526,8 +515,8 @@ public:
         {
             if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
             {
-                uint32_t lateral_partition = xs_encryptor.get_lateral_to_t4_partition(link.fragments[2]); // the RR fragment
-                uint32_t cross_partition = xs_encryptor.get_r_t4_partition(link.fragments[2]); // the RR fragment
+                uint32_t lateral_partition = fragment_codec.get_lateral_to_t4_partition(link.fragments[2]); // the RR fragment
+                uint32_t cross_partition = fragment_codec.get_r_t4_partition(link.fragments[2]); // the RR fragment
                 if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
                 {
                     filtered_links.push_back(link);
@@ -539,8 +528,8 @@ public:
             }
             else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
             {
-                uint32_t lateral_partition = xs_encryptor.get_lateral_to_t4_partition(link.fragments[1]); // the LR fragment
-                uint32_t cross_partition = xs_encryptor.get_r_t4_partition(link.fragments[1]); // the LR fragment
+                uint32_t lateral_partition = fragment_codec.get_lateral_to_t4_partition(link.fragments[1]); // the LR fragment
+                uint32_t cross_partition = fragment_codec.get_r_t4_partition(link.fragments[1]); // the LR fragment
                 if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
                 {
                     filtered_links.push_back(link);

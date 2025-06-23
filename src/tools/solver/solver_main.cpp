@@ -2,14 +2,14 @@
 #include <string>
 #include <cstdlib>
 #include "plot/PlotFile.hpp"
-#include "pos/XsEncryptor.hpp"
+#include "pos/ProofFragment.hpp"
 #include "solve/Solver.hpp"
 #include "pos/ProofValidator.hpp"
 #include "common/Utils.hpp"
 
 int exhaustive_test(PlotFile::PlotFileContents &plot)
 {
-    XsEncryptor xs_encryptor(plot.params);
+    ProofFragmentCodec fragment_codec(plot.params);
 
 #ifdef RETAIN_X_VALUES_TO_T3
     // This function is not implemented in the original code.
@@ -25,20 +25,20 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             T5Pairing t5_pairing = plot.data.t5_to_t4_back_pointers[partition][test_slot]; // now get t4 L and R pairings
             T4BackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_l];
             T4BackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_r];
-            uint64_t encrypted_xs_LL = plot.data.t3_encrypted_xs[t4_to_t3_L.encx_index_l];
-            uint64_t encrypted_xs_LR = plot.data.t3_encrypted_xs[t4_to_t3_L.encx_index_r];
-            uint64_t encrypted_xs_RL = plot.data.t3_encrypted_xs[t4_to_t3_R.encx_index_l];
-            uint64_t encrypted_xs_RR = plot.data.t3_encrypted_xs[t4_to_t3_R.encx_index_r];
-            std::cout << "Encrypted xs LL: " << encrypted_xs_LL << std::endl;
-            // decrypt it to get x-bits
+            ProofFragment fragment_LL = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_l];
+            ProofFragment fragment_LR = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_r];
+            ProofFragment fragment_RL = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_l];
+            ProofFragment fragment_RR = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_r];
+            std::cout << "Encrypted xs LL: " << fragment_LL << std::endl;
+            // decode it to get x-bits
 
-            uint64_t decrypted_xs_LL = xs_encryptor.decrypt(encrypted_xs_LL);
-            uint64_t decrypted_xs_LR = xs_encryptor.decrypt(encrypted_xs_LR);
-            uint64_t decrypted_xs_RL = xs_encryptor.decrypt(encrypted_xs_RL);
-            uint64_t decrypted_xs_RR = xs_encryptor.decrypt(encrypted_xs_RR);
+            uint64_t decrypted_xs_LL = fragment_codec.decode(fragment_LL);
+            uint64_t decrypted_xs_LR = fragment_codec.decode(fragment_LR);
+            uint64_t decrypted_xs_RL = fragment_codec.decode(fragment_RL);
+            uint64_t decrypted_xs_RR = fragment_codec.decode(fragment_RR);
 
             // verify our xs are correct with encrypted xs
-            if (xs_encryptor.validate_encrypted_xs(encrypted_xs_LL, plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_l].data()))
+            if (fragment_codec.validate_proof_fragment(fragment_LL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l].data()))
             {
                 std::cout << "Encrypted xs LL match x-bits." << std::endl;
             }
@@ -47,7 +47,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
                 std::cerr << "Encrypted xs LL do not match x-bits." << std::endl;
                 return 1;
             }
-            if (xs_encryptor.validate_encrypted_xs(encrypted_xs_LR, plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_r].data()))
+            if (fragment_codec.validate_proof_fragment(fragment_LR, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r].data()))
             {
                 std::cout << "Encrypted xs LR match x-bits." << std::endl;
             }
@@ -56,7 +56,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
                 std::cerr << "Encrypted xs LR do not match x-bits." << std::endl;
                 return 1;
             }
-            if (xs_encryptor.validate_encrypted_xs(encrypted_xs_RL, plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_l].data()))
+            if (fragment_codec.validate_proof_fragment(fragment_RL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l].data()))
             {
                 std::cout << "Encrypted xs RL match x-bits." << std::endl;
             }
@@ -65,7 +65,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
                 std::cerr << "Encrypted xs RL do not match x-bits." << std::endl;
                 return 1;
             }
-            if (xs_encryptor.validate_encrypted_xs(encrypted_xs_RR, plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_r].data()))
+            if (fragment_codec.validate_proof_fragment(fragment_RR, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r].data()))
             {
                 std::cout << "Encrypted xs RR match x-bits." << std::endl;
             }
@@ -83,38 +83,38 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             int bit_drop = plot.params.get_k() / 2;
             for (int i = 0; i < 8; i++)
             {
-                std::cout << plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_l][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_l][i]);
+                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i] << " ";
+                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i]);
                 if (i % 2 == 0)
                 {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_l][i] >> bit_drop);
+                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i] >> bit_drop);
                 }
             }
             for (int i = 0; i < 8; i++)
             {
-                std::cout << plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_r][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_r][i]);
+                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i] << " ";
+                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i]);
                 if (i % 2 == 0)
                 {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_r][i] >> bit_drop);
+                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i] >> bit_drop);
                 }
             }
             for (int i = 0; i < 8; i++)
             {
-                std::cout << plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_l][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_l][i]);
+                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i] << " ";
+                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i]);
                 if (i % 2 == 0)
                 {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_l][i] >> bit_drop);
+                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i] >> bit_drop);
                 }
             }
             for (int i = 0; i < 8; i++)
             {
-                std::cout << plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_r][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_r][i]);
+                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i] << " ";
+                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i]);
                 if (i % 2 == 0)
                 {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_r][i] >> bit_drop);
+                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i] >> bit_drop);
                 }
             }
             std::cout << std::endl;
@@ -164,7 +164,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
 
 int chain_test(PlotFile::PlotFileContents &plot)
 {
-    XsEncryptor xs_encryptor(plot.params);
+    ProofFragmentCodec fragment_codec(plot.params);
 
     //T5 indices: 7126,11699,19124,23993,25291,21053,17607,6303,21934,10168,25165,16573,18375,18911,20855,3427,
 //T5 partitions: 10,29,29,29,10,29,29,29,29,29,10,29,10,29,29,10,
@@ -190,40 +190,40 @@ int chain_test(PlotFile::PlotFileContents &plot)
             T5Pairing t5_pairing = plot.data.t5_to_t4_back_pointers[partition][t5_index]; // now get t4 L and R pairings
             T4BackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_l];
             T4BackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_r];
-            uint64_t encrypted_xs_LL = plot.data.t3_encrypted_xs[t4_to_t3_L.encx_index_l];
-            uint64_t encrypted_xs_LR = plot.data.t3_encrypted_xs[t4_to_t3_L.encx_index_r];
-            uint64_t encrypted_xs_RL = plot.data.t3_encrypted_xs[t4_to_t3_R.encx_index_l];
-            uint64_t encrypted_xs_RR = plot.data.t3_encrypted_xs[t4_to_t3_R.encx_index_r];
+            uint64_t fragment_LL = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_l];
+            uint64_t fragment_LR = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_r];
+            uint64_t fragment_RL = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_l];
+            uint64_t fragment_RR = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_r];
 
-            uint64_t decrypted_xs_LL = xs_encryptor.decrypt(encrypted_xs_LL);
-            uint64_t decrypted_xs_LR = xs_encryptor.decrypt(encrypted_xs_LR);
-            uint64_t decrypted_xs_RL = xs_encryptor.decrypt(encrypted_xs_RL);
-            uint64_t decrypted_xs_RR = xs_encryptor.decrypt(encrypted_xs_RR);
+            uint64_t decrypted_xs_LL = fragment_codec.decode(fragment_LL);
+            uint64_t decrypted_xs_LR = fragment_codec.decode(fragment_LR);
+            uint64_t decrypted_xs_RL = fragment_codec.decode(fragment_RL);
+            uint64_t decrypted_xs_RR = fragment_codec.decode(fragment_RR);
 
-            std::array<uint32_t, 4>  x_bits_ll = xs_encryptor.get_x_bits_from_encrypted_xs(encrypted_xs_LL);
-            std::array<uint32_t, 4>  x_bits_lr = xs_encryptor.get_x_bits_from_encrypted_xs(encrypted_xs_LR);
-            std::array<uint32_t, 4>  x_bits_rl = xs_encryptor.get_x_bits_from_encrypted_xs(encrypted_xs_RL);
-            std::array<uint32_t, 4>  x_bits_rr = xs_encryptor.get_x_bits_from_encrypted_xs(encrypted_xs_RR);
+            std::array<uint32_t, 4>  x_bits_ll = fragment_codec.get_x_bits_from_proof_fragment(fragment_LL);
+            std::array<uint32_t, 4>  x_bits_lr = fragment_codec.get_x_bits_from_proof_fragment(fragment_LR);
+            std::array<uint32_t, 4>  x_bits_rl = fragment_codec.get_x_bits_from_proof_fragment(fragment_RL);
+            std::array<uint32_t, 4>  x_bits_rr = fragment_codec.get_x_bits_from_proof_fragment(fragment_RR);
 
             std::cout << "Quality Link: " << std::endl
             << " Partition: " << partition << std::endl
             << " T5 Index: " << t5_index << std::endl
             << " T4 Index L: " << t5_pairing.t4_index_l << std::endl
             << " T4 Index R: " << t5_pairing.t4_index_r << std::endl
-            << " T3 Index LL: " << t4_to_t3_L.encx_index_l << std::endl
-            << " T3 Index LR: " << t4_to_t3_L.encx_index_r << std::endl
-            << " T3 Index RL: " << t4_to_t3_R.encx_index_l << std::endl
-            << " T3 Index RR: " << t4_to_t3_R.encx_index_r << std::endl
-            << " Encrypted xs LL: " << std::hex << encrypted_xs_LL << std::endl
+            << " T3 Index LL: " << t4_to_t3_L.fragment_index_l << std::endl
+            << " T3 Index LR: " << t4_to_t3_L.fragment_index_r << std::endl
+            << " T3 Index RL: " << t4_to_t3_R.fragment_index_l << std::endl
+            << " T3 Index RR: " << t4_to_t3_R.fragment_index_r << std::endl
+            << " Encrypted xs LL: " << std::hex << fragment_LL << std::endl
             << "   LL xbits: " << std::dec
             << " [" << x_bits_ll[0] << ", " << x_bits_ll[1] << ", " << x_bits_ll[2] << ", " << x_bits_ll[3] << "]" << std::endl
-            << " Encrypted xs LR: " << std::hex << encrypted_xs_LR << std::endl
+            << " Encrypted xs LR: " << std::hex << fragment_LR << std::endl
             << "   LR xbits: " << std::dec
             << " [" << x_bits_lr[0] << ", " << x_bits_lr[1] << ", " << x_bits_lr[2] << ", " << x_bits_lr[3] << "]" << std::endl
-            << " Encrypted xs RL: " << std::hex << encrypted_xs_RL << std::endl
+            << " Encrypted xs RL: " << std::hex << fragment_RL << std::endl
             << "   RL xbits: " << std::dec
             << " [" << x_bits_rl[0] << ", " << x_bits_rl[1] << ", " << x_bits_rl[2] << ", " << x_bits_rl[3] << "]" << std::endl
-            << " Encrypted xs RR: " << std::hex << encrypted_xs_RR << std::endl
+            << " Encrypted xs RR: " << std::hex << fragment_RR << std::endl
             << "   RR xbits: " << std::dec
             << " [" << x_bits_rr[0] << ", " << x_bits_rr[1] << ", " << x_bits_rr[2] << ", " << x_bits_rr[3] << "]" << std::endl
             << std::endl << std::dec;
@@ -248,19 +248,19 @@ int chain_test(PlotFile::PlotFileContents &plot)
 #ifdef RETAIN_X_VALUES_TO_T3
             for (int i = 0; i < 8; i++)
             {
-                xs_full_solution.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_l][i]);
+                xs_full_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i]);
             }
             for (int i = 0; i < 8; i++)
             {
-                xs_full_solution.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_L.encx_index_r][i]);
+                xs_full_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i]);
             }
             for (int i = 0; i < 8; i++)
             {
-                xs_full_solution.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_l][i]);
+                xs_full_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i]);
             }
             for (int i = 0; i < 8; i++)
             {
-                xs_full_solution.push_back(plot.data.xs_correlating_to_encrypted_xs[t4_to_t3_R.encx_index_r][i]);
+                xs_full_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i]);
             }
 #endif
         }
@@ -371,7 +371,7 @@ int prove(const std::string& plot_file) {
     std::cout << "Plot file read successfully: " << plot_file << std::endl;
     plot.params.debugPrint();
 
-    XsEncryptor xs_encryptor(plot.params);
+    //ProofFragmentCodec fragment_codec(plot.params);
 
     // perform the proof/chain test
     chain_test(plot);

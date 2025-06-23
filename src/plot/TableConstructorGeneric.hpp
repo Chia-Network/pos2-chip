@@ -413,9 +413,9 @@ public:
 struct T3_Partitions_Results
 {
     std::vector<std::vector<T3PartitionedPairing>> partitioned_pairs;
-    std::vector<uint64_t> encrypted_xs;
+    std::vector<ProofFragment> proof_fragments;
 #ifdef RETAIN_X_VALUES_TO_T3
-    std::vector<std::array<uint32_t, 8>> xs_correlating_to_encrypted_xs;
+    std::vector<std::array<uint32_t, 8>> xs_correlating_to_proof_fragments;
 #endif
 };
 
@@ -470,7 +470,7 @@ public:
     T3_Partitions_Results post_construct(std::vector<T3Pairing> &pairings) const override
     {
         // do a radix sort on encryptedxs variable
-        RadixSort<T3Pairing, uint64_t, decltype(&T3Pairing::encrypted_xs)> radix_sort(&T3Pairing::encrypted_xs);
+        RadixSort<T3Pairing, uint64_t, decltype(&T3Pairing::proof_fragment)> radix_sort(&T3Pairing::proof_fragment);
 
         // 1) sort by encrypted_xs
         std::vector<T3Pairing> temp_buffer(pairings.size());
@@ -487,23 +487,23 @@ private:
         // after sorting by encx's we split data
         // into list of encx's and partitioned pairs.
 
-        // 1) extract the encrypted_xs and split index and data into partitioned t3
-        std::vector<uint64_t> encrypted_xs(pairings.size());
+        // 1) extract the proof fragments and split index and data into partitioned t3
+        std::vector<ProofFragment> proof_fragments(pairings.size());
         int num_partitions = params_.get_num_partitions() * 2; // two sets of partitions, upper and lower
         std::vector<std::vector<T3PartitionedPairing>> partitioned_pairs(num_partitions);
 
 #ifdef RETAIN_X_VALUES_TO_T3
-        std::vector<std::array<uint32_t, 8>> xs_correlating_to_encrypted_xs(pairings.size());
+        std::vector<std::array<uint32_t, 8>> xs_correlating_to_proof_fragments(pairings.size());
 #endif
 
-        for (uint64_t encx_index = 0; encx_index < pairings.size(); encx_index++)
+        for (uint64_t fragment_index = 0; fragment_index < pairings.size(); fragment_index++)
         {
-            const T3Pairing &pairing = pairings.at(encx_index);
+            const T3Pairing &pairing = pairings.at(fragment_index);
 
-            // encrypted_xs are pre-allocated, so set directly in the vector
-            encrypted_xs[encx_index] = pairing.encrypted_xs;
+            // fragments are pre-allocated, so set directly in the vector
+            proof_fragments[fragment_index] = pairing.proof_fragment;
 #ifdef RETAIN_X_VALUES_TO_T3
-            xs_correlating_to_encrypted_xs[encx_index] = {
+            xs_correlating_to_proof_fragments[fragment_index] = {
                 pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
                 pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7]};
 #endif
@@ -512,7 +512,7 @@ private:
 
             partitioned_pairs[pairing.lower_partition].push_back(T3PartitionedPairing{
                 .meta = pairing.meta_lower_partition,
-                .encx_index = encx_index,
+                .fragment_index = fragment_index,
                 .match_info = pairing.match_info_lower_partition,
                 .order_bits = pairing.order_bits,
 #ifdef RETAIN_X_VALUES
@@ -522,7 +522,7 @@ private:
             });
             partitioned_pairs[pairing.upper_partition].push_back(T3PartitionedPairing{
                 .meta = pairing.meta_upper_partition,
-                .encx_index = encx_index,
+                .fragment_index = fragment_index,
                 .match_info = pairing.match_info_upper_partition,
                 .order_bits = pairing.order_bits,
 #ifdef RETAIN_X_VALUES
@@ -554,9 +554,9 @@ private:
 
         return T3_Partitions_Results{
             .partitioned_pairs = partitioned_pairs,
-            .encrypted_xs = encrypted_xs,
+            .proof_fragments = proof_fragments,
 #ifdef RETAIN_X_VALUES_TO_T3
-            .xs_correlating_to_encrypted_xs = xs_correlating_to_encrypted_xs
+            .xs_correlating_to_proof_fragments = xs_correlating_to_proof_fragments
 #endif
         };
     }
@@ -581,7 +581,7 @@ public:
         uint32_t r_match_target = proof_core_.matching_target(4, prev_table_pair.meta, match_key_r);
         return T3PartitionedPairing{
             .meta = prev_table_pair.meta,
-            .encx_index = prev_table_pair.encx_index,
+            .fragment_index = prev_table_pair.fragment_index,
             .match_info = r_match_target,
             .order_bits = prev_table_pair.order_bits,
 #ifdef RETAIN_X_VALUES
@@ -606,8 +606,8 @@ public:
         if (opt_res.has_value())
         {
             T4Pairing pairing = opt_res.value();
-            pairing.encx_index_l = l_candidate.encx_index;
-            pairing.encx_index_r = r_candidate.encx_index;
+            pairing.fragment_index_l = l_candidate.fragment_index;
+            pairing.fragment_index_r = r_candidate.fragment_index;
 #ifdef RETAIN_X_VALUES
             for (int i = 0; i < 8; i++)
             {
@@ -621,9 +621,9 @@ public:
 
     T4_Partition_Result post_construct(std::vector<T4Pairing> &pairings) const override
     {
-        // first thing is to sort by encx_index_l
-        RadixSort<T4Pairing, uint64_t, decltype(&T4Pairing::encx_index_l)> radix_sort_by_index_l(&T4Pairing::encx_index_l);
-        RadixSort<T4Pairing, uint64_t, decltype(&T4Pairing::encx_index_r)> radix_sort_by_index_r(&T4Pairing::encx_index_r);
+        // first thing is to sort by fragment_index_l
+        RadixSort<T4Pairing, uint64_t, decltype(&T4Pairing::fragment_index_l)> radix_sort_by_index_l(&T4Pairing::fragment_index_l);
+        RadixSort<T4Pairing, uint64_t, decltype(&T4Pairing::fragment_index_r)> radix_sort_by_index_r(&T4Pairing::fragment_index_r);
 
         // Create a temporary buffer
         std::vector<T4Pairing> temp_buffer(pairings.size());
@@ -653,8 +653,8 @@ public:
 #endif
             };
             t4_to_t3_back_pointers[i] = T4BackPointers{
-                .encx_index_l = pairing.encx_index_l,
-                .encx_index_r = pairing.encx_index_r,
+                .fragment_index_l = pairing.fragment_index_l,
+                .fragment_index_r = pairing.fragment_index_r,
 #ifdef RETAIN_X_VALUES
                 .xs = {pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
                        pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7],

@@ -57,14 +57,14 @@ int main(int argc, char *argv[])
             std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
             ProofParams params = prover.getProofParams();
-            XsEncryptor xs_encryptor(params);
+            ProofFragmentCodec fragment_codec(params);
             // convert proof fragments to xbits hex
             std::string xbits_hex;
             std::vector<uint32_t> xbits_list;
             for (const auto &fragment : proof_fragments)
             {
-                std::cout << "ProofFragment: " << std::hex << fragment << std::dec;
-                std::array<uint32_t, 4> x_bits = xs_encryptor.get_x_bits_from_encrypted_xs(fragment);
+                std::cout << "ProofFragmentCodec: " << std::hex << fragment << std::dec;
+                std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(fragment);
                 for (const auto &x_bit : x_bits)
                 {
                     // at most 16 bits = 4 x 4 bits

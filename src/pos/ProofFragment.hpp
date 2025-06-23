@@ -3,22 +3,20 @@
 #include <cstdint>
 #include <cstddef>
 
-#include "ProofParams.hpp"  // Expected to provide: 
-                            //   - const uint8_t* getPlotIdBytes() const;
-                            //   - size_t getK() const;
-                            //   - size_t get_num_partition_bits() const;
-#include "FeistelCipher.hpp"// Expected to provide:
-                            //   - FeistelCipher(const uint8_t* plot_id_bytes, size_t k);
-                            //   - uint64_t encrypt(uint64_t all_x_bits);
-                            //   - uint64_t decrypt(uint64_t ciphertext);
+#include "ProofParams.hpp"
+#include "FeistelCipher.hpp"
 
 
-// XsEncryptor provides methods for encrypting/decrypting an x-value block and 
+
+// A “proof fragment” is 2k bits of the chiphertext
+using ProofFragment = uint64_t;
+
+// ProofFragment provides methods for encrypting/decrypting an x-value block and 
 // extracting partition bits from the resulting encrypted value.
-class XsEncryptor {
+class ProofFragmentCodec {
 public:
     // Constructor: uses the provided ProofParams.
-    XsEncryptor(const ProofParams& proof_params)
+    ProofFragmentCodec(const ProofParams& proof_params)
         : params_(proof_params),
           cipher_(proof_params.get_plot_id_bytes(), proof_params.get_k())
     {
@@ -27,11 +25,11 @@ public:
     // Encrypt: Input is a 2*k‑bit integer containing bit-dropped x1/3/5/7 
     // values (in the format [x1 (k/2 bits)][x3 (k/2 bits)][x5 (k/2 bits)][x7 (k/2 bits)]).
     // Returns the encryption result as a uint64_t.
-    uint64_t encrypt(uint64_t all_x_bits) {
+    uint64_t encode(uint64_t all_x_bits) {
         return cipher_.encrypt(all_x_bits);
     }
 
-    uint64_t encrypt(const uint32_t x_values[8]) {
+    ProofFragment encode(const uint32_t x_values[8]) {
         // Combine the upper halves of x1, x3, x5, and x7 into a single 2*k bit value.
         uint32_t x1 = x_values[0] >> (params_.get_k() / 2);
         uint32_t x3 = x_values[2] >> (params_.get_k() / 2);
@@ -46,88 +44,88 @@ public:
     }
 
     // Decrypt: Given a ciphertext (2*k bits) returns the decrypted value as a uint64_t.
-    uint64_t decrypt(uint64_t ciphertext) {
+    uint64_t decode(uint64_t ciphertext) {
         return cipher_.decrypt(ciphertext);
     }
 
-    // Returns the specified number of bits extracted from encx.
+    // Returns the specified number of bits extracted from proof fragment
     // The extraction treats the MSB as bit 0.
-    uint64_t get_encx_bits_with_msb_as_zero(uint64_t encx, size_t start_bits_incl, size_t len) const {
+    uint64_t get_proof_fragment_bits_with_msb_as_zero(ProofFragment proof_fragment, size_t start_bits_incl, size_t len) const {
         size_t total_bits = params_.get_k() * 2;
-        return (encx >> (total_bits - start_bits_incl - len)) & ((uint64_t(1) << len) - 1);
+        return (proof_fragment >> (total_bits - start_bits_incl - len)) & ((uint64_t(1) << len) - 1);
     }
 
     // Extracts 2 order bits following the partition as a uint32_t.
-    uint32_t extract_t3_order_bits(uint64_t encx) const {
+    uint32_t extract_t3_order_bits(ProofFragment proof_fragment) const {
         return static_cast<uint32_t>(
-            get_encx_bits_with_msb_as_zero(encx, params_.get_num_partition_bits(), 2)
+            get_proof_fragment_bits_with_msb_as_zero(proof_fragment, params_.get_num_partition_bits(), 2)
         );
     }
 
     // Extracts the T3 right partition bits (the LSB partition) as a uint32_t.
-    uint32_t extract_t3_r_partition_bits(uint64_t encx) const {
+    uint32_t extract_t3_r_partition_bits(ProofFragment proof_fragment) const {
         return static_cast<uint32_t>(
-            encx & ((uint64_t(1) << params_.get_num_partition_bits()) - 1)
+            proof_fragment & ((uint64_t(1) << params_.get_num_partition_bits()) - 1)
         );
     }
 
     // Extracts the T3 left partition bits (from the MSB side) as a uint32_t.
-    uint32_t extract_t3_l_partition_bits(uint64_t encx) const {
+    uint32_t extract_t3_l_partition_bits(ProofFragment proof_fragment) const {
         return static_cast<uint32_t>(
-            get_encx_bits_with_msb_as_zero(encx, 0, params_.get_num_partition_bits())
+            get_proof_fragment_bits_with_msb_as_zero(proof_fragment, 0, params_.get_num_partition_bits())
         );
     }
 
-    void get_lower_and_upper_partitions(uint64_t encx, uint32_t &lower, uint32_t upper) const {
-        uint32_t top_order_bit = extract_t3_order_bits(encx) >> 1;
+    void get_lower_and_upper_partitions(ProofFragment proof_fragment, uint32_t &lower, uint32_t upper) const {
+        uint32_t top_order_bit = extract_t3_order_bits(proof_fragment) >> 1;
         if (top_order_bit == 0)
         {
-            lower = extract_t3_l_partition_bits(encx);
-            upper = extract_t3_r_partition_bits(encx) + params_.get_num_partitions();
+            lower = extract_t3_l_partition_bits(proof_fragment);
+            upper = extract_t3_r_partition_bits(proof_fragment) + params_.get_num_partitions();
         }
         else
         {
-            lower = extract_t3_r_partition_bits(encx);
-            upper = extract_t3_l_partition_bits(encx) + params_.get_num_partitions();
+            lower = extract_t3_r_partition_bits(proof_fragment);
+            upper = extract_t3_l_partition_bits(proof_fragment) + params_.get_num_partitions();
         }
     }
 
-    uint32_t get_lateral_to_t4_partition(uint64_t encrypted_xs) const {
-        uint32_t top_order_bit = extract_t3_order_bits(encrypted_xs) >> 1;
+    uint32_t get_lateral_to_t4_partition(ProofFragment proof_fragment) const {
+        uint32_t top_order_bit = extract_t3_order_bits(proof_fragment) >> 1;
         if (top_order_bit == 0)
         {
-            return extract_t3_l_partition_bits(encrypted_xs);
+            return extract_t3_l_partition_bits(proof_fragment);
         }
         else
         {
-            return extract_t3_l_partition_bits(encrypted_xs) + params_.get_num_partitions();
+            return extract_t3_l_partition_bits(proof_fragment) + params_.get_num_partitions();
         }
     }
 
-    uint32_t get_r_t4_partition(uint64_t encrypted_xs) const {
-        uint32_t top_order_bit = extract_t3_order_bits(encrypted_xs) >> 1;
+    uint32_t get_r_t4_partition(ProofFragment proof_fragment) const {
+        uint32_t top_order_bit = extract_t3_order_bits(proof_fragment) >> 1;
         if (top_order_bit == 0)
         {
-            return extract_t3_r_partition_bits(encrypted_xs) + params_.get_num_partitions();
+            return extract_t3_r_partition_bits(proof_fragment) + params_.get_num_partitions();
         }
         else
         {
-            return extract_t3_r_partition_bits(encrypted_xs);
+            return extract_t3_r_partition_bits(proof_fragment);
         }
     }
 
-    // validate_encrypted_xs checks that the decrypted x-values match the provided x_values.
+    // checks that the decoded x-values match the provided x_values.
     // x_values is an array of 8 uint32_t values (each representing a k-bit number).
     // It compares the upper halves (k/2 bits) of x_values[0], [2], [4], and [6] with those
     // recovered from the decrypted ciphertext.
-    bool validate_encrypted_xs(uint64_t encrypted_xs, const uint32_t x_values[8]) const {
+    bool validate_proof_fragment(ProofFragment proof_fragment, const uint32_t x_values[8]) const {
         size_t half_k = params_.get_k() / 2;  // Each x-value is k bits, so its high half is k/2 bits.
         uint32_t x1 = x_values[0] >> half_k;
         uint32_t x3 = x_values[2] >> half_k;
         uint32_t x5 = x_values[4] >> half_k;
         uint32_t x7 = x_values[6] >> half_k;
         
-        uint64_t decrypted_xs = cipher_.decrypt(encrypted_xs);
+        uint64_t decrypted_xs = cipher_.decrypt(proof_fragment);
         uint32_t decrypted_x1 = static_cast<uint32_t>((decrypted_xs >> (half_k * 3)) & ((uint64_t(1) << half_k) - 1));
         uint32_t decrypted_x3 = static_cast<uint32_t>((decrypted_xs >> (half_k * 2)) & ((uint64_t(1) << half_k) - 1));
         uint32_t decrypted_x5 = static_cast<uint32_t>((decrypted_xs >> (half_k * 1)) & ((uint64_t(1) << half_k) - 1));
@@ -140,8 +138,8 @@ public:
         return true;
     }
 
-    std::array<uint32_t, 4> get_x_bits_from_encrypted_xs(uint64_t encrypted_xs) const {
-        uint64_t decrypted_xs = cipher_.decrypt(encrypted_xs);
+    std::array<uint32_t, 4> get_x_bits_from_proof_fragment(ProofFragment proof_fragment) const {
+        uint64_t decrypted_xs = cipher_.decrypt(proof_fragment);
         size_t half_k = params_.get_k() / 2;
         uint32_t x1 = static_cast<uint32_t>((decrypted_xs >> (half_k * 3)) & ((uint64_t(1) << half_k) - 1));
         uint32_t x3 = static_cast<uint32_t>((decrypted_xs >> (half_k * 2)) & ((uint64_t(1) << half_k) - 1));

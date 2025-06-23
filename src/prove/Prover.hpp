@@ -4,7 +4,7 @@
 #include "plot/PlotFile.hpp"
 #include "common/Utils.hpp"
 #include "pos/ProofFragmentScanFilter.hpp"
-#include "pos/XsEncryptor.hpp"
+#include "pos/ProofFragment.hpp"
 #include <bitset>
 #include <set>
 #include <optional>
@@ -50,12 +50,12 @@ public:
 
         // 2) Scan the plot data for fragments that pass the Proof Fragment Scan Filter
         ProofFragmentScanFilter scan_filter(plot.params, challenge_);
-        std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.scan(plot.data.t3_encrypted_xs);
+        std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.scan(plot.data.t3_proof_fragments);
         stats_.num_scan_filter_passed++;
         stats_.num_fragments_passed_scan_filter += filtered_fragments.size();
 
         // 3) For each passing fragment, get their Quality Links (if any) that seed the initial entries in the Quality Chains.
-        XsEncryptor xs_encryptor(plot.params);
+        ProofFragmentCodec fragment_codec(plot.params);
 
         std::vector<QualityChain> all_chains; // this will hold all the quality chains found
 
@@ -69,8 +69,8 @@ public:
             uint64_t fragment = filtered_fragments[i].fragment;
             std::cout << "  Fragment: " << std::hex << fragment << std::dec << std::endl;
             // extract R pointer
-            uint32_t l_partition = xs_encryptor.get_lateral_to_t4_partition(fragment);
-            uint32_t r_partition = xs_encryptor.get_r_t4_partition(fragment);
+            uint32_t l_partition = fragment_codec.get_lateral_to_t4_partition(fragment);
+            uint32_t r_partition = fragment_codec.get_r_t4_partition(fragment);
             // std::cout << "          Total partitions: " << plot.params.get_num_partitions() << std::endl;
             std::cout << "          Partition A(L): " << l_partition << std::endl;
             std::cout << "          Partition R(R): " << r_partition << std::endl;
@@ -102,7 +102,7 @@ public:
                     for (int i = 0; i < 3; i++)
                     {
                         unique_fragments.insert(link.fragments[i]);
-                        std::array<uint32_t, 4> x_bits = xs_encryptor.get_x_bits_from_encrypted_xs(link.fragments[i]);
+                        std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(link.fragments[i]);
                         unique_x_bits.insert(x_bits[0]);
                         unique_x_bits.insert(x_bits[1]);
                         unique_x_bits.insert(x_bits[2]);
@@ -236,14 +236,14 @@ public:
     std::vector<QualityLink> getQualityLinks(FragmentsParent parent, uint64_t t3_fragment_index, uint32_t t4_partition)
     {
         std::vector<QualityLink> links;
-        std::vector<uint64_t> t3_encrypted_xs = plot_.value().data.t3_encrypted_xs;
+        std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
         std::vector<T4BackPointers> t4_to_t3_back_pointers = plot_.value().data.t4_to_t3_back_pointers[t4_partition];
         std::vector<T5Pairing> t5_to_t4_back_pointers = plot_.value().data.t5_to_t4_back_pointers[t4_partition];
         // find the T4 entry that matches the t3_index
         for (size_t t4_index = 0; t4_index < t4_to_t3_back_pointers.size(); t4_index++)
         {
             T4BackPointers entry = t4_to_t3_back_pointers[t4_index];
-            if (entry.encx_index_r == t3_fragment_index)
+            if (entry.fragment_index_r == t3_fragment_index)
             {
                 // we found a T4 entry that matches the T3 index
                 // now get it's parents and other fragments
@@ -258,12 +258,12 @@ public:
                         {
                             QualityLink link;
                             // LR link
-                            link.fragments[0] = t3_encrypted_xs[entry.encx_index_l]; // LL
-                            link.fragments[1] = t3_encrypted_xs[entry.encx_index_r]; // LR
+                            link.fragments[0] = t3_proof_fragments[entry.fragment_index_l]; // LL
+                            link.fragments[1] = t3_proof_fragments[entry.fragment_index_r]; // LR
                             T4BackPointers other_entry = t4_to_t3_back_pointers[t5_entry.t4_index_r];
-                            link.fragments[2] = t3_encrypted_xs[other_entry.encx_index_l]; // RL
+                            link.fragments[2] = t3_proof_fragments[other_entry.fragment_index_l]; // RL
                             link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;       // this is an LR link, so outside index is RR
-                            link.outside_t3_index = other_entry.encx_index_r;              // RR
+                            link.outside_t3_index = other_entry.fragment_index_r;              // RR
 
                             links.push_back(link);
                         }
@@ -272,11 +272,11 @@ public:
                             // RR link
                             QualityLink link;
                             T4BackPointers other_entry = t4_to_t3_back_pointers[t5_entry.t4_index_l];
-                            link.fragments[0] = t3_encrypted_xs[other_entry.encx_index_l]; // LL
-                            link.fragments[1] = t3_encrypted_xs[entry.encx_index_l];       // RL
-                            link.fragments[2] = t3_encrypted_xs[entry.encx_index_r];       // RR
+                            link.fragments[0] = t3_proof_fragments[other_entry.fragment_index_l]; // LL
+                            link.fragments[1] = t3_proof_fragments[entry.fragment_index_l];       // RL
+                            link.fragments[2] = t3_proof_fragments[entry.fragment_index_r];       // RR
                             link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;       // this is an RR link, so outside index is LR
-                            link.outside_t3_index = other_entry.encx_index_r;              // LR
+                            link.outside_t3_index = other_entry.fragment_index_r;              // LR
                             
                             links.push_back(link);
                         }
@@ -292,7 +292,7 @@ public:
 
         std::vector<QualityLink> links;
 
-        std::vector<uint64_t> t3_encrypted_xs = plot_.value().data.t3_encrypted_xs;
+        //std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
 
         std::vector<QualityLink> other_partition_links = getQualityLinksFromT4PartitionToT3Partition(partition_B, partition_A, FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION);
         std::cout << "Found " << other_partition_links.size() << " links from partition B to A." << std::endl;
@@ -315,7 +315,7 @@ public:
 
         // 1. get t3 partition A range, and scan R side links from partitionB that link to partition_A
         Range t3_partition_range = plot_.value().data.t4_to_t3_lateral_ranges[partition_t3];
-        std::vector<uint64_t> t3_encrypted_xs = plot_.value().data.t3_encrypted_xs;
+        std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
         std::cout << "Partition T3: " << partition_t3 << std::endl;
         std::cout << "t3_partition_range: " << t3_partition_range.start << " - " << t3_partition_range.end << std::endl;
         // 2. get t4 partition B, and find r links that point to t3 partition A range
@@ -326,7 +326,7 @@ public:
         for (size_t t4_index = 0; t4_index < t4_b_to_t3.size(); t4_index++)
         {
             T4BackPointers entry = t4_b_to_t3[t4_index];
-            if (t3_partition_range.isInRange(entry.encx_index_r))
+            if (t3_partition_range.isInRange(entry.fragment_index_r))
             {
 
                 // we found a link that points to partition A. Now, in T5 find the parent nodes, where either the l or r pointer points to this entry in T4 partition B.
@@ -345,11 +345,11 @@ public:
 
                         // get other side child node
                         T4BackPointers other_entry = t4_b_to_t3[t5_entry.t4_index_r];
-                        link.fragments[0] = t3_encrypted_xs[entry.encx_index_l];       // LL
-                        link.fragments[1] = t3_encrypted_xs[entry.encx_index_r];       // LR
-                        link.fragments[2] = t3_encrypted_xs[other_entry.encx_index_l]; // RL
+                        link.fragments[0] = t3_proof_fragments[entry.fragment_index_l];       // LL
+                        link.fragments[1] = t3_proof_fragments[entry.fragment_index_r];       // LR
+                        link.fragments[2] = t3_proof_fragments[other_entry.fragment_index_l]; // RL
                         link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;       // this is an LR link, so outside index is RR
-                        link.outside_t3_index = other_entry.encx_index_r;              // RR
+                        link.outside_t3_index = other_entry.fragment_index_r;              // RR
 
                         links.push_back(link);
                     }
@@ -360,11 +360,11 @@ public:
                         
                         // get other side child node
                         T4BackPointers other_entry = t4_b_to_t3[t5_entry.t4_index_l];
-                        link.fragments[0] = t3_encrypted_xs[other_entry.encx_index_l]; // LL
-                        link.fragments[1] = t3_encrypted_xs[entry.encx_index_l];       // RL
-                        link.fragments[2] = t3_encrypted_xs[entry.encx_index_r];       // RR
+                        link.fragments[0] = t3_proof_fragments[other_entry.fragment_index_l]; // LL
+                        link.fragments[1] = t3_proof_fragments[entry.fragment_index_l];       // RL
+                        link.fragments[2] = t3_proof_fragments[entry.fragment_index_r];       // RR
                         link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;       // this is an RR link, so outside index is LR
-                        link.outside_t3_index = other_entry.encx_index_r;              // LR
+                        link.outside_t3_index = other_entry.fragment_index_r;              // LR
 
                         links.push_back(link);
                     }
@@ -390,7 +390,7 @@ public:
             if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
             {
                 proof_fragments.push_back(link.fragments[0]); // LL
-                uint64_t outside_fragment = plot_.value().data.t3_encrypted_xs[link.outside_t3_index]; // RR
+                uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
                 proof_fragments.push_back(outside_fragment); // LR
                 proof_fragments.push_back(link.fragments[1]); // RL
                 proof_fragments.push_back(link.fragments[2]); // RR
@@ -404,7 +404,7 @@ public:
                 proof_fragments.push_back(link.fragments[0]); // LL
                 proof_fragments.push_back(link.fragments[1]); // LR
                 proof_fragments.push_back(link.fragments[2]); // RL
-                uint64_t outside_fragment = plot_.value().data.t3_encrypted_xs[link.outside_t3_index]; // RR
+                uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
                 proof_fragments.push_back(outside_fragment); // RR
 
                 std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_RR " << outside_fragment << "]" << std::dec << std::endl;
