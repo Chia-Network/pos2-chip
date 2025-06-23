@@ -62,8 +62,8 @@ public:
         }
 
         // Generate the hash.
-        auto h = blake_.generate_hash();
-        uint64_t hash_value = (static_cast<uint64_t>(h.r0) << 32) | h.r1;
+        auto h = blake_.generate_hash_64();
+        uint64_t hash_value = (static_cast<uint64_t>(h.r[0]) << 32) | h.r[1];
 
         return hash_value;
     }
@@ -83,8 +83,8 @@ public:
         blake_.set_data(7, link_fragments[2] >> 32);
 
         // 2) Generate the hash
-        auto h = blake_.generate_hash();
-        uint64_t hash_value = (static_cast<uint64_t>(h.r0) << 32) | h.r1;
+        auto h = blake_.generate_hash_64();
+        uint64_t hash_value = (static_cast<uint64_t>(h.r[0]) << 32) | h.r[1];
 
         return hash_value;
     }
@@ -119,16 +119,8 @@ inline uint32_t ProofHashing::matching_target(int table_id, uint32_t match_key,
                                               uint64_t meta, int num_meta_bits, int num_target_bits) {
     // Use table_id as the salt.
     _set_data_for_matching_target(static_cast<uint32_t>(table_id), match_key, meta, num_meta_bits);
-    BlakeHash::BlakeHashResult res = blake_.generate_hash();
+    uint32_t match_target_bits = blake_.generate_hash_32() & ((1ULL << num_target_bits) - 1);
 
-    uint32_t match_target_bits = 0;
-    if (num_target_bits == 32) {
-        match_target_bits = res.r0;
-    } else if (num_target_bits < 32) {
-        match_target_bits = res.r0 & ((1ULL << num_target_bits) - 1);
-    } else {
-        throw std::invalid_argument("num_target_bits > 32 not supported");
-    }
     return match_target_bits;
 }
 
@@ -177,20 +169,20 @@ inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64
                                            int in_meta_bits, int num_match_info_bits,
                                            int out_num_meta_bits, int num_test_bits) {
     set_data_for_pairing(static_cast<uint32_t>(table_id), meta_l, meta_r, in_meta_bits);
-    BlakeHash::BlakeHashResult res = blake_.generate_hash();
+    BlakeHash::BlakeHashResult128 res = blake_.generate_hash();
 
     PairingResult pr = {0, 0, 0};
 
     // Special case: table 5 returns only test bits for match filter.
     if (num_match_info_bits == 0 && out_num_meta_bits == 0 && num_test_bits > 0) {
-        pr.test_result = res.r0 & ((1ULL << num_test_bits) - 1);
+        pr.test_result = res.r[0] & ((1ULL << num_test_bits) - 1);
         return pr;
     }
 
     if (num_match_info_bits == 32)
-        pr.match_info_result = res.r0;
+        pr.match_info_result = res.r[0];
     else if (num_match_info_bits < 32)
-        pr.match_info_result = res.r0 & ((1ULL << num_match_info_bits) - 1);
+        pr.match_info_result = res.r[0] & ((1ULL << num_match_info_bits) - 1);
     else {
         // num_match_info_bits > 32
         //match_info_result = (res.r0 | (static_cast<uint64_t>(res.r1) << 32))
@@ -203,9 +195,9 @@ inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64
     }
 
     if (out_num_meta_bits == 64)
-        pr.meta_result = res.r1 + (static_cast<uint64_t>(res.r2) << 32);
+        pr.meta_result = res.r[1] + (static_cast<uint64_t>(res.r[2]) << 32);
     else if (out_num_meta_bits < 64)
-        pr.meta_result = (res.r1 + (static_cast<uint64_t>(res.r2) << 32))
+        pr.meta_result = (res.r[1] + (static_cast<uint64_t>(res.r[2]) << 32))
                       & ((1ULL << out_num_meta_bits) - 1);
     else {
         throw std::invalid_argument("num_bits_meta > 64 not supported");
@@ -215,7 +207,7 @@ inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64
         return pr;
     }
 
-    uint32_t test_result = res.r3 & ((1ULL << num_test_bits) - 1);
+    uint32_t test_result = res.r[3] & ((1ULL << num_test_bits) - 1);
     pr.test_result = test_result;
     return pr;
 }

@@ -155,7 +155,7 @@ public:
     }
 
     // TODO: Currently input is only 128 bits, should be upgrade to 256 bits
-    static BlakeHash newSeedBlakeFromResult(BlakeHash::BlakeHashResult &result)
+    static BlakeHash newSeedBlakeFromResult(BlakeHash::BlakeHashResult128 &result)
     {
         // 1) Pack the eight 32-bit words into a 32-byte array
         std::array<uint8_t, 32> seed_bytes;

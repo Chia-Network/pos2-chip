@@ -40,11 +40,11 @@ int main(int argc, char *argv[])
         challenge[2] = (i >> 16) & 0xFF;
         challenge[3] = (i >> 24) & 0xFF;
 
-        for (int i = 0; i < 32; i++)
-        {
-            int randseed = 23;//rand() % 65536;
-            challenge[i] = randseed;
-        }
+        //for (int i = 0; i < 32; i++)
+        //{
+        //    int randseed = rand() % 65536;
+        //    challenge[i] = randseed;
+        //}
 
         prover.setChallenge(challenge);
         std::vector<QualityChain> chains = prover.prove();
@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
             std::memcpy(plot_id_arr.data(), params.get_plot_id_bytes(), 32);
             std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
 
-            std::cout << "./solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << std::endl;
+            std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << std::endl;
 
             std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
             exit(23);
