@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
                 bool valid_r = fragment_codec.validate_proof_fragment(proof_fragment_r, plot.t5_to_t4_back_pointers[partition_id][i].xs + 8);
                 if (!valid_l || !valid_r)
                 {
-                    std::cerr << "Encrypted_xs do not match x-values " << i << std::endl;
+                    std::cerr << "Fragments do not match x-values " << i << std::endl;
                     for (int i = 0; i < 8; i++)
                     {
                         std::cerr << plot.t5_to_t4_back_pointers[partition_id][i].xs[i] << ", ";
@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
                 valid_r = fragment_codec.validate_proof_fragment(proof_fragment_r, plot.t5_to_t4_back_pointers[partition_id][i].xs + 24);
                 if (!valid_l || !valid_r)
                 {
-                    std::cerr << "Encrypted_xs do not match x-values " << i << std::endl;
+                    std::cerr << "Fragments xs do not match x-values " << i << std::endl;
                     for (int i = 0; i < 8; i++)
                     {
                         std::cerr << plot.t5_to_t4_back_pointers[partition_id][i].xs[i] << ", ";

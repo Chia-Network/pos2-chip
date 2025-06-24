@@ -469,10 +469,10 @@ public:
 
     T3_Partitions_Results post_construct(std::vector<T3Pairing> &pairings) const override
     {
-        // do a radix sort on encryptedxs variable
+        // do a radix sort on fragments
         RadixSort<T3Pairing, uint64_t, decltype(&T3Pairing::proof_fragment)> radix_sort(&T3Pairing::proof_fragment);
 
-        // 1) sort by encrypted_xs
+        // 1) sort by fragments
         std::vector<T3Pairing> temp_buffer(pairings.size());
         // Create a span over the temporary buffer
         std::span<T3Pairing> buffer(temp_buffer.data(), temp_buffer.size());

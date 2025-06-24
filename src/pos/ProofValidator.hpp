@@ -137,7 +137,6 @@ public:
             return t4_pairs; // will be empty
         }
 
-        // make sure encrypted xs are valid
         if (!proof_core_.fragment_codec.validate_proof_fragment(result_l->proof_fragment, l_xs))
         {
             std::cerr << "Validation failed for left proof_fragment: ["

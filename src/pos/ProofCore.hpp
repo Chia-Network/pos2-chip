@@ -258,7 +258,7 @@ public:
     // pairing_t3:
     // Input: meta_l, meta_r (each 2k bits), x_bits_l, x_bits_r (each k bits).
     // Returns: a T3Pairing struct with lower/upper partition, partition-specific match_info,
-    // meta, order bits, and the full encrypted_xs.
+    // meta, order bits, and the full proof fragments.
     std::optional<T3Pairing> pairing_t3(uint64_t meta_l, uint64_t meta_r, uint32_t x_bits_l, uint32_t x_bits_r)
     {
         if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),

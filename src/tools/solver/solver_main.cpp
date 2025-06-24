@@ -29,7 +29,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             ProofFragment fragment_LR = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_r];
             ProofFragment fragment_RL = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_l];
             ProofFragment fragment_RR = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_r];
-            std::cout << "Encrypted xs LL: " << fragment_LL << std::endl;
+            std::cout << "Fragments LL: " << fragment_LL << std::endl;
             // decode it to get x-bits
 
             uint64_t decrypted_xs_LL = fragment_codec.decode(fragment_LL);
@@ -37,44 +37,44 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             uint64_t decrypted_xs_RL = fragment_codec.decode(fragment_RL);
             uint64_t decrypted_xs_RR = fragment_codec.decode(fragment_RR);
 
-            // verify our xs are correct with encrypted xs
+
             if (fragment_codec.validate_proof_fragment(fragment_LL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l].data()))
             {
-                std::cout << "Encrypted xs LL match x-bits." << std::endl;
+                std::cout << "Fragments LL match x-bits." << std::endl;
             }
             else
             {
-                std::cerr << "Encrypted xs LL do not match x-bits." << std::endl;
+                std::cerr << "Fragments LL do not match x-bits." << std::endl;
                 return 1;
             }
             if (fragment_codec.validate_proof_fragment(fragment_LR, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r].data()))
             {
-                std::cout << "Encrypted xs LR match x-bits." << std::endl;
+                std::cout << "Fragments LR match x-bits." << std::endl;
             }
             else
             {
-                std::cerr << "Encrypted xs LR do not match x-bits." << std::endl;
+                std::cerr << "Fragments LR do not match x-bits." << std::endl;
                 return 1;
             }
             if (fragment_codec.validate_proof_fragment(fragment_RL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l].data()))
             {
-                std::cout << "Encrypted xs RL match x-bits." << std::endl;
+                std::cout << "Fragments RL match x-bits." << std::endl;
             }
             else
             {
-                std::cerr << "Encrypted xs RL do not match x-bits." << std::endl;
+                std::cerr << "Fragments RL do not match x-bits." << std::endl;
                 return 1;
             }
             if (fragment_codec.validate_proof_fragment(fragment_RR, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r].data()))
             {
-                std::cout << "Encrypted xs RR match x-bits." << std::endl;
+                std::cout << "Fragments RR match x-bits." << std::endl;
             }
             else
             {
-                std::cerr << "Encrypted xs RR do not match x-bits." << std::endl;
+                std::cerr << "Fragments RR do not match x-bits." << std::endl;
                 return 1;
             }
-            std::cout << "All encrypted xs match x-bits." << std::endl;
+            std::cout << "All fragments match x-bits." << std::endl;
 
             // output full x's solution
             std::cout << "Xs solution: ";
@@ -214,16 +214,16 @@ int chain_test(PlotFile::PlotFileContents &plot)
             << " T3 Index LR: " << t4_to_t3_L.fragment_index_r << std::endl
             << " T3 Index RL: " << t4_to_t3_R.fragment_index_l << std::endl
             << " T3 Index RR: " << t4_to_t3_R.fragment_index_r << std::endl
-            << " Encrypted xs LL: " << std::hex << fragment_LL << std::endl
+            << " Fragment LL: " << std::hex << fragment_LL << std::endl
             << "   LL xbits: " << std::dec
             << " [" << x_bits_ll[0] << ", " << x_bits_ll[1] << ", " << x_bits_ll[2] << ", " << x_bits_ll[3] << "]" << std::endl
-            << " Encrypted xs LR: " << std::hex << fragment_LR << std::endl
+            << " Fragment LR: " << std::hex << fragment_LR << std::endl
             << "   LR xbits: " << std::dec
             << " [" << x_bits_lr[0] << ", " << x_bits_lr[1] << ", " << x_bits_lr[2] << ", " << x_bits_lr[3] << "]" << std::endl
-            << " Encrypted xs RL: " << std::hex << fragment_RL << std::endl
+            << " Fragment RL: " << std::hex << fragment_RL << std::endl
             << "   RL xbits: " << std::dec
             << " [" << x_bits_rl[0] << ", " << x_bits_rl[1] << ", " << x_bits_rl[2] << ", " << x_bits_rl[3] << "]" << std::endl
-            << " Encrypted xs RR: " << std::hex << fragment_RR << std::endl
+            << " Fragment RR: " << std::hex << fragment_RR << std::endl
             << "   RR xbits: " << std::dec
             << " [" << x_bits_rr[0] << ", " << x_bits_rr[1] << ", " << x_bits_rr[2] << ", " << x_bits_rr[3] << "]" << std::endl
             << std::endl << std::dec;

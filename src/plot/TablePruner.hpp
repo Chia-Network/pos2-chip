@@ -12,7 +12,7 @@ public:
     std::vector<std::array<uint32_t, 8>> &xs_correlating_to_proof_fragments;
     #endif
 private:
-    // t3 encrypted xs data (to be pruned later)
+    // t3 proof fragments (to be pruned later)
     std::vector<uint64_t> &t3_proof_fragments;
 
    
@@ -39,9 +39,6 @@ private:
     }
 
 public:
-    // Constructor initializes using the provided t3 encrypted xs.
-    
-
     #ifdef RETAIN_X_VALUES_TO_T3
     TablePruner(const ProofParams &proof_params, std::vector<uint64_t> &t3, std::vector<std::array<uint32_t, 8>> &xs)
     : params_(proof_params),
@@ -220,7 +217,7 @@ public:
 
     // -------------------------------------------------------------------------
     // finalize_t3_entries:
-    //   Compacts the t3_encrypted_xs vector by retaining only entries that were tagged
+    //   Compacts the t3_proof_fragments vector by retaining only entries that were tagged
     //   as used in the t3_used_entries_bitmask.
     // -------------------------------------------------------------------------
     void finalize_t3_entries()
@@ -244,8 +241,6 @@ public:
                 //t3_lateral_t4_partition_index_end[lateral_partition] = std::max(t3_lateral_t4_partition_index_end[lateral_partition], (uint64_t)i);
             }
         }
-        // std::cout << "Cropping t3 from " << t3_encrypted_xs.size()
-        //           << " to " << last_used_t3_index << std::endl;
         t3_proof_fragments.resize(last_used_t3_index);
     }
 
