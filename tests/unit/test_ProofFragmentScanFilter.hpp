@@ -1,4 +1,4 @@
-#include "prove/ProofFragmentScanFilter.hpp"
+#include "pos/ProofFragmentScanFilter.hpp"
 #include "pos/ProofCore.hpp"
 
 TEST_SUITE_BEGIN("proof-fragment-scan-filter");
@@ -17,7 +17,7 @@ TEST_CASE("lsb-from-challenge")
     }
     ProofParams params(Utils::hexToBytes(plot_id_hex).data(), k, sub_k);
 
-    ProofFragmentScanFilter filter(params, challenge, 1);
+    ProofFragmentScanFilter filter(params, challenge);
     // Test with various challenges
     for (int i = 0; i < 64; ++i)
     {
@@ -35,11 +35,10 @@ TEST_CASE("scan-range")
         int sub_k = 20;
         std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
         std::array<uint8_t, 32> challenge = {0};
-        int scan_filter = 1;
-
+        
         ProofParams params(Utils::hexToBytes(plot_id_hex).data(), k, sub_k);
 
-        ProofFragmentScanFilter filter(params, challenge, scan_filter);
+        ProofFragmentScanFilter filter(params, challenge);
 
         auto range = filter.getScanRangeForFilter();
 
@@ -53,14 +52,14 @@ TEST_CASE("scan-range")
 
         // now try with challenge of 1
         challenge[0] = 1;
-        filter = ProofFragmentScanFilter(params, challenge, scan_filter);
+        filter = ProofFragmentScanFilter(params, challenge);
         range = filter.getScanRangeForFilter();
         // With challenge of 1, scan_range_id should be 1
         REQUIRE(range.start == (scan_range * 1));
         REQUIRE(range.end == (scan_range * 2 - 1));
         // now try with challenge of 2
         challenge[0] = 2;
-        filter = ProofFragmentScanFilter(params, challenge, scan_filter);
+        filter = ProofFragmentScanFilter(params, challenge);
         range = filter.getScanRangeForFilter();
         // With challenge of 2, scan_range_id should be 2
         REQUIRE(range.start == scan_range * 2);
@@ -68,7 +67,7 @@ TEST_CASE("scan-range")
 
         // now try with challenge of 255
         challenge[0] = 255;
-        filter = ProofFragmentScanFilter(params, challenge, scan_filter);
+        filter = ProofFragmentScanFilter(params, challenge);
         range = filter.getScanRangeForFilter();
         // With challenge of 255, scan_range_id should be 255
         REQUIRE(range.start == (scan_range * 255));
@@ -79,7 +78,7 @@ TEST_CASE("scan-range")
         {
             challenge[i] = 0xFF;
         }
-        filter = ProofFragmentScanFilter(params, challenge, scan_filter);
+        filter = ProofFragmentScanFilter(params, challenge);
         range = filter.getScanRangeForFilter();
         // With all bits set, scan_range_id should be (1 << scan_range_filter_bits) - 1
         REQUIRE(range.start == (72057594037927936 - scan_range));
@@ -95,7 +94,7 @@ TEST_CASE("scan-range")
         std::array<uint8_t, 32> challenge = {0};
         int scan_filter = 1;
         ProofParams params(Utils::hexToBytes(plot_id_hex).data(), k, sub_k);
-        ProofFragmentScanFilter filter(params, challenge, scan_filter);
+        ProofFragmentScanFilter filter(params, challenge);
         auto range = filter.getScanRangeForFilter();
         // For k=20, scan_range_id should be 0
         uint64_t scan_range = (1ULL << (k + PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS));
@@ -104,14 +103,14 @@ TEST_CASE("scan-range")
         REQUIRE(range.end == (scan_range * 1 - 1));
         // now try with challenge of 1
         challenge[0] = 1;
-        filter = ProofFragmentScanFilter(params, challenge, scan_filter);
+        filter = ProofFragmentScanFilter(params, challenge);
         range = filter.getScanRangeForFilter();
         // With challenge of 1, scan_range_id should be 1
         REQUIRE(range.start == (scan_range * 1));
         REQUIRE(range.end == (scan_range * 2 - 1));
         // now try with challenge of 2
         challenge[0] = 2;
-        filter = ProofFragmentScanFilter(params, challenge, scan_filter);
+        filter = ProofFragmentScanFilter(params, challenge);
         range = filter.getScanRangeForFilter();
         // With challenge of 2, scan_range_id should be 2
         REQUIRE(range.start == (scan_range * 2));
@@ -121,7 +120,7 @@ TEST_CASE("scan-range")
         {
             challenge[i] = 0xFF;
         }
-        filter = ProofFragmentScanFilter(params, challenge, scan_filter);
+        filter = ProofFragmentScanFilter(params, challenge);
         range = filter.getScanRangeForFilter();
         // With all bits set, scan_range_id should be (1 << scan_range_filter_bits) - 1
         REQUIRE(range.start == (1099511627776 - scan_range));

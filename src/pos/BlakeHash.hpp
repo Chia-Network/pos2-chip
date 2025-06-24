@@ -121,15 +121,15 @@
 
 class BlakeHash {
 public:
-    struct BlakeHashResult64 {
+    struct Result64 {
         uint32_t r[2];
     };
     
-    struct BlakeHashResult128 {
+    struct Result128 {
         uint32_t r[4];
     };
 
-    struct BlakeHashResult256 {
+    struct Result256 {
         uint32_t r[8];
     };
 
@@ -157,6 +157,36 @@ public:
         }
     }
 
+    static Result256 hash_block_256(const uint32_t block_words[16]) 
+    {
+        _b3_inline_rounds(21);
+
+        // Finally, compute the result.
+        // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
+        Result256 result;
+        result.r[0] = big_endian(state[0] ^ state[8]);
+        result.r[1] = big_endian(state[1] ^ state[9]);
+        result.r[2] = big_endian(state[2] ^ state[10]);
+        result.r[3] = big_endian(state[3] ^ state[11]);
+        result.r[4] = big_endian(state[4] ^ state[12]);
+        result.r[5] = big_endian(state[5] ^ state[13]);
+        result.r[6] = big_endian(state[6] ^ state[14]);
+        result.r[7] = big_endian(state[7] ^ state[15]);
+        return result;
+    }
+
+    static Result64 hash_block_64(const uint32_t block_words[16]) 
+    {
+        _b3_inline_rounds(21);
+
+        // Finally, compute the result.
+        // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
+        Result64 result;
+        result.r[0] = big_endian(state[0] ^ state[8]);
+        result.r[1] = big_endian(state[1] ^ state[9]);
+        return result;
+    }
+
     BlakeHash(const uint8_t* plot_id_bytes, const uint8_t* challenge_bytes)
         : k(32) // Default output bit-size is 32.
     {
@@ -182,7 +212,7 @@ public:
         }
 
         // Do 256 bit hash, set the first 8 words to the result and the last to zero.
-        BlakeHashResult256 result = generate_hash_256();
+        Result256 result = generate_hash_256();
         for (int i = 0; i < 8; i++) {
             block_words[i] = result.r[i];
         }
@@ -208,26 +238,26 @@ public:
         return big_endian(state[0] ^ state[8]);
     }
 
-    BlakeHashResult64 generate_hash_64() const {
+    Result64 generate_hash_64() const {
 
         _b3_inline_rounds(21);
 
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
-        BlakeHashResult64 result;
+        Result64 result;
         result.r[0] = big_endian(state[0] ^ state[8]);
         result.r[1] = big_endian(state[1] ^ state[9]);
         return result;
     }
     
-    // generate_hash() computes the hash and returns a BlakeHashResult128 containing 4 words.
-    BlakeHashResult128 generate_hash() const {
+    // generate_hash() computes the hash and returns a Result128 containing 4 words.
+    Result128 generate_hash() const {
 
         _b3_inline_rounds(21);
 
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
-        BlakeHashResult128 result;
+        Result128 result;
         result.r[0] = big_endian(state[0] ^ state[8]);
         result.r[1] = big_endian(state[1] ^ state[9]);
         result.r[2] = big_endian(state[2] ^ state[10]);
@@ -235,13 +265,13 @@ public:
         return result;
     }
 
-    BlakeHashResult256 generate_hash_256() const {
+    Result256 generate_hash_256() const {
 
         _b3_inline_rounds(21);
 
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
-        BlakeHashResult256 result;
+        Result256 result;
         result.r[0] = big_endian(state[0] ^ state[8]);
         result.r[1] = big_endian(state[1] ^ state[9]);
         result.r[2] = big_endian(state[2] ^ state[10]);

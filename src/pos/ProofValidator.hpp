@@ -248,7 +248,7 @@ public:
         }
 
         size_t num_sub_proofs = full_proof.size() / 32;
-        std::vector<uint64_t> full_proof_fragments;
+        std::vector<ProofFragment> full_proof_fragments;
         for (size_t i = 0; i < num_sub_proofs; ++i)
         {
             // extract the 32 x-values from the proof
@@ -312,7 +312,7 @@ public:
         std::cout << "Filtered fragments after scan filter: " << filtered_fragments.size() << std::endl; 
 
         //QualityChainer quality_chainer(params_, challenge, proof_core_.quality_chain_pass_threshold());
-        if (verifyDepth(0, 0, full_proof_fragments, challenge))
+        if (verifyDepth(0, BlakeHash::Result256(), full_proof_fragments, challenge))
         {
             std::cout << "Chain verified successfully." << std::endl;
             return true; // if we reach here, the chain is valid
@@ -320,7 +320,7 @@ public:
         return false;
     }
 
-    bool verifyDepth(int depth, uint64_t current_hash, const std::vector<uint64_t> &proof_fragments, const std::array<uint8_t, 32> &challenge, uint32_t partition_A = 0, uint32_t partition_B = 0)
+    bool verifyDepth(int depth, BlakeHash::Result256 current_hash, const std::vector<uint64_t> &proof_fragments, const std::array<uint8_t, 32> &challenge, uint32_t partition_A = 0, uint32_t partition_B = 0)
     {
         if (depth == NUM_CHAIN_LINKS)
         {
@@ -376,14 +376,14 @@ public:
         {
             // first filter QualityLinks by partition pattern (faster than hash). In most cases this will reduce number of links to 1 instead of 2.
             auto filtered_links = proof_core_.filterLinkSetToPartitions({lr_outside_link, rr_outside_link}, partition_A, partition_B);
-            new_links = proof_core_.getNewLinksForChain(current_hash, filtered_links);
+            new_links = proof_core_.getNewLinksForChain(current_hash, filtered_links, depth);
             
             std::cout << "new links count: " << new_links.size() << std::endl;
             std::cout << "filtered links count: " << filtered_links.size() << std::endl;
         }
         if (new_links.empty())
         {
-            std::cerr << "No new links found for depth " << depth << " with current hash: " << current_hash << std::endl;
+            std::cerr << "No new links found for depth " << depth << std::endl;
             return false;
         }
 

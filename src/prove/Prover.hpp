@@ -19,7 +19,7 @@
 class Prover
 {
 public:
-    Prover(const std::array<uint8_t, 32> &challenge, const std::string &plot_file_name, const int scan_filter)
+    Prover(const std::array<uint8_t, 32> &challenge, const std::string &plot_file_name)
         : challenge_(challenge), plot_file_name_(plot_file_name)
     {
     }
@@ -55,19 +55,24 @@ public:
         stats_.num_fragments_passed_scan_filter += filtered_fragments.size();
 
         // 3) For each passing fragment, get their Quality Links (if any) that seed the initial entries in the Quality Chains.
+        // hand off to helper that builds and returns all quality chains
+        return processFilteredFragments(plot, filtered_fragments);
+    }
+
+    // Build quality chains from the filtered fragments
+    std::vector<QualityChain> processFilteredFragments(
+        const PlotFile::PlotFileContents &plot,
+        const std::vector<ProofFragmentScanFilter::ScanResult> &filtered_fragments)
+    {
+        std::vector<QualityChain> all_chains;
         ProofFragmentCodec fragment_codec(plot.params);
-
-        std::vector<QualityChain> all_chains; // this will hold all the quality chains found
-
         ProofCore proof_core(plot.params);
-        uint64_t chaining_hash_pass_threshold = proof_core.quality_chain_pass_threshold();
-        BlakeHash blake_hash(plot.params.get_plot_id_bytes(), plot.params.get_k());
+        //uint32_t chaining_hash_pass_threshold = proof_core.quality_chain_pass_threshold();
 
         std::cout << "Found fragments passing filter: " << filtered_fragments.size() << std::endl;
-        for (size_t i = 0; i < filtered_fragments.size(); i++)
+        for (const auto &frag_res : filtered_fragments)
         {
-            uint64_t fragment = filtered_fragments[i].fragment;
-            std::cout << "  Fragment: " << std::hex << fragment << std::dec << std::endl;
+            uint64_t fragment = frag_res.fragment;
             // extract R pointer
             uint32_t l_partition = fragment_codec.get_lateral_to_t4_partition(fragment);
             uint32_t r_partition = fragment_codec.get_r_t4_partition(fragment);
@@ -75,7 +80,7 @@ public:
             std::cout << "          Partition A(L): " << l_partition << std::endl;
             std::cout << "          Partition R(R): " << r_partition << std::endl;
 
-            std::vector<QualityLink> firstLinks = getQualityLinks(FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION, filtered_fragments[i].index, r_partition);
+            std::vector<QualityLink> firstLinks = getQualityLinks(FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION, frag_res.index, r_partition);
             
             // output first links fragemnts in hex
             std::cout << " # First Quality Links: " << firstLinks.size() << std::endl;
@@ -116,11 +121,7 @@ public:
             // 4) For each Quality Chain, grow and expand the number of chains link by link until we reach the chain length limit (NUM_CHAIN_LINKS).
             for (const auto &firstLink : firstLinks)
             {
-                std::vector<QualityChain> qualityChains =
-                    createQualityChains(firstLink,
-                                        links,
-                                        chaining_hash_pass_threshold,
-                                        blake_hash);
+                std::vector<QualityChain> qualityChains = createQualityChains(firstLink, links);
                 // add to all chains
                 all_chains.insert(all_chains.end(), qualityChains.begin(), qualityChains.end());
             }
@@ -129,54 +130,11 @@ public:
         return all_chains;
     }
 
-    // Build a BlakeHash pre-loaded with a 32-byte digest of (plotID||challenge)
-    /*static BlakeHash makeSeedBlake(const ProofParams &params,
-                                   const std::array<uint8_t, 32> &challenge)
-    {
-        // 1) First Blake round: compress plot-ID||challenge → 32-byte digest
-        // note our output is desired as 32 bits (not cropped to k bits)
-        BlakeHash pre(params.get_plot_id_bytes(), 32);
-        // inject the 32B challenge as four 32-bit words
-        for (int i = 0; i < 4; ++i)
-        {
-            uint32_t w =
-                uint32_t(challenge[i * 4 + 0]) |
-                (uint32_t(challenge[i * 4 + 1]) << 8) |
-                (uint32_t(challenge[i * 4 + 2]) << 16) |
-                (uint32_t(challenge[i * 4 + 3]) << 24);
-            pre.set_data(i, w);
-        }
-        // generate a 256-bit/32-byte result
-        // TODO: Currently this is only a 128 bit result, upgrade to 256 bit result
-        auto digest = pre.generate_hash();
-
-        // 2) pack those eight 32-bit words into a 32-byte array
-        return newSeedBlakeFromResult(digest);
-    }
-
-    // TODO: Currently input is only 128 bits, should be upgrade to 256 bits
-    static BlakeHash newSeedBlakeFromResult(BlakeHash::BlakeHashResult128 &result)
-    {
-        // 1) Pack the eight 32-bit words into a 32-byte array
-        std::array<uint8_t, 32> seed_bytes;
-        uint32_t words[8] = {
-            result.r0, result.r1, result.r2, result.r3, 0, 0, 0, 0};
-
-        for (int i = 0; i < 8; ++i)
-        {
-            seed_bytes[i * 4 + 0] = uint8_t(words[i] & 0xFF);
-            seed_bytes[i * 4 + 1] = uint8_t((words[i] >> 8) & 0xFF);
-            seed_bytes[i * 4 + 2] = uint8_t((words[i] >> 16) & 0xFF);
-            seed_bytes[i * 4 + 3] = uint8_t((words[i] >> 24) & 0xFF);
-        }
-
-        // 3) Final BlakeHash is seeded with those 32 bytes
-        return BlakeHash(seed_bytes.data(), 32);
-    }*/
-
-    std::vector<QualityChain> createQualityChains(const QualityLink &firstLink, const std::vector<QualityLink> &link_set, uint64_t chaining_hash_pass_threshold, BlakeHash &blake_hash)
+    std::vector<QualityChain> createQualityChains(const QualityLink &firstLink, const std::vector<QualityLink> &link_set)
     {
         //QualityChainer quality_chainer(plot_.value().params, challenge_, chaining_hash_pass_threshold);
+
+
 
         std::vector<QualityChain> quality_chains;
 
@@ -191,29 +149,25 @@ public:
 
         stats_.num_first_chain_links++;
 
-        std::cout << "Initial chain hash: " << std::hex << chain.chain_hash << std::dec << std::endl;
-
-        // 3) Grow chains link by link
-
         for (int depth = 1; depth < NUM_CHAIN_LINKS; ++depth)
         {
-            std::cout << "=== Depth " << depth + 1 << " ===\n";
+            //std::cout << "=== Depth " << depth + 1 << " ===\n";
 
             // If we have no chains, we cannot grow further
             if (quality_chains.empty())
             {
-                std::cout << "No chains to grow at depth " << depth + 1 << std::endl;
+                //std::cout << "No chains to grow at depth " << depth + 1 << std::endl;
                 break;
             }
-            std::cout << "  Current number of chains: " << quality_chains.size() << std::endl;
+            //std::cout << "  Current number of chains: " << quality_chains.size() << std::endl;
 
             std::vector<QualityChain> new_chains;
-            size_t total_hashes = 0;
+            //size_t total_hashes = 0;
 
             // For each chain-so-far, try appending every possible link
             for (auto &qc : quality_chains)
             {
-                auto new_links = proof_core_.getNewLinksForChain(qc.chain_hash, link_set);
+                auto new_links = proof_core_.getNewLinksForChain(qc.chain_hash, link_set, depth);
 
                 // if we have new links, create new chains
                 for (const auto &new_link_result : new_links)
@@ -443,6 +397,11 @@ public:
         {
             throw std::runtime_error("Plot file not loaded.");
         }
+    }
+
+    void _testing_setPlotFileContents(const PlotFile::PlotFileContents &plot_contents)
+    {
+        plot_ = plot_contents;
     }
 
 

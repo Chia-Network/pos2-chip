@@ -21,16 +21,14 @@ public:
     ProofFragmentScanFilter(const ProofParams &proof_params, const std::array<uint8_t, 32> &challenge)
         : params_(proof_params),
           challenge_(challenge),
-          proof_core_(proof_params),
-          blake_hash_(params_.get_plot_id_bytes(), 32)
+          proof_core_(proof_params)
     {
 
-        uint64_t challenge_plot_id_hash = proof_core_.hashing.challengeWithPlotIdHash(challenge_.data());
-
+        
         // TODO: blake hash should update with the 256-bit result of the challenge plot id hash
         // set the first 64 bits of the challenge plot id hash
-        blake_hash_.set_data(0, static_cast<uint32_t>(challenge_plot_id_hash & 0xFFFFFFFF));
-        blake_hash_.set_data(1, static_cast<uint32_t>(challenge_plot_id_hash >> 32));
+        //blake_hash_.set_data(0, static_cast<uint32_t>(challenge_plot_id_hash & 0xFFFFFFFF));
+        //blake_hash_.set_data(1, static_cast<uint32_t>(challenge_plot_id_hash >> 32));
 
         // if changes are made to the number of seed words, update this constant
         static_assert(NUM_SEED_BLAKE_WORDS == 2, "NUM_SEED_BLAKE_WORDS must be 2");
@@ -60,12 +58,12 @@ public:
 
     struct ScanResult
     {
-        uint64_t fragment;
+        ProofFragment fragment;
         uint64_t index;
     };
 
     // Scan the plot data for fragments that pass the scan filter
-    std::vector<ScanResult> scan(const std::vector<uint64_t> &fragments)
+    std::vector<ScanResult> scan(const std::vector<ProofFragment> &fragments)
     {
         ScanRange range = getScanRangeForFilter();
         auto in_range = collectFragmentsInRange(fragments, range);
@@ -77,15 +75,27 @@ public:
     std::vector<ScanResult> filterFragmentsByHash(
         const std::vector<ScanResult> &candidates)
     {
+
+        BlakeHash::Result256 challenge_plot_id_hash = proof_core_.hashing.challengeWithPlotIdHash(challenge_.data());
+        uint32_t block_words[16];
+        // Fill the first 8 words with the challenge plot ID hash.
+        for (int i = 0; i < 8; ++i)
+        {
+            block_words[i] = challenge_plot_id_hash.r[i];
+        }
+        for (int i = 8; i < 16; ++i)
+        {
+            block_words[i] = 0; // Zero the remaining words
+        }
+
         std::vector<ScanResult> filtered;
         for (auto &r : candidates)
         {
-            blake_hash_.set_data(NUM_SEED_BLAKE_WORDS + 0, r.fragment >> 32);
-            blake_hash_.set_data(NUM_SEED_BLAKE_WORDS + 1, r.fragment & 0xFFFFFFFF);
-            //blake_hash_.set_data(4, r.fragment >> 32);
-            //blake_hash_.set_data(5, r.fragment & 0xFFFFFFFF);
-            uint32_t h = blake_hash_.generate_hash_32();
-            if (h < filter_32bit_hash_threshold_)
+            // Set the next 2 words of the Blake hash with the fragment
+            block_words[8] = static_cast<uint32_t>(r.fragment >> 32);
+            block_words[9] = static_cast<uint32_t>(r.fragment & 0xFFFFFFFF);
+            BlakeHash::Result64 result = BlakeHash::hash_block_64(block_words);
+            if (result.r[0] < filter_32bit_hash_threshold_)
                 filtered.push_back(r);
         }
         return filtered;
@@ -155,7 +165,7 @@ private:
     // Scan filter parameters
     ProofParams params_;
     ProofCore proof_core_;
-    BlakeHash blake_hash_;
+    //BlakeHash blake_hash_;
     std::array<uint8_t, 32> challenge_;
     uint32_t filter_32bit_hash_threshold_;
 

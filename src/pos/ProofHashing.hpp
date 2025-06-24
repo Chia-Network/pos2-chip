@@ -51,42 +51,48 @@ public:
     // Prepares Blake hash data for pairing.
     void set_data_for_pairing(uint32_t salt, uint64_t meta_l, uint64_t meta_r, int num_meta_bits);
 
-    uint64_t challengeWithPlotIdHash(const uint8_t *challenge_32_bytes)
-    {
-        // Set the data for the hash.
+    BlakeHash::Result256 challengeWithPlotIdHash(const uint8_t *challenge_32_bytes)
+    {   
+        uint32_t block_words[16];
+        const uint8_t *plot_id_bytes = params_.get_plot_id_bytes();
+        // Fill the first 8 words with the plot ID.
+
+        // set data from plot id
         for (int i = 0; i < 8; i++) {
-            blake_.set_data(i, static_cast<uint32_t>(challenge_32_bytes[i * 4 + 0]) |
-                            (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 1]) << 8) |
-                            (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 2]) << 16) |
-                            (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 3]) << 24));
+            block_words[i] = 
+                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 0]))        |
+                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 1]) << 8)   |
+                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 2]) << 16)  |
+                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 3]) << 24);
         }
-
-        // Generate the hash.
-        auto h = blake_.generate_hash_64();
-        uint64_t hash_value = (static_cast<uint64_t>(h.r[0]) << 32) | h.r[1];
-
-        return hash_value;
+        // set data from challenge
+        for (int i = 0; i < 8; i++) {
+            block_words[i + 8] = 
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 0]))        |
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 1]) << 8)   |
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 2]) << 16)  |
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 3]) << 24);
+        }
+        
+        return BlakeHash::hash_block_256(block_words);
     }
 
-    uint64_t chainHash(uint64_t prev_chain_hash, const uint64_t *link_fragments)
+    BlakeHash::Result256 chainHash(BlakeHash::Result256 prev_chain_hash, const uint64_t *link_fragments)
     {
-        // TODO: top and bottom partition bits will be frequently re-used across fragments, so could
-        // increase chain_hash bits and reduce fragment bits for hash.
-        // 1) Set the data for the hash
-        blake_.set_data(0, prev_chain_hash & 0xFFFFFFFF);
-        blake_.set_data(1, prev_chain_hash >> 32);
-        blake_.set_data(2, link_fragments[0] & 0xFFFFFFFF);
-        blake_.set_data(3, link_fragments[0] >> 32);
-        blake_.set_data(4, link_fragments[1] & 0xFFFFFFFF);
-        blake_.set_data(5, link_fragments[1] >> 32);
-        blake_.set_data(6, link_fragments[2] & 0xFFFFFFFF);
-        blake_.set_data(7, link_fragments[2] >> 32);
+        uint32_t block_words[16];
+        for (int i = 0; i < 8; i++) {
+            block_words[i] = prev_chain_hash.r[i];
+        }
+        block_words[8] = static_cast<uint32_t>(link_fragments[0] & 0xFFFFFFFF);
+        block_words[9] = static_cast<uint32_t>(link_fragments[0] >> 32);
+        block_words[10] = static_cast<uint32_t>(link_fragments[1] & 0xFFFFFFFF);
+        block_words[11] = static_cast<uint32_t>(link_fragments[1] >> 32);
+        block_words[12] = static_cast<uint32_t>(link_fragments[2] & 0xFFFFFFFF);
+        block_words[13] = static_cast<uint32_t>(link_fragments[2] >> 32);
+        block_words[14] = 0; // Zero out the last two words.
+        block_words[15] = 0;
 
-        // 2) Generate the hash
-        auto h = blake_.generate_hash_64();
-        uint64_t hash_value = (static_cast<uint64_t>(h.r[0]) << 32) | h.r[1];
-
-        return hash_value;
+        return BlakeHash::hash_block_256(block_words);
     }
 
 private:
@@ -169,7 +175,7 @@ inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64
                                            int in_meta_bits, int num_match_info_bits,
                                            int out_num_meta_bits, int num_test_bits) {
     set_data_for_pairing(static_cast<uint32_t>(table_id), meta_l, meta_r, in_meta_bits);
-    BlakeHash::BlakeHashResult128 res = blake_.generate_hash();
+    BlakeHash::Result128 res = blake_.generate_hash();
 
     PairingResult pr = {0, 0, 0};
 

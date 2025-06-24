@@ -17,8 +17,8 @@
 
 // use retain x values to t3 to make a plot and save x values to disk for analysis
 // use BOTH includes to for deeper validation of results
-#define RETAIN_X_VALUES_TO_T3 true
-#define RETAIN_X_VALUES true
+//#define RETAIN_X_VALUES_TO_T3 true
+//#define RETAIN_X_VALUES true
 
 // T4 and T5 are bipartite for optimal compression, T3 links back to T2 and T2 to T1 are omitted
 // so bipartite is optional. Some notes as to which mode is best:
@@ -33,8 +33,22 @@
 const uint32_t FINAL_TABLE_FILTER = 855570511; // out of 2^32
 const double FINAL_TABLE_FILTER_D = 0.19920303275; 
 
-constexpr double CHAINING_FACTOR = 1.1;
+// define this if want quality chain to pass more up front, then less in subsequent passes
+// this helps distribution of number of quality chains to be more compact.0.
+#define USE_UPFRONT_CHAINING_FACTOR true
+
 constexpr int NUM_CHAIN_LINKS = 16;
+
+#ifdef USE_UPFRONT_CHAINING_FACTOR
+// first chain link is always passed in from passing fragment scan filter
+constexpr double CHAINING_FACTORS[NUM_CHAIN_LINKS-1] = {
+    4.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.25,
+    //1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1
+};
+#else
+constexpr double CHAINING_FACTOR = 1.1;
+#endif
+
 constexpr double PROOF_FRAGMENT_SCAN_FILTER = 2.0; // 1 / expected number of fragments to pass scan filter.
 
 
@@ -61,7 +75,7 @@ enum class QualityLinkProofFragmentPositions : int
 struct QualityLink
 {
     // there are 2 patterns: either LR or RR is included in the fragment, but never both.
-    uint64_t fragments[3]; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
+    ProofFragment fragments[3]; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
     FragmentsPattern pattern;
     uint64_t outside_t3_index;
 };
@@ -69,7 +83,7 @@ struct QualityLink
 struct QualityChain
 {
     std::array<QualityLink, NUM_CHAIN_LINKS> chain_links;
-    uint64_t chain_hash;
+    BlakeHash::Result256 chain_hash;
 };
 
 struct T1Pairing
@@ -467,19 +481,38 @@ public:
         return 2.0 * entries_per_partition / (double) params_.get_num_partitions();
     }
 
-    uint64_t quality_chain_pass_threshold() {
+    static double expected_number_of_quality_chains_per_passing_fragment() {
+        // chaining_factor ^ (num_chain_links-1)
+        #ifdef USE_UPFRONT_CHAINING_FACTOR
+            double expected = CHAINING_FACTORS[0];
+            for (int i = 1; i < NUM_CHAIN_LINKS-1; ++i) {
+                expected *= CHAINING_FACTORS[i];
+            }
+            return expected;
+        #else
+            return pow(CHAINING_FACTOR, NUM_CHAIN_LINKS - 1);
+        #endif
+    }
+
+    // depth 0 is first quality link added by passsing fragment scan filter
+    // depth 1 starts using CHAINING_FACTORS[0] and so on.
+    uint32_t quality_chain_pass_threshold(int depth) {
         // 1) compute pass probability
+        #ifdef USE_UPFRONT_CHAINING_FACTOR
+        double chance = CHAINING_FACTORS[depth-1] / expected_quality_links_set_size();
+        #else
         double chance = CHAINING_FACTOR / expected_quality_links_set_size();
+        #endif
 
         // 2) use long double for extra precision
-        long double max_uint64 = static_cast<long double>(std::numeric_limits<uint64_t>::max());
+        long double max_uint32 = static_cast<long double>(std::numeric_limits<uint32_t>::max());
 
         // 3) compute raw threshold
-        long double raw = chance * max_uint64;
+        long double raw = chance * max_uint32;
 
         // 4) clamp to avoid overflow
-        if (raw >= max_uint64) {
-            raw = max_uint64;
+        if (raw >= max_uint32) {
+            raw = max_uint32;
         }
 
         if (false) {
@@ -493,19 +526,19 @@ public:
         }
 
         // 5) round to nearest integer and return
-        return static_cast<uint64_t>(raw + 0.5L);
+        return static_cast<uint32_t>(raw + 0.5L);
     }
 
     // Quality Chaining functions
-    uint64_t firstLinkHash(const QualityLink &link, const std::array<uint8_t, 32> &challenge)
+    BlakeHash::Result256 firstLinkHash(const QualityLink &link, const std::array<uint8_t, 32> &challenge)
     {
-        uint64_t challenge_plotid_hash = hashing.challengeWithPlotIdHash(challenge.data());
+        BlakeHash::Result256 challenge_plotid_hash = hashing.challengeWithPlotIdHash(challenge.data());
         return hashing.chainHash(challenge_plotid_hash, link.fragments);
     }
 
     struct NewLinksResult {
         QualityLink link;
-        uint64_t new_hash;
+        BlakeHash::Result256 new_hash;
     };
 
     std::vector<QualityLink> filterLinkSetToPartitions(const std::vector<QualityLink> &link_set, uint32_t lower_partition, uint32_t upper_partition)
@@ -547,12 +580,13 @@ public:
         return filtered_links;
     }
 
-    std::vector<NewLinksResult> getNewLinksForChain(uint64_t current_hash, const std::vector<QualityLink> &link_set) // , uint32_t lower_partition, uint32_t upper_partition)
+    std::vector<NewLinksResult> getNewLinksForChain(BlakeHash::Result256 current_hash, const std::vector<QualityLink> &link_set, int depth) // , uint32_t lower_partition, uint32_t upper_partition)
     {
+        uint32_t qc_pass_threshold = quality_chain_pass_threshold(depth);
         // initialize threshold on first use
-        if (quality_chain_pass_threshold_ == 0) {
-            quality_chain_pass_threshold_ = quality_chain_pass_threshold();
-        }
+        //if (quality_chain_pass_threshold_ == 0) {
+        //    quality_chain_pass_threshold_ = quality_chain_pass_threshold();
+        //}
 
         std::vector<NewLinksResult> new_links;
         for (int i = 0; i < link_set.size(); ++i)
@@ -560,8 +594,8 @@ public:
             const QualityLink &link = link_set[i];
 
             // test the hash
-            uint64_t new_hash = hashing.chainHash(current_hash, link.fragments);
-            if (new_hash < quality_chain_pass_threshold_)
+            BlakeHash::Result256 new_hash = hashing.chainHash(current_hash, link.fragments);
+            if (new_hash.r[0] < qc_pass_threshold)
             {
                 new_links.push_back({link, new_hash});
             }
@@ -573,7 +607,8 @@ public:
         return params_;
     }
 
+    uint32_t quality_chain_pass_threshold_ = 0;
 private:
-    uint64_t quality_chain_pass_threshold_ = 0;
+    
     ProofParams params_;
 };

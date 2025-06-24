@@ -19,12 +19,12 @@ int main(int argc, char *argv[])
     if (false) {
         ProofParams params(challenge.data(), 28, 20);
         ProofCore proof_core(params);
-        uint64_t chaining_hash_pass_threshold = proof_core.quality_chain_pass_threshold();
+        uint32_t chaining_hash_pass_threshold = proof_core.quality_chain_pass_threshold();
         std::cout << "Chaining hash pass threshold: " << std::dec << chaining_hash_pass_threshold << std::endl;
         exit(23);
     }
 
-    Prover prover(challenge, argv[2], 2);
+    Prover prover(challenge, argv[2]);
 
     // set random seed
     srand(static_cast<unsigned int>(time(nullptr)));
