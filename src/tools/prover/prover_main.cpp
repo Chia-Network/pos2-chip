@@ -16,14 +16,6 @@ int main(int argc, char *argv[])
 
     std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
 
-    if (false) {
-        ProofParams params(challenge.data(), 28, 20);
-        ProofCore proof_core(params);
-        uint32_t chaining_hash_pass_threshold = proof_core.quality_chain_pass_threshold();
-        std::cout << "Chaining hash pass threshold: " << std::dec << chaining_hash_pass_threshold << std::endl;
-        exit(23);
-    }
-
     Prover prover(challenge, argv[2]);
 
     // set random seed

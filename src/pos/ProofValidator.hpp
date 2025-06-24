@@ -9,7 +9,6 @@
 #include <string>
 
 #include "ProofCore.hpp"
-#include "prove/Prover.hpp"
 #include "pos/ProofFragmentScanFilter.hpp"
 
 class ProofValidator
