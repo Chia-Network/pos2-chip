@@ -271,7 +271,17 @@ public:
         uint32_t top_order_bit = order_bits >> 1;
         uint32_t lower_partition, upper_partition;
 
-        fragment_codec.get_lower_and_upper_partitions(proof_fragment, lower_partition, upper_partition);
+        if (top_order_bit == 0)
+        {
+            lower_partition = fragment_codec.extract_t3_l_partition_bits(proof_fragment);
+            upper_partition = fragment_codec.extract_t3_r_partition_bits(proof_fragment) + params_.get_num_partitions();
+        }
+        else
+        {
+            lower_partition = fragment_codec.extract_t3_r_partition_bits(proof_fragment);
+            upper_partition = fragment_codec.extract_t3_l_partition_bits(proof_fragment) + params_.get_num_partitions();
+        }
+
 
         PairingResult lower_partition_pair = hashing.pairing(3, meta_l, meta_r,
                                              static_cast<int>(params_.get_num_pairing_meta_bits()),

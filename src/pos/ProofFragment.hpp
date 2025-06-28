@@ -76,20 +76,6 @@ public:
         );
     }
 
-    void get_lower_and_upper_partitions(ProofFragment proof_fragment, uint32_t &lower, uint32_t upper) const {
-        uint32_t top_order_bit = extract_t3_order_bits(proof_fragment) >> 1;
-        if (top_order_bit == 0)
-        {
-            lower = extract_t3_l_partition_bits(proof_fragment);
-            upper = extract_t3_r_partition_bits(proof_fragment) + params_.get_num_partitions();
-        }
-        else
-        {
-            lower = extract_t3_r_partition_bits(proof_fragment);
-            upper = extract_t3_l_partition_bits(proof_fragment) + params_.get_num_partitions();
-        }
-    }
-
     uint32_t get_lateral_to_t4_partition(ProofFragment proof_fragment) const {
         uint32_t top_order_bit = extract_t3_order_bits(proof_fragment) >> 1;
         if (top_order_bit == 0)
