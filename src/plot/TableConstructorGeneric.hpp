@@ -158,6 +158,9 @@ public:
             #ifdef NON_BIPARTITE_BEFORE_T3
             uint32_t section_l = section;
             uint32_t section_r = proof_core_.matching_section(section_l);
+            std::cout << "section_l: " << section_l
+                      << ", section_r: " << section_r
+                      << ", table_id: " << table_id_ << std::endl;
             if (table_id_ > 3) {
                 if (section_r < section_l) {
                     // swap
