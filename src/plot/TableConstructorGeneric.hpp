@@ -14,20 +14,22 @@
 #include "pos/ProofCore.hpp"
 #include "pos/ProofValidator.hpp"
 #include "RadixSort.hpp"
+#include "WorkingBuffer.hpp"
 
 template <typename PairingCandidate, typename T_Pairing, typename T_Result>
 class TableConstructorGeneric
 {
+
 public:
-    TableConstructorGeneric(int table_id, const ProofParams &proof_params)
+    TableConstructorGeneric(int table_id, const ProofParams &proof_params, WorkingBuffer &working_buffer)
         : table_id_(table_id), params_(proof_params),
-          proof_core_(proof_params)
+          proof_core_(proof_params), wb_(working_buffer), mr_(working_buffer.resource())
     {
     }
 
     virtual ~TableConstructorGeneric() = default;
 
-    std::vector<std::vector<uint64_t>> find_candidates_prefixes(const std::vector<PairingCandidate> &pairing_candidates) const
+    std::vector<std::vector<uint64_t>> find_candidates_prefixes(const std::span<PairingCandidate> &pairing_candidates) const
     {
         int num_sections = params_.get_num_sections();
         int num_match_keys = params_.get_num_match_keys(table_id_);
@@ -145,7 +147,7 @@ public:
         throw std::runtime_error("handle_pair not implemented");
     }
 
-    T_Result construct(const std::vector<PairingCandidate> &previous_table_pairs)
+    T_Result construct(const std::span<PairingCandidate> &previous_table_pairs)
     {
         auto pairing_candidates_offsets = find_candidates_prefixes(previous_table_pairs);
 
@@ -230,6 +232,8 @@ public:
 protected:
     int table_id_;
     ProofParams params_;
+    WorkingBuffer& wb_;
+    std::pmr::memory_resource * mr_;
 
 public:
     // Provide direct access to the underlying ProofCore if needed:
@@ -245,29 +249,39 @@ struct Xs_Candidate
 class XsConstructor
 {
 public:
-    XsConstructor(const ProofParams &proof_params)
+    XsConstructor(const ProofParams &proof_params, WorkingBuffer &working_buffer)
         : params_(proof_params),
-          proof_core_(proof_params)
+          proof_core_(proof_params),
+          wb_(working_buffer),
+            mr_(working_buffer.resource())
     {
     }
 
     virtual ~XsConstructor() = default;
 
-    std::vector<Xs_Candidate> construct()
+    struct StripeResult {
+        std::span<Xs_Candidate> candidates; // Non-owning view of the candidates.
+        std::span<size_t> section_counts;
+    };
+
+    StripeResult constructStripe(size_t stripe, bool horizontal = true)
     {
-        std::vector<Xs_Candidate> x_candidates;
-        // We'll have 2^(k-4) groups, each group has 16 x-values
-        // => total of 2^(k-4)*16 x-values
+        std::pmr::vector<Xs_Candidate> x_candidates(mr_);
+        std::pmr::vector<size_t> section_counts(mr_);
+        section_counts.resize(params_.get_num_sections(), 0ULL);
         
+        size_t MAX_PER_SECTION = (1ULL << (params_.get_k())) / params_.get_num_sections();
         
-        uint64_t num_groups = (1ULL << (params_.get_k() - 4));
-        
-        // hack to make smaller plot for debugging
-        //num_groups = (uint64_t) ((double) num_groups * 0.75);
+        // Each stripe has a number of sections, each section has MAX_PER_SECTION candidates.
+
+        size_t num_stripes = params_.get_num_sections();
+
+        uint64_t num_groups_of_16_chachas = (1ULL << (params_.get_k() - 4));
+        uint64_t num_groups = num_groups_of_16_chachas / num_stripes;
+        uint64_t start_group = stripe * num_groups;
 
         x_candidates.reserve(num_groups * 16ULL);
-
-        for (uint64_t x_group = 0; x_group < num_groups; x_group++)
+        for (uint64_t x_group = start_group; x_group < start_group + num_groups; x_group++)
         {
             uint64_t base_x = x_group * 16ULL;
             uint32_t out_hashes[16];
@@ -277,29 +291,93 @@ public:
             {
                 uint32_t x = base_x + i;
                 uint32_t match_info = out_hashes[i];
+                uint32_t section = params_.extract_section_from_match_info(0, match_info);
                 // Store [ x, match_info ]
                 x_candidates.push_back({match_info, x});
+                // Increment the section count
+                section_counts[section]++;
             }
         }
+        // sort using a pmr scratch buffer
         RadixSort<Xs_Candidate, uint32_t> radix_sort;
         std::vector<Xs_Candidate> temp_buffer(x_candidates.size());
         // Create a span over the temporary buffer
         std::span<Xs_Candidate> buffer(temp_buffer.data(), temp_buffer.size());
         radix_sort.sort(x_candidates, buffer);
 
-        return x_candidates;
+        if (true) {
+            // check candiates are sorted by match_info
+            for (size_t i = 1; i < x_candidates.size(); i++)
+            {
+                if (x_candidates[i].match_info < x_candidates[i - 1].match_info)
+                {
+                    std::cerr << "Error: candidates not sorted by match_info at index " << i << std::endl;
+                    exit(1);
+                }
+            }
+        }
+
+        StripeResult result;
+        result.candidates = std::span<Xs_Candidate>(x_candidates.data(), x_candidates.size());
+        result.section_counts = std::span<size_t>(section_counts.data(), section_counts.size());
+
+        return result;
+
+        //return std::span<Xs_Candidate>(x_candidates.data(), x_candidates.size());
+    }
+
+    std::span<Xs_Candidate> construct()
+    {
+        // use pmr::vector backed by the shared WorkingBuffer resource
+        std::pmr::vector<Xs_Candidate> x_candidates(mr_);
+         // We'll have 2^(k-4) groups, each group has 16 x-values
+         // => total of 2^(k-4)*16 x-values
+         
+         
+        uint64_t num_groups = (1ULL << (params_.get_k() - 4));
+        
+        // hack to make smaller plot for debugging
+        //num_groups = (uint64_t) ((double) num_groups * 0.75);
+
+        x_candidates.reserve(num_groups * 16ULL);
+
+        for (uint64_t x_group = 0; x_group < num_groups; x_group++)
+         {
+             uint64_t base_x = x_group * 16ULL;
+             uint32_t out_hashes[16];
+
+             proof_core_.hashing.g_range_16(static_cast<uint32_t>(base_x), out_hashes);
+             for (int i = 0; i < 16; i++)
+             {
+                 uint32_t x = base_x + i;
+                 uint32_t match_info = out_hashes[i];
+                 // Store [ x, match_info ]
+                 x_candidates.push_back({match_info, x});
+             }
+         }
+        // sort in-place using a pmr scratch buffer
+        RadixSort<Xs_Candidate, uint32_t> radix_sort;
+        std::vector<Xs_Candidate> temp_buffer(x_candidates.size());
+        // Create a span over the temporary buffer
+        std::span<Xs_Candidate> buffer(temp_buffer.data(), temp_buffer.size());
+        radix_sort.sort(x_candidates, buffer);
+
+        // return non-owning view of x_candidates
+        return std::span<Xs_Candidate>(x_candidates.data(), x_candidates.size());
     }
 
 protected:
     ProofParams params_;
     ProofCore proof_core_;
+    WorkingBuffer& wb_;
+    std::pmr::memory_resource * mr_;
 };
 
 class Table1Constructor : public TableConstructorGeneric<Xs_Candidate, T1Pairing, std::vector<T1Pairing>>
 {
 public:
-    Table1Constructor(const ProofParams &proof_params)
-        : TableConstructorGeneric(1, proof_params)
+    Table1Constructor(const ProofParams &proof_params, WorkingBuffer &working_buffer)
+        : TableConstructorGeneric(1, proof_params, working_buffer)
     {
     }
 
@@ -349,8 +427,8 @@ public:
 class Table2Constructor : public TableConstructorGeneric<T1Pairing, T2Pairing, std::vector<T2Pairing>>
 {
 public:
-    Table2Constructor(const ProofParams &proof_params)
-        : TableConstructorGeneric(2, proof_params)
+    Table2Constructor(const ProofParams &proof_params, WorkingBuffer &working_buffer)
+        : TableConstructorGeneric(2, proof_params, working_buffer)
     {
     }
 
@@ -425,8 +503,8 @@ struct T3_Partitions_Results
 class Table3Constructor : public TableConstructorGeneric<T2Pairing, T3Pairing, T3_Partitions_Results>
 {
 public:
-    Table3Constructor(const ProofParams &proof_params)
-        : TableConstructorGeneric(3, proof_params)
+    Table3Constructor(const ProofParams &proof_params, WorkingBuffer &working_buffer)
+        : TableConstructorGeneric(3, proof_params, working_buffer)
     {
     }
 
@@ -574,8 +652,8 @@ struct T4_Partition_Result
 class Table4PartitionConstructor : public TableConstructorGeneric<T3PartitionedPairing, T4Pairing, T4_Partition_Result>
 {
 public:
-    Table4PartitionConstructor(const ProofParams &proof_params, const int t3_k)
-        : TableConstructorGeneric(4, proof_params), t3_k_(t3_k)
+    Table4PartitionConstructor(const ProofParams &proof_params, const int t3_k, WorkingBuffer &working_buffer)
+        : TableConstructorGeneric(4, proof_params, working_buffer), t3_k_(t3_k)
     {
     }
 
@@ -686,8 +764,8 @@ private:
 class Table5GenericConstructor : public TableConstructorGeneric<T4PairingPropagation, T5Pairing, std::vector<T5Pairing>>
 {
 public:
-    Table5GenericConstructor(const ProofParams &proof_params)
-        : TableConstructorGeneric(5, proof_params)
+    Table5GenericConstructor(const ProofParams &proof_params, WorkingBuffer &working_buffer)
+        : TableConstructorGeneric(5, proof_params, working_buffer)
     {
     }
 

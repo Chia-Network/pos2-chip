@@ -167,6 +167,10 @@ private:
 class StripeIO
 {
 public:
+    enum class Direction {
+        HORIZONTAL,  // row fixed, iterate over columns
+        VERTICAL     // column fixed, iterate over rows
+    };
     StripeIO(MemoryGrid& mg, DiskGrid& dg) 
         : memGrid(mg), diskGrid(dg) {}
 
@@ -230,7 +234,7 @@ public:
 
     // pushStripe: write from src into mem+disk along a stripe
     // startBytes/endBytes are arrays of size N: [0..start)→mem, [start..end)→disk
-    void pushStripe(bool horizontal,
+    void pushStripe(Direction dir,
                     size_t idx,
                     const void* src,
                     const size_t* srcBytes,
@@ -241,17 +245,17 @@ public:
         for (size_t j = 0, N = memGrid.N(); j < N; ++j)
         {
             pushBlock(
-                horizontal ? idx : j, 
-                horizontal ? j : idx, 
-                in + srcOffset, 
-                srcBytes[j], 
+                dir == Direction::HORIZONTAL ? idx : j,
+                dir == Direction::HORIZONTAL ? j : idx,
+                in + srcOffset,
+                srcBytes[j],
                 offsetInBlock);
             srcOffset += srcBytes[j];
         }
     }
 
     // pullStripe: read from mem+disk into dst
-    void pullStripe(bool horizontal,
+    void pullStripe(Direction dir,
                     size_t idx,
                     void* dst,
                     const size_t* dstBytes,
@@ -262,10 +266,10 @@ public:
         for (size_t j = 0, N = memGrid.N(); j < N; ++j)
         {
             pullBlock(
-                horizontal ? idx : j, 
-                horizontal ? j : idx, 
-                out + dstOffset, 
-                dstBytes[j], 
+                dir == Direction::HORIZONTAL ? idx : j,
+                dir == Direction::HORIZONTAL ? j : idx,
+                out + dstOffset,
+                dstBytes[j],
                 offsetInBlock);
             dstOffset += dstBytes[j];
         }
