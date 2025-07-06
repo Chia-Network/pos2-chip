@@ -166,7 +166,6 @@ public:
             transposeXsCandidatesToGrid(result, stripe);
             std::cout << "Bytes used in working buffer for stripe " << stripe
                       << ": " << working_buffer.bytesUsed() << std::endl;
-            
         }
 
         auto xs_candidates = xs_gen_ctor.construct();
@@ -181,26 +180,63 @@ public:
         std::cout << "Constructed " << t1_pairs.size() << " Table 1 pairs." << std::endl;
 
         // now try stripe version of plotter: let's pull section data for each stripe
-        for (size_t stripe = 0; stripe < N_stripes; ++stripe)
+        uint32_t section_l = 0;
+        uint32_t section_r = proof_core_.matching_section(section_l);
+        while (true)
         {
             working_buffer.reset();
+
+            section_r = proof_core_.matching_section(section_l);
+
             // pull the stripe data
-            std::span<Xs_Candidate> xs_candidates_in_section = transposeXsCandidatesFromGrid(stripe, working_buffer);
-            std::cout << "Stripe " << stripe
-                      << " pulled " << xs_candidates_in_section.size() << " Xs candidates." << std::endl;
-            if (true) {
-                // check candiates are sorted by match_info
-                for (size_t i = 1; i < xs_candidates_in_section.size(); i++)
+            // TODO: can be more efficient by caching previous pulled sections
+            std::span<Xs_Candidate> l_candidates_in_section = transposeXsCandidatesFromGrid(section_l, working_buffer);
+            std::span<Xs_Candidate> r_candidates_in_section = transposeXsCandidatesFromGrid(section_r, working_buffer);
+            std::cout << "section_l: " << section_l
+                      << ", section_r: " << section_r
+                      << ", l_candidates_in_section.size(): " << l_candidates_in_section.size()
+                      << ", r_candidates_in_section.size(): " << r_candidates_in_section.size() << std::endl;
+
+            auto t1_results = t1_ctor.constructFromSections(l_candidates_in_section, r_candidates_in_section);
+            std::cout << "Constructed " << t1_results.candidates.size() << " Table 1 pairs from section " << section_l << "." << std::endl;
+            // show section counts
+            for (size_t i = 0; i < N_stripes; ++i)
+            {
+                std::cout << "Section " << i << " count: " << t1_results.section_counts[i] << std::endl;
+            }
+
+#ifdef RETAIN_X_VALUES
+            if (validate_)
+            {
+                for (const auto &pair : t1_results.candidates)
                 {
-                    if (xs_candidates_in_section[i].match_info < xs_candidates_in_section[i - 1].match_info)
+                    uint32_t xs[2] = {
+                        static_cast<uint32_t>(pair.meta >> proof_params_.get_k()),
+                        static_cast<uint32_t>(pair.meta & ((1 << proof_params_.get_k()) - 1))};
+                    auto result = validator_.validate_table_1_pair(xs);
+                    if (!result.has_value())
                     {
-                        std::cerr << "Error: candidates not sorted by match_info at index " << i << std::endl;
-                        exit(1);
+                        std::cerr << "Validation failed for Table 1 pair: ["
+                                  << xs[0] << ", " << xs[1] << "]\n";
+                        exit(23);
                     }
                 }
-                std::cout << "Candidates in stripe " << stripe
-                          << " are sorted by match_info." << std::endl;
+                std::cout << "Table 1 pairs validated successfully." << std::endl;
             }
+#endif
+
+            // push the stripe data
+            //stripe_io_->pushStripe(StripeIO::Direction::HORIZONTAL, section_l,
+            //                       t1_results.candidates.data(),
+            //                       t1_results.section_counts.data(),
+            //                       /*offsetInBlock=*/0);
+
+            // move to next section
+            section_l = section_r;
+
+            // break loop if finished doing section r as 0
+            if (section_r == 0)
+                break;
         }
 
 #ifdef RETAIN_X_VALUES
@@ -348,7 +384,8 @@ public:
                 };*/
     }
 
-    ProofParams getProofParams() const
+    ProofParams
+    getProofParams() const
     {
         return proof_params_;
     }
@@ -383,6 +420,7 @@ private:
 
     // Core PoSpace objects
     ProofParams proof_params_;
+    ProofCore proof_core_{proof_params_};
     ProofFragmentCodec fragment_codec_;
 
     // Timing utility

@@ -29,6 +29,111 @@ public:
 
     virtual ~TableConstructorGeneric() = default;
 
+    struct StripeResult
+    {
+        std::span<T_Pairing> candidates; // Non-owning view of the candidates.
+        std::span<size_t> section_counts;
+    };
+
+    // This function returns match key prefixes for candidates within a single section
+    std::pmr::vector<uint64_t> find_match_key_prefixes(const std::span<PairingCandidate> &section_candidates) const
+    {
+        int num_match_keys = params_.get_num_match_keys(table_id_);
+
+        // Allocate counts array for a single section with num_match_keys elements
+        std::pmr::vector<uint64_t> counts(num_match_keys, mr_);
+        std::fill(counts.begin(), counts.end(), 0ULL);
+
+        // Count candidates by match_key
+        for (const auto &candidate : section_candidates)
+        {
+            uint32_t match_key = params_.extract_match_key_from_match_info(table_id_, candidate.match_info);
+            counts[match_key]++;
+        }
+
+        // Compute prefix sums (will have num_match_keys + 1 elements)
+        std::pmr::vector<uint64_t> prefixes(num_match_keys + 1, mr_);
+        prefixes[0] = 0;
+
+        for (int mk = 0; mk < num_match_keys; mk++)
+        {
+            prefixes[mk + 1] = prefixes[mk] + counts[mk];
+        }
+
+        return prefixes;
+    }
+
+    std::pmr::vector<T_Pairing> new_find_pairs(
+        const std::span<PairingCandidate> &l_targets,
+        const std::span<PairingCandidate> &r_candidates)
+    {
+        std::pmr::vector<T_Pairing> pairs(mr_);
+        pairs.reserve(std::max(l_targets.size(), r_candidates.size()));
+
+        size_t left_index = 0;
+        size_t right_index = 0;
+        const size_t r_size = r_candidates.size();
+
+        int num_match_target_bits = params_.get_num_match_target_bits(table_id_);
+        uint32_t match_target_mask = (1 << num_match_target_bits) - 1;
+
+        // We treat r_candidates like an iterator:
+        bool have_r_candidate = (r_size > 0);
+        PairingCandidate current_r;
+        if (have_r_candidate)
+        {
+            current_r = r_candidates[0];
+        }
+
+        while (left_index < l_targets.size() && have_r_candidate)
+        {
+            uint32_t match_target_l = l_targets[left_index].match_info;
+            uint32_t match_target_r = (current_r.match_info & match_target_mask);
+
+            if (match_target_l == match_target_r)
+            {
+                // we match all left items that share the same match_target_l
+                size_t start_i = left_index;
+                while (start_i < l_targets.size() &&
+                       (l_targets[start_i].match_info == match_target_r))
+                {
+                    new_handle_pair(l_targets[start_i], current_r, pairs, start_i, right_index);
+                    start_i++;
+                }
+                // Advance the right side
+                right_index++;
+                if (right_index < r_size)
+                {
+                    current_r = r_candidates[right_index];
+                }
+                else
+                {
+                    have_r_candidate = false;
+                }
+            }
+            else if (match_target_r < match_target_l)
+            {
+                // Advance the right side
+                right_index++;
+                if (right_index < r_size)
+                {
+                    current_r = r_candidates[right_index];
+                }
+                else
+                {
+                    have_r_candidate = false;
+                }
+            }
+            else
+            {
+                // match_target_r > match_target_l => advance left side
+                left_index++;
+            }
+        }
+        return pairs;
+    }
+
+
     std::vector<std::vector<uint64_t>> find_candidates_prefixes(const std::span<PairingCandidate> &pairing_candidates) const
     {
         int num_sections = params_.get_num_sections();
@@ -147,6 +252,15 @@ public:
         throw std::runtime_error("handle_pair not implemented");
     }
 
+    virtual void new_handle_pair(const PairingCandidate &l_candidate,
+                                 const PairingCandidate &r_candidate,
+                                 std::pmr::vector<T_Pairing> &pairs,
+                                 size_t left_index,
+                                 size_t right_index)
+    {
+        throw std::runtime_error("new_handle_pair not implemented");
+    }
+
     T_Result construct(const std::span<PairingCandidate> &previous_table_pairs)
     {
         auto pairing_candidates_offsets = find_candidates_prefixes(previous_table_pairs);
@@ -157,25 +271,27 @@ public:
 
         for (uint32_t section = 0; section < params_.get_num_sections(); section++)
         {
-            #ifdef NON_BIPARTITE_BEFORE_T3
+#ifdef NON_BIPARTITE_BEFORE_T3
             uint32_t section_l = section;
             uint32_t section_r = proof_core_.matching_section(section_l);
             std::cout << "section_l: " << section_l
                       << ", section_r: " << section_r
                       << ", table_id: " << table_id_ << std::endl;
-            if (table_id_ > 3) {
-                if (section_r < section_l) {
+            if (table_id_ > 3)
+            {
+                if (section_r < section_l)
+                {
                     // swap
                     std::swap(section_l, section_r);
                 }
             }
-            #else
+#else
             // TODO: as section_l is always lower, we can speedup plotting by re-using the same section_r hashes
             // for each section_l (two total) they compare against.
             uint32_t other_section = proof_core_.matching_section(section);
             uint32_t section_l = std::min(section, other_section);
             uint32_t section_r = std::max(section, other_section);
-            #endif
+#endif
 
             // l_start..l_end in the previous_table_pairs
             uint64_t l_start = pairing_candidates_offsets[section_l][0];
@@ -229,11 +345,64 @@ public:
         throw std::runtime_error("post_construct not implemented");
     }
 
+    StripeResult constructFromSections(const std::span<PairingCandidate> &L_section_candidates, const std::span<PairingCandidate> &R_section_candidates)
+    {
+        // auto pairing_candidates_offsets = find_candidates_prefixes(previous_table_pairs);
+        auto l_section_match_key_prefixes = find_match_key_prefixes(L_section_candidates);
+        auto r_section_match_key_prefixes = find_match_key_prefixes(R_section_candidates);
+
+        std::pmr::vector<T_Pairing> new_table_pairs(mr_);
+
+        // Stores the l candidates generated from matching targets
+        std::pmr::vector<PairingCandidate> l_matching_targets(mr_);
+        l_matching_targets.resize(L_section_candidates.size());
+
+        // create a temporary buffer for sorting
+        std::pmr::vector<PairingCandidate> temp_buffer(mr_);
+        temp_buffer.resize(L_section_candidates.size());
+
+        int num_match_keys = params_.get_num_match_keys(table_id_);
+
+        // For each match_key in [0..num_match_keys_-1]
+        for (uint64_t match_key_r = 0; match_key_r < num_match_keys; match_key_r++)
+        {
+            uint64_t r_start = r_section_match_key_prefixes[match_key_r];
+            uint64_t r_end = r_section_match_key_prefixes[match_key_r + 1];
+
+            // make span from the R start to end
+            std::span<PairingCandidate> r_candidates(R_section_candidates.data() + r_start, r_end - r_start);
+
+            for (uint64_t i = 0; i < L_section_candidates.size(); i++)
+            {
+                l_matching_targets[i] = matching_target(L_section_candidates[i], match_key_r);
+            }
+
+            // sort by match_target (default setting for RadixSort)
+            // RadixSort<T_Target, decltype(&T_Target::match_target)> radix_sort(&T_Target::match_target);
+            RadixSort<PairingCandidate, uint32_t> radix_sort;
+
+            std::span<PairingCandidate> buffer(temp_buffer.data(), temp_buffer.size());
+            radix_sort.sort(l_matching_targets, buffer);
+
+            // Now pair them
+            auto found_pairs = new_find_pairs(l_matching_targets, r_candidates);
+            // Append found_pairs to new_table_pairs
+            new_table_pairs.insert(new_table_pairs.end(), found_pairs.begin(), found_pairs.end());
+        }
+
+        return new_post_construct(new_table_pairs);
+    }
+
+    virtual StripeResult new_post_construct(std::pmr::vector<T_Pairing> &pairings) const
+    {
+        throw std::runtime_error("new_post_construct not implemented");
+    }
+
 protected:
     int table_id_;
     ProofParams params_;
-    WorkingBuffer& wb_;
-    std::pmr::memory_resource * mr_;
+    WorkingBuffer &wb_;
+    std::pmr::memory_resource *mr_;
 
 public:
     // Provide direct access to the underlying ProofCore if needed:
@@ -253,25 +422,26 @@ public:
         : params_(proof_params),
           proof_core_(proof_params),
           wb_(working_buffer),
-            mr_(working_buffer.resource())
+          mr_(working_buffer.resource())
     {
     }
 
     virtual ~XsConstructor() = default;
 
-    struct StripeResult {
+    struct StripeResult
+    {
         std::span<Xs_Candidate> candidates; // Non-owning view of the candidates.
         std::span<size_t> section_counts;
     };
 
-    StripeResult constructStripe(size_t stripe, bool horizontal = true)
+    StripeResult constructStripe(size_t stripe)
     {
         std::pmr::vector<Xs_Candidate> x_candidates(mr_);
         std::pmr::vector<size_t> section_counts(mr_);
         section_counts.resize(params_.get_num_sections(), 0ULL);
-        
+
         size_t MAX_PER_SECTION = (1ULL << (params_.get_k())) / params_.get_num_sections();
-        
+
         // Each stripe has a number of sections, each section has MAX_PER_SECTION candidates.
 
         size_t num_stripes = params_.get_num_sections();
@@ -305,7 +475,8 @@ public:
         std::span<Xs_Candidate> buffer(temp_buffer.data(), temp_buffer.size());
         radix_sort.sort(x_candidates, buffer);
 
-        if (true) {
+        if (true)
+        {
             // check candiates are sorted by match_info
             for (size_t i = 1; i < x_candidates.size(); i++)
             {
@@ -323,38 +494,37 @@ public:
 
         return result;
 
-        //return std::span<Xs_Candidate>(x_candidates.data(), x_candidates.size());
+        // return std::span<Xs_Candidate>(x_candidates.data(), x_candidates.size());
     }
 
     std::span<Xs_Candidate> construct()
     {
         // use pmr::vector backed by the shared WorkingBuffer resource
         std::pmr::vector<Xs_Candidate> x_candidates(mr_);
-         // We'll have 2^(k-4) groups, each group has 16 x-values
-         // => total of 2^(k-4)*16 x-values
-         
-         
+        // We'll have 2^(k-4) groups, each group has 16 x-values
+        // => total of 2^(k-4)*16 x-values
+
         uint64_t num_groups = (1ULL << (params_.get_k() - 4));
-        
+
         // hack to make smaller plot for debugging
-        //num_groups = (uint64_t) ((double) num_groups * 0.75);
+        // num_groups = (uint64_t) ((double) num_groups * 0.75);
 
         x_candidates.reserve(num_groups * 16ULL);
 
         for (uint64_t x_group = 0; x_group < num_groups; x_group++)
-         {
-             uint64_t base_x = x_group * 16ULL;
-             uint32_t out_hashes[16];
+        {
+            uint64_t base_x = x_group * 16ULL;
+            uint32_t out_hashes[16];
 
-             proof_core_.hashing.g_range_16(static_cast<uint32_t>(base_x), out_hashes);
-             for (int i = 0; i < 16; i++)
-             {
-                 uint32_t x = base_x + i;
-                 uint32_t match_info = out_hashes[i];
-                 // Store [ x, match_info ]
-                 x_candidates.push_back({match_info, x});
-             }
-         }
+            proof_core_.hashing.g_range_16(static_cast<uint32_t>(base_x), out_hashes);
+            for (int i = 0; i < 16; i++)
+            {
+                uint32_t x = base_x + i;
+                uint32_t match_info = out_hashes[i];
+                // Store [ x, match_info ]
+                x_candidates.push_back({match_info, x});
+            }
+        }
         // sort in-place using a pmr scratch buffer
         RadixSort<Xs_Candidate, uint32_t> radix_sort;
         std::vector<Xs_Candidate> temp_buffer(x_candidates.size());
@@ -369,8 +539,8 @@ public:
 protected:
     ProofParams params_;
     ProofCore proof_core_;
-    WorkingBuffer& wb_;
-    std::pmr::memory_resource * mr_;
+    WorkingBuffer &wb_;
+    std::pmr::memory_resource *mr_;
 };
 
 class Table1Constructor : public TableConstructorGeneric<Xs_Candidate, T1Pairing, std::vector<T1Pairing>>
@@ -379,7 +549,7 @@ public:
     Table1Constructor(const ProofParams &proof_params, WorkingBuffer &working_buffer)
         : TableConstructorGeneric(1, proof_params, working_buffer)
     {
-    }
+    }    
 
     // matching_target => (meta_l, r_match_target)
     Xs_Candidate matching_target(const Xs_Candidate &prev_table_pair, uint32_t match_key_r)
@@ -410,6 +580,21 @@ public:
         }
     }
 
+    void new_handle_pair(const Xs_Candidate &l_candidate,
+                     const Xs_Candidate &r_candidate,
+                     std::pmr::vector<T1Pairing> &pairs,
+                     size_t left_index,
+                     size_t right_index)
+    {
+        uint32_t x_left = l_candidate.x;
+        uint32_t x_right = r_candidate.x;
+        std::optional<T1Pairing> res = proof_core_.pairing_t1(x_left, x_right);
+        if (res.has_value())
+        {
+            pairs.push_back(res.value());
+        }
+    }
+
     std::vector<T1Pairing> post_construct(std::vector<T1Pairing> &pairings) const
     {
         RadixSort<T1Pairing, uint32_t> radix_sort;
@@ -421,6 +606,33 @@ public:
         radix_sort.sort(pairings, buffer);
 
         return pairings;
+    }
+
+    StripeResult new_post_construct(std::pmr::vector<T1Pairing> &pairings) const
+    {
+        RadixSort<T1Pairing, uint32_t> radix_sort;
+        std::pmr::vector<T1Pairing> temp_buffer(pairings.size(), mr_);
+        // Create a span over the temporary buffer
+        std::span<T1Pairing> buffer(temp_buffer.data(), temp_buffer.size());
+
+        // sort by match_info (default)
+        radix_sort.sort(pairings, buffer);
+
+        // do section counts
+        // TODO: since list is sorted, this can be much faster with targetted guesses of section divisions in random distribution.
+        std::pmr::vector<size_t> section_counts(mr_);
+        section_counts.resize(params_.get_num_sections(), 0ULL);
+        for (const auto &pairing : pairings)
+        {
+            uint32_t section = params_.extract_section_from_match_info(table_id_, pairing.match_info);
+            section_counts[section]++;
+        }
+
+        StripeResult result;
+        result.candidates = std::span<T1Pairing>(pairings.data(), pairings.size());
+        result.section_counts = std::span<size_t>(section_counts.data(), section_counts.size());
+
+        return result;
     }
 };
 
@@ -469,7 +681,8 @@ public:
                     static_cast<uint32_t>(meta_l >> params_.get_k()),
                     static_cast<uint32_t>(meta_l & ((1 << params_.get_k()) - 1)),
                     static_cast<uint32_t>(meta_r >> params_.get_k()),
-                    static_cast<uint32_t>(meta_r & ((1 << params_.get_k()) - 1))}
+                    static_cast<uint32_t>(meta_r & ((1 << params_.get_k()) - 1))
+                }
 #endif
             };
 
@@ -520,7 +733,8 @@ public:
                 static_cast<uint32_t>(prev_table_pair.xs[0]),
                 static_cast<uint32_t>(prev_table_pair.xs[1]),
                 static_cast<uint32_t>(prev_table_pair.xs[2]),
-                static_cast<uint32_t>(prev_table_pair.xs[3])}
+                static_cast<uint32_t>(prev_table_pair.xs[3])
+            }
 #endif
         };
     }
@@ -597,8 +811,14 @@ private:
                 .match_info = pairing.match_info_lower_partition,
                 .order_bits = pairing.order_bits,
 #ifdef RETAIN_X_VALUES
-                .xs = {pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
-                       pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7]}
+                .xs = { pairing.xs[0],
+                        pairing.xs[1],
+                        pairing.xs[2],
+                        pairing.xs[3],
+                        pairing.xs[4],
+                        pairing.xs[5],
+                        pairing.xs[6],
+                        pairing.xs[7] }
 #endif
             });
             partitioned_pairs[pairing.upper_partition].push_back(T3PartitionedPairing{
@@ -607,8 +827,14 @@ private:
                 .match_info = pairing.match_info_upper_partition,
                 .order_bits = pairing.order_bits,
 #ifdef RETAIN_X_VALUES
-                .xs = {pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
-                       pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7]}
+                .xs = { pairing.xs[0],
+                        pairing.xs[1],
+                        pairing.xs[2],
+                        pairing.xs[3],
+                        pairing.xs[4],
+                        pairing.xs[5],
+                        pairing.xs[6],
+                        pairing.xs[7] }
 #endif
             });
         }
@@ -667,10 +893,15 @@ public:
             .order_bits = prev_table_pair.order_bits,
 #ifdef RETAIN_X_VALUES
             .xs = {
-                prev_table_pair.xs[0], prev_table_pair.xs[1],
-                prev_table_pair.xs[2], prev_table_pair.xs[3],
-                prev_table_pair.xs[4], prev_table_pair.xs[5],
-                prev_table_pair.xs[6], prev_table_pair.xs[7]}
+                prev_table_pair.xs[0],
+                prev_table_pair.xs[1],
+                prev_table_pair.xs[2],
+                prev_table_pair.xs[3],
+                prev_table_pair.xs[4],
+                prev_table_pair.xs[5],
+                prev_table_pair.xs[6],
+                prev_table_pair.xs[7]
+            }
 #endif
         };
     }
@@ -727,20 +958,44 @@ public:
                 .match_info = pairing.match_info,
                 .t4_back_pointer_index = i, // keep track of original index, we will sort by match info later and must retain this position.
 #ifdef RETAIN_X_VALUES
-                .xs = {pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
-                       pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7],
-                       pairing.xs[8], pairing.xs[9], pairing.xs[10], pairing.xs[11],
-                       pairing.xs[12], pairing.xs[13], pairing.xs[14], pairing.xs[15]}
+                .xs = { pairing.xs[0],
+                        pairing.xs[1],
+                        pairing.xs[2],
+                        pairing.xs[3],
+                        pairing.xs[4],
+                        pairing.xs[5],
+                        pairing.xs[6],
+                        pairing.xs[7],
+                        pairing.xs[8],
+                        pairing.xs[9],
+                        pairing.xs[10],
+                        pairing.xs[11],
+                        pairing.xs[12],
+                        pairing.xs[13],
+                        pairing.xs[14],
+                        pairing.xs[15] }
 #endif
             };
             t4_to_t3_back_pointers[i] = T4BackPointers{
                 .fragment_index_l = pairing.fragment_index_l,
                 .fragment_index_r = pairing.fragment_index_r,
 #ifdef RETAIN_X_VALUES
-                .xs = {pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
-                       pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7],
-                       pairing.xs[8], pairing.xs[9], pairing.xs[10], pairing.xs[11],
-                       pairing.xs[12], pairing.xs[13], pairing.xs[14], pairing.xs[15]}
+                .xs = { pairing.xs[0],
+                        pairing.xs[1],
+                        pairing.xs[2],
+                        pairing.xs[3],
+                        pairing.xs[4],
+                        pairing.xs[5],
+                        pairing.xs[6],
+                        pairing.xs[7],
+                        pairing.xs[8],
+                        pairing.xs[9],
+                        pairing.xs[10],
+                        pairing.xs[11],
+                        pairing.xs[12],
+                        pairing.xs[13],
+                        pairing.xs[14],
+                        pairing.xs[15] }
 #endif
             };
         }
@@ -778,14 +1033,23 @@ public:
             .t4_back_pointer_index = prev_table_pair.t4_back_pointer_index,
 #ifdef RETAIN_X_VALUES
             .xs = {
-                prev_table_pair.xs[0], prev_table_pair.xs[1],
-                prev_table_pair.xs[2], prev_table_pair.xs[3],
-                prev_table_pair.xs[4], prev_table_pair.xs[5],
-                prev_table_pair.xs[6], prev_table_pair.xs[7],
-                prev_table_pair.xs[8], prev_table_pair.xs[9],
-                prev_table_pair.xs[10], prev_table_pair.xs[11],
-                prev_table_pair.xs[12], prev_table_pair.xs[13],
-                prev_table_pair.xs[14], prev_table_pair.xs[15]}
+                prev_table_pair.xs[0],
+                prev_table_pair.xs[1],
+                prev_table_pair.xs[2],
+                prev_table_pair.xs[3],
+                prev_table_pair.xs[4],
+                prev_table_pair.xs[5],
+                prev_table_pair.xs[6],
+                prev_table_pair.xs[7],
+                prev_table_pair.xs[8],
+                prev_table_pair.xs[9],
+                prev_table_pair.xs[10],
+                prev_table_pair.xs[11],
+                prev_table_pair.xs[12],
+                prev_table_pair.xs[13],
+                prev_table_pair.xs[14],
+                prev_table_pair.xs[15]
+            }
 #endif
         };
     }
