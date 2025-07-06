@@ -42,6 +42,22 @@ public:
         sectionGridCounts_.resize(N_stripes, std::vector<size_t>(N_stripes, 0ULL));
     }
 
+    void transposeT1PairsToGrid(Table1Constructor::StripeResult &result, size_t stripe)
+    {
+        size_t N_stripes = proof_params_.get_num_sections();
+        std::vector<size_t> stripeBytes(N_stripes);
+        for (size_t i = 0; i < N_stripes; ++i)
+        {
+            stripeBytes[i] = result.section_counts[i] * sizeof(Xs_Candidate);
+            sectionGridCounts_[stripe][i] = result.section_counts[i];
+        }
+        // write into stripe
+        stripe_io_->pushStripe(StripeIO::Direction::VERTICAL, stripe,
+                               result.candidates.data(),
+                               stripeBytes.data(),
+                               /*offsetInBlock=*/0);
+    }
+
     void transposeXsCandidatesToGrid(XsConstructor::StripeResult &result, size_t stripe)
     {
         size_t N_stripes = proof_params_.get_num_sections();
@@ -57,6 +73,87 @@ public:
                                stripeBytes.data(),
                                /*offsetInBlock=*/0);
     }
+
+    std::span<T1Pairing> transposeT1PairsFromGrid(size_t stripe, WorkingBuffer &working_buffer)
+    {
+        size_t N_stripes = proof_params_.get_num_sections();
+        std::pmr::vector<size_t> numEntriesPerBlock(N_stripes, working_buffer.resource());
+        std::pmr::vector<size_t> stripeBytes(N_stripes, working_buffer.resource());
+
+        // fill the numEntriesPerBlock with counts from sectionGridCounts_
+        // this is the number of entries per block in the stripe
+        size_t totalEntries = 0;
+        for (size_t i = 0; i < N_stripes; ++i)
+        {
+            numEntriesPerBlock[i] = sectionGridCounts_[i][stripe];
+            stripeBytes[i] = numEntriesPerBlock[i] * sizeof(T1Pairing);
+            totalEntries += numEntriesPerBlock[i];
+        }
+
+        // allocate span in working buffer for entries expected in this stripe
+        std::pmr::vector<T1Pairing> sorted_pairs(totalEntries, working_buffer.resource());
+        std::pmr::vector<T1Pairing> pairs(totalEntries, working_buffer.resource());
+
+        // pull the stripe data into pairs
+        stripe_io_->pullStripe(StripeIO::Direction::HORIZONTAL, stripe, pairs.data(), stripeBytes.data(), /*offsetInBlock=*/0);
+
+        // will do a k-way merge of the pairs from each section
+
+        // Create indices and pointers for each section
+        std::vector<size_t> indices(N_stripes, 0);
+        std::vector<size_t> offsets(N_stripes + 1, 0);
+
+        // Calculate section offsets
+        for (size_t i = 0; i < N_stripes; ++i)
+        {
+            offsets[i + 1] = offsets[i] + numEntriesPerBlock[i];
+        }
+
+        // Use a min-heap for efficient merging
+        struct HeapEntry
+        {
+            T1Pairing pairing;
+            size_t section_idx;
+
+            bool operator>(const HeapEntry &other) const
+            {
+                return pairing.match_info > other.pairing.match_info;
+            }
+        };
+
+        // Create a min-heap using std::priority_queue
+        std::priority_queue<HeapEntry, std::vector<HeapEntry>, std::greater<HeapEntry>> min_heap;
+
+        // Initialize the heap with the first element from each section
+        for (size_t i = 0; i < N_stripes; ++i)
+        {
+            if (numEntriesPerBlock[i] > 0)
+            {
+                min_heap.push({pairs[offsets[i]], i});
+                indices[i]++;
+            }
+        }
+        // Merge the sections
+        size_t out_idx = 0;
+        while (!min_heap.empty())
+        {
+            HeapEntry top = min_heap.top();
+            min_heap.pop();
+
+            sorted_pairs[out_idx++] = top.pairing;
+
+            size_t section = top.section_idx;
+            if (indices[section] < numEntriesPerBlock[section])
+            {
+                min_heap.push({pairs[offsets[section] + indices[section]], section});
+                indices[section]++;
+            }
+        }
+        assert(out_idx == totalEntries);
+        return std::span<T1Pairing>(sorted_pairs.data(), sorted_pairs.size());
+    }
+
+    
 
     std::span<Xs_Candidate> transposeXsCandidatesFromGrid(size_t stripe, WorkingBuffer &working_buffer)
     {
@@ -182,16 +279,36 @@ public:
         // now try stripe version of plotter: let's pull section data for each stripe
         uint32_t section_l = 0;
         uint32_t section_r = proof_core_.matching_section(section_l);
+        std::span<Xs_Candidate> original_l_candidates_in_section = transposeXsCandidatesFromGrid(section_l, working_buffer);
+        auto wb_section_0_checkpoint = working_buffer.checkpoint();
         while (true)
         {
-            working_buffer.reset();
+            // we retain original section_l candidates from stripe 0 in working buffer,
+            // since this get's overwritten.
+            working_buffer.release(wb_section_0_checkpoint);
 
             section_r = proof_core_.matching_section(section_l);
 
             // pull the stripe data
             // TODO: can be more efficient by caching previous pulled sections
-            std::span<Xs_Candidate> l_candidates_in_section = transposeXsCandidatesFromGrid(section_l, working_buffer);
-            std::span<Xs_Candidate> r_candidates_in_section = transposeXsCandidatesFromGrid(section_r, working_buffer);
+            std::span<Xs_Candidate> l_candidates_in_section;
+            std::span<Xs_Candidate> r_candidates_in_section;
+            if (section_l == 0)
+            {
+                l_candidates_in_section = original_l_candidates_in_section;
+            }
+            else
+            {
+                l_candidates_in_section = transposeXsCandidatesFromGrid(section_l, working_buffer);
+            }
+            if (section_r == 0)
+            {
+                r_candidates_in_section = original_l_candidates_in_section;
+            }
+            else
+            {
+                r_candidates_in_section = transposeXsCandidatesFromGrid(section_r, working_buffer);
+            }
             std::cout << "section_l: " << section_l
                       << ", section_r: " << section_r
                       << ", l_candidates_in_section.size(): " << l_candidates_in_section.size()
@@ -225,11 +342,9 @@ public:
             }
 #endif
 
-            // push the stripe data
-            //stripe_io_->pushStripe(StripeIO::Direction::HORIZONTAL, section_l,
-            //                       t1_results.candidates.data(),
-            //                       t1_results.section_counts.data(),
-            //                       /*offsetInBlock=*/0);
+            // transpose the pairs to grid
+            std::cout << "Transposing Table 1 pairs to grid stripe " << section_l << std::endl;
+            transposeT1PairsToGrid(t1_results, section_l);
 
             // move to next section
             section_l = section_r;
