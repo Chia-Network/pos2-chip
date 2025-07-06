@@ -690,6 +690,42 @@ public:
         }
     }
 
+    void new_handle_pair(const T1Pairing &l_candidate,
+                     const T1Pairing &r_candidate,
+                     std::pmr::vector<T2Pairing> &pairs,
+                     size_t left_index,
+                     size_t right_index)
+    {
+        uint64_t meta_l = l_candidate.meta;
+        uint64_t meta_r = r_candidate.meta;
+        auto opt_res = proof_core_.pairing_t2(meta_l, meta_r);
+        if (opt_res.has_value())
+        {
+            auto r = opt_res.value();
+
+            // x_bits becomes x1 >> k/2 bits, x3 >> k/2 bits.
+            uint32_t x_bits_l = (meta_l >> params_.get_k()) >> (params_.get_k() / 2);
+            uint32_t x_bits_r = (meta_r >> params_.get_k()) >> (params_.get_k() / 2);
+            uint32_t x_bits = x_bits_l << (params_.get_k() / 2) | x_bits_r;
+
+            T2Pairing pairing{
+                .meta = r.meta,
+                .match_info = r.match_info,
+                .x_bits = x_bits,
+#ifdef RETAIN_X_VALUES_TO_T3
+                .xs = {
+                    static_cast<uint32_t>(meta_l >> params_.get_k()),
+                    static_cast<uint32_t>(meta_l & ((1 << params_.get_k()) - 1)),
+                    static_cast<uint32_t>(meta_r >> params_.get_k()),
+                    static_cast<uint32_t>(meta_r & ((1 << params_.get_k()) - 1))
+                }
+#endif
+            };
+
+            pairs.push_back(pairing);
+        }
+    }
+
     std::vector<T2Pairing> post_construct(std::vector<T2Pairing> &pairings) const
     {
         RadixSort<T2Pairing, uint32_t> radix_sort;
@@ -701,6 +737,32 @@ public:
         radix_sort.sort(pairings, buffer);
 
         return pairings;
+    }
+
+    StripeResult new_post_construct(std::pmr::vector<T2Pairing> &pairings) const
+    {
+        RadixSort<T2Pairing, uint32_t> radix_sort;
+        std::pmr::vector<T2Pairing> temp_buffer(pairings.size(), mr_);
+        // Create a span over the temporary buffer
+        std::span<T2Pairing> buffer(temp_buffer.data(), temp_buffer.size());
+
+        // sort by match_info (default)
+        radix_sort.sort(pairings, buffer);
+
+        // TODO: since list is sorted, this can be much faster with targetted guesses of section divisions in random distribution.
+        std::pmr::vector<size_t> section_counts(mr_);
+        section_counts.resize(params_.get_num_sections(), 0ULL);
+        for (const auto &pairing : pairings)
+        {
+            uint32_t section = params_.extract_section_from_match_info(table_id_, pairing.match_info);
+            section_counts[section]++;
+        }
+
+        StripeResult result;
+        result.candidates = std::span<T2Pairing>(pairings.data(), pairings.size());
+        result.section_counts = std::span<size_t>(section_counts.data(), section_counts.size());
+
+        return result;
     }
 };
 

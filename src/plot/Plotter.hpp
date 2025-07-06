@@ -42,21 +42,7 @@ public:
         sectionGridCounts_.resize(N_stripes, std::vector<size_t>(N_stripes, 0ULL));
     }
 
-    void transposeT1PairsToGrid(Table1Constructor::StripeResult &result, size_t stripe)
-    {
-        size_t N_stripes = proof_params_.get_num_sections();
-        std::vector<size_t> stripeBytes(N_stripes);
-        for (size_t i = 0; i < N_stripes; ++i)
-        {
-            stripeBytes[i] = result.section_counts[i] * sizeof(Xs_Candidate);
-            sectionGridCounts_[stripe][i] = result.section_counts[i];
-        }
-        // write into stripe
-        stripe_io_->pushStripe(StripeIO::Direction::VERTICAL, stripe,
-                               result.candidates.data(),
-                               stripeBytes.data(),
-                               /*offsetInBlock=*/0);
-    }
+    
 
     void transposeXsCandidatesToGrid(XsConstructor::StripeResult &result, size_t stripe)
     {
@@ -74,8 +60,44 @@ public:
                                /*offsetInBlock=*/0);
     }
 
+    void transposeT1PairsToGrid(Table1Constructor::StripeResult &result, size_t column_stripe)
+    {
+        size_t N_stripes = proof_params_.get_num_sections();
+        std::vector<size_t> stripeBytes(N_stripes);
+        for (size_t i = 0; i < N_stripes; ++i)
+        {
+            stripeBytes[i] = result.section_counts[i] * sizeof(T1Pairing);
+            sectionGridCounts_[column_stripe][i] = result.section_counts[i];
+            std::cout << "sectionGridCounts_[" << column_stripe << "][" << i << "] = " << sectionGridCounts_[column_stripe][i] << std::endl;
+        }
+
+        // make sure t1 pairs are all sorted by match_info within each section
+        for (size_t i = 0; i < N_stripes; ++i)
+        {
+            size_t offset = 0;
+            for (size_t j = 0; j < result.candidates.size(); ++j)
+            {
+                if (j > 0 && result.candidates[offset + j - 1].match_info > result.candidates[offset + j].match_info)
+                {
+                    std::cerr << "Error: T1 pairs not sorted in section " << i << " at index " << j << std::endl;
+                    exit(1);
+                }
+            }
+            std::cout << "Section " << i << " is sorted by match_info." << std::endl;
+            offset += result.section_counts[i];
+        }
+
+
+        // write into stripe
+        stripe_io_->pushStripe(StripeIO::Direction::VERTICAL, column_stripe,
+                               result.candidates.data(),
+                               stripeBytes.data(),
+                               /*offsetInBlock=*/0);
+    }
+
     std::span<T1Pairing> transposeT1PairsFromGrid(size_t stripe, WorkingBuffer &working_buffer)
     {
+        std::cout << "Transposing T1 pairs from grid for stripe " << stripe << std::endl;
         size_t N_stripes = proof_params_.get_num_sections();
         std::pmr::vector<size_t> numEntriesPerBlock(N_stripes, working_buffer.resource());
         std::pmr::vector<size_t> stripeBytes(N_stripes, working_buffer.resource());
@@ -88,6 +110,7 @@ public:
             numEntriesPerBlock[i] = sectionGridCounts_[i][stripe];
             stripeBytes[i] = numEntriesPerBlock[i] * sizeof(T1Pairing);
             totalEntries += numEntriesPerBlock[i];
+            //std::cout << "Stripe " << stripe << ", section " << i << ": " << numEntriesPerBlock[i] << " entries" << std::endl;
         }
 
         // allocate span in working buffer for entries expected in this stripe
@@ -96,6 +119,27 @@ public:
 
         // pull the stripe data into pairs
         stripe_io_->pullStripe(StripeIO::Direction::HORIZONTAL, stripe, pairs.data(), stripeBytes.data(), /*offsetInBlock=*/0);
+
+
+        // check each group is sorted by match_info
+        /*size_t offset = 0;
+        for (size_t i = 0; i < N_stripes; ++i)
+        {
+            size_t start_data = offset;
+            size_t end_data = start_data + numEntriesPerBlock[i];
+            std::cout << "Checking section " << i << " for sorted pairs: range [" << start_data << " to " << end_data << "]" << std::endl;
+            for (size_t j = start_data + 1; j < end_data; ++j)
+            {
+               
+                if (pairs[j - 1].match_info > pairs[j].match_info)
+                {
+                    std::cerr << "gack Error: T1 pairs not sorted in section " << i << " at index " << j << std::endl;
+                    
+                }
+            }
+            offset = end_data;
+        }
+        std::cout << "All sections are sorted by match_info." << std::endl;*/
 
         // will do a k-way merge of the pairs from each section
 
@@ -373,7 +417,89 @@ public:
             std::cout << "Table 1 pairs validated successfully." << std::endl;
         }
 #endif
-        /*
+
+        // 3) Table2 generic
+        Table2Constructor t2_ctor(proof_params_, working_buffer);
+        timer_.start("Constructing Table 2");
+
+        // pull stripe method as with table 1
+        section_l = 0;
+        section_r = proof_core_.matching_section(section_l);
+        std::span<T1Pairing> original_t1_l_candidates_in_section = transposeT1PairsFromGrid(section_l, working_buffer);
+        wb_section_0_checkpoint = working_buffer.checkpoint();
+        std::vector<T2Pairing> t2_pairs;
+        while (true)
+        {
+            // we retain original section_l pairs from stripe 0 in working buffer,
+            // since this get's overwritten.
+            working_buffer.release(wb_section_0_checkpoint);
+
+            section_r = proof_core_.matching_section(section_l);
+
+            // pull the stripe data
+            // TODO: can be more efficient by caching previous pulled sections
+            std::span<T1Pairing> l_candidates_in_section;
+            std::span<T1Pairing> r_candidates_in_section;
+            if (section_l == 0)
+            {
+                l_candidates_in_section = original_t1_l_candidates_in_section;
+            }
+            else
+            {
+                l_candidates_in_section = transposeT1PairsFromGrid(section_l, working_buffer);
+            }
+            if (section_r == 0)
+            {
+                r_candidates_in_section = original_t1_l_candidates_in_section;
+            }
+            else
+            {
+                r_candidates_in_section = transposeT1PairsFromGrid(section_r, working_buffer);
+            }
+            std::cout << "section_l: " << section_l
+                      << ", section_r: " << section_r
+                      << ", l_candidates_in_section.size(): " << l_candidates_in_section.size()
+                      << ", r_candidates_in_section.size(): " << r_candidates_in_section.size() << std::endl;
+
+            auto t2_results = t2_ctor.constructFromSections(l_candidates_in_section, r_candidates_in_section);
+            
+
+
+#ifdef RETAIN_X_VALUES
+            if (validate_)
+            {
+                for (const auto &pair : t2_results.candidates)
+                {
+                    auto result = validator_.validate_table_2_pairs(pair.xs);
+                    if (!result.has_value())
+                    {
+                        std::cerr << "Validation failed for Table 2 pair: ["
+                                  << pair.xs[0] << ", " << pair.xs[1] << ", " << pair.xs[2] << ", " << pair.xs[3] << "]\n";
+                        exit(23);
+                    }
+                }
+                std::cout << "Table 2 pairs validated successfully." << std::endl;
+            }
+#endif
+
+            // transpose the pairs to grid
+            /*std::cout << "Transposing Table 2 pairs to grid stripe " << section_l << std::endl;
+            for (const auto &pair : t2_results.candidates)
+            {
+                t2_pairs.push_back(pair);
+            }*/
+
+            // move to next section
+            section_l = section_r;
+
+            // break loop if finished doing section r as 0
+            if (section_r == 0)
+                break;
+
+            
+        }
+
+            /*
                 // 3) Table2 generic
                 Table2Constructor t2_ctor(proof_params_, working_buffer);
                 timer_.start("Constructing Table 2");

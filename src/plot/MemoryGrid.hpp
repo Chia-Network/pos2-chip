@@ -177,6 +177,7 @@ public:
     void pushBlock(size_t row, size_t col, const void* src, size_t srcBytes, size_t offsetInBlock) noexcept
     {
        assert(row < memGrid.N() && col < memGrid.N());
+       std::cout << "StripeIO::pushBlock (" << row << ", " << col << ") srcBytes: " << srcBytes << std::endl;
 
         size_t offsetInMemoryBlock, bytesToCopyToMem;
         size_t offsetInDiskBlock, bytesToCopyToDisk;
@@ -211,6 +212,8 @@ public:
     {
         assert(row < memGrid.N() && col < memGrid.N());
         assert(fromPosBytes + bytes <= memGrid.blockSize());
+
+        std::cout << "StripeIO::pullBlock (" << row << ", " << col << ") bytes: " << bytes << ", fromPosBytes: " << fromPosBytes << std::endl;
 
         // Read from memory first
         if (fromPosBytes < memGrid.blockSize())
