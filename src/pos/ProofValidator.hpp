@@ -245,6 +245,19 @@ public:
             return false;
         }
 
+        // First test if passes plot id filter. We hash the plot id with the challenge, and
+        // use this 256-bit result for the next challenge.
+        uint32_t plot_id_filter = 0; // TODO: set appropriately.
+        auto plot_id_challenge_result = proof_core_.check_plot_id_filter(plot_id_filter, challenge);
+        if (!plot_id_challenge_result.has_value())
+        {
+            // failed to pass plot id filter
+            return false;
+        }
+        BlakeHash::Result256 challenge_plot_id_hash = plot_id_challenge_result.value();
+
+        // next we check all the single proofs. We verify if all the x-pairs pair,
+        // and construct all the proof fragments needed to build and verify the Quality String.
         size_t num_sub_proofs = full_proof.size() / 32;
         std::vector<ProofFragment> full_proof_fragments;
         for (size_t i = 0; i < num_sub_proofs; ++i)
@@ -283,11 +296,41 @@ public:
             }
         }
 
-        ProofFragmentScanFilter scan_filter(params_, challenge);
+        // Now we have all the proof fragments, we can build the Quality String.
+        // First, test for the Proof Fragment Scan Filter, which finds the first set of fragments (Quality Link) in the Quality Chain.
+        ProofFragmentScanFilter scan_filter(params_, challenge_plot_id_hash);
+
+        // The first challenge defines the pattern, scan range, and scan filter for the first fragment.
+        FragmentsPattern pattern = proof_core_.requiredPatternFromChallenge(challenge_plot_id_hash);
+        int fragment_position = pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR
+                                    ? static_cast<int>(QualityLinkProofFragmentPositions::RR)
+                                    : static_cast<int>(QualityLinkProofFragmentPositions::LR);
+        ProofFragment fragment_passing_scan_filter = full_proof_fragments[fragment_position];
+        ProofFragmentScanFilter::ScanRange range = scan_filter.getScanRangeForFilter();
+        if (!range.isInRange(fragment_passing_scan_filter))
+        {
+            return false;
+        }
+        auto filtered_fragments = scan_filter.filterFragmentsByHash(
+            {{fragment_passing_scan_filter, static_cast<uint64_t>(fragment_position)}});
+        if (filtered_fragments.empty())
+        {
+            std::cerr << "No fragments passed the scan filter." << std::endl;
+            return false;
+        }
+        std::cout << "Filtered fragments after scan filter: " << filtered_fragments.size() << std::endl;
+
+        /*std::vector<ProofFragment> passing_scan_fragments;
+        int fragment_position = pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR
+                                    ? static_cast<int>(QualityLinkProofFragmentPositions::RR)
+                                    : static_cast<int>(QualityLinkProofFragmentPositions::LR);
+        passing_scan_fragments.push_back(full_proof_fragments[fragment_position]);*/
+        
+        //auto filtered_fragments = scan_filter.scan(passing_scan_fragments);
 
         // The first Quality Link of a proof could originate from either LR or RR fragments.
         // Add these to a scan fragments list to test against the scan filter.
-        std::vector<ProofFragmentScanFilter::ScanResult> scan_fragments;
+        /*std::vector<ProofFragmentScanFilter::ScanResult> scan_fragments;
         {
             ProofFragmentScanFilter::ScanResult first_fragment;
             first_fragment.fragment = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LR)];
@@ -299,15 +342,18 @@ public:
             second_fragment.fragment = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RR)];
             second_fragment.index = static_cast<int>(QualityLinkProofFragmentPositions::RR);
             scan_fragments.push_back(second_fragment);
-        }
+    }
+
 
         auto filtered_fragments = scan_filter.filterFragmentsByHash(scan_fragments);
+
+        
         if (filtered_fragments.empty())
         {
             std::cerr << "No fragments passed the scan filter." << std::endl;
             return false;
         }
-        std::cout << "Filtered fragments after scan filter: " << filtered_fragments.size() << std::endl; 
+        std::cout << "Filtered fragments after scan filter: " << filtered_fragments.size() << std::endl; */
 
         //QualityChainer quality_chainer(params_, challenge, proof_core_.quality_chain_pass_threshold());
         if (verifyDepth(0, BlakeHash::Result256(), full_proof_fragments, challenge))

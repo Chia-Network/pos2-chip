@@ -9,42 +9,23 @@ const uint64_t PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS = 13; // 2^13 = 8192
 
 class ProofFragmentScanFilter
 {
-private:
-    static constexpr int NUM_SEED_BLAKE_WORDS = 2;
 public:
     struct ScanRange
     {
         uint64_t start;
         uint64_t end;
+
+        bool isInRange(ProofFragment fragment) const
+        {
+            return (fragment >= start && fragment <= end);
+        }
     };
 
-    ProofFragmentScanFilter(const ProofParams &proof_params, const std::array<uint8_t, 32> &challenge)
+    ProofFragmentScanFilter(const ProofParams &proof_params, const BlakeHash::Result256 &challenge)
         : params_(proof_params),
-          challenge_(challenge),
-          proof_core_(proof_params)
+          proof_core_(proof_params),
+          challenge_(challenge)
     {
-
-        
-        // TODO: blake hash should update with the 256-bit result of the challenge plot id hash
-        // set the first 64 bits of the challenge plot id hash
-        //blake_hash_.set_data(0, static_cast<uint32_t>(challenge_plot_id_hash & 0xFFFFFFFF));
-        //blake_hash_.set_data(1, static_cast<uint32_t>(challenge_plot_id_hash >> 32));
-
-        // if changes are made to the number of seed words, update this constant
-        static_assert(NUM_SEED_BLAKE_WORDS == 2, "NUM_SEED_BLAKE_WORDS must be 2");
-
-        // Initialize the first 4 words (32*4 = 128 bits) of the Blake hash with the challenge
-        // TODO: may want to make a blake hash seed from full hash of plot and all 256 bits of challenge
-        /*for (int i = 0; i < 4; ++i)
-        {
-            uint32_t block_word =
-                (static_cast<uint32_t>(challenge_[i * 4 + 0])) |
-                (static_cast<uint32_t>(challenge_[i * 4 + 1]) << 8) |
-                (static_cast<uint32_t>(challenge_[i * 4 + 2]) << 16) |
-                (static_cast<uint32_t>(challenge_[i * 4 + 3]) << 24);
-
-            blake_hash_.set_data(i, block_word);
-        }*/
 
         // compute our hashing threshold for the scan filter
         double t3_exp = proof_core_.num_expected_pruned_entries_for_t3();
@@ -65,6 +46,13 @@ public:
     // Scan the plot data for fragments that pass the scan filter
     std::vector<ScanResult> scan(const std::vector<ProofFragment> &fragments)
     {
+        if (true) {
+            std::cout << "Scanning " << fragments.size() << " fragments." << std::endl;
+            /*for (const auto &fragment : fragments)
+            {
+                std::cout << "  Fragment: " << std::hex << fragment << std::dec << std::endl;
+            }*/
+        }
         ScanRange range = getScanRangeForFilter();
         auto in_range = collectFragmentsInRange(fragments, range);
 
@@ -75,13 +63,22 @@ public:
     std::vector<ScanResult> filterFragmentsByHash(
         const std::vector<ScanResult> &candidates)
     {
+        // output candidates
+        if (true)
+        {
+            std::cout << "Filtering " << candidates.size() << " candidates by hash threshold." << std::endl;
+            for (const auto &candidate : candidates)
+            {
+                std::cout << "  Candidate fragment: " << std::hex << candidate.fragment << std::dec << std::endl;
+            }
+        }
 
-        BlakeHash::Result256 challenge_plot_id_hash = proof_core_.hashing.challengeWithPlotIdHash(challenge_.data());
+        //BlakeHash::Result256 challenge_plot_id_hash = proof_core_.hashing.challengeWithPlotIdHash(challenge_.data());
         uint32_t block_words[16];
         // Fill the first 8 words with the challenge plot ID hash.
         for (int i = 0; i < 8; ++i)
         {
-            block_words[i] = challenge_plot_id_hash.r[i];
+            block_words[i] = challenge_.r[i];
         }
         for (int i = 8; i < 16; ++i)
         {
@@ -101,24 +98,6 @@ public:
         return filtered;
     }
 
-    uint64_t
-    getLSBFromChallenge(int num_bits)
-    {
-        if (num_bits > 64)
-        {
-            throw std::invalid_argument("num_bits must be less than or equal to 64");
-        }
-
-        // Get the least significant bits from the challenge
-        uint64_t lsb = 0;
-        for (int i = 0; i < num_bits; ++i)
-        {
-            uint64_t bit = (challenge_[i / 8] >> (i % 8)) & 1;
-            lsb |= (bit << i);
-        }
-
-        return lsb;
-    }
 
     // The span (or range) of values for proof fragment scan filters
     uint64_t getScanSpan()
@@ -134,16 +113,18 @@ public:
 
     ScanRange getScanRangeForFilter()
     {
-        // Calculate the scan range based on the filter
+        // Calculate the scan range based on the challenge
         // A filter range of PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS (set to 13, value 8192) means we want to scan approximately 8192 entries (before pruning metric) at a time.
         // To find the range across approximately 2^k entries that span across proof fragment values 0..2^(2k) - 1, then the number of possible scan ranges is 2^k / 8192, or 2^(k - 13)
         //   -> this becomes scan_range_filter_bits = k - 13.
         // and thus the value of that span is 2^(2k) / (2^k / 8192) = 2^k * 8192 = 2^(k + 13).
         int scan_range_filter_bits = params_.get_k() - PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS;
 
-        // scan range id should be 0..(2^scan_range_filter_bits - 1)
-        uint64_t scan_range_id = getLSBFromChallenge(scan_range_filter_bits);
-
+        // the scan range bits are the 13 bits from the challenge r[3] (the last word of the challenge)
+        // after the highest order bit which defines the pattern.
+        // challenge 256 bits: [highest order bit is pattern][next scan range bits]...
+        uint32_t scan_range_id = (challenge_.r[3] >> (32 - scan_range_filter_bits - 1)) & ((1U << scan_range_filter_bits) - 1);
+       
         uint64_t scan_span = getScanSpan();
 
         // TODO: make sure k32 doesn't overflow
@@ -165,8 +146,8 @@ private:
     // Scan filter parameters
     ProofParams params_;
     ProofCore proof_core_;
+    BlakeHash::Result256 challenge_;
     //BlakeHash blake_hash_;
-    std::array<uint8_t, 32> challenge_;
     uint32_t filter_32bit_hash_threshold_;
 
     // 1) Gather all fragments in the scan range
@@ -196,7 +177,8 @@ private:
                 ++start_index;
             }
         }
-        else if (fragments[start_index] > range.start)
+        // if we are not at the front of the list, then scan backwards until we find a fragment that is within the range
+        else if ((start_index > 0) && (fragments[start_index] > range.start))
         {
             // Move back until we find a fragment for start of range
             while (start_index > 0 && fragments[start_index] > range.start)

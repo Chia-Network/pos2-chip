@@ -539,6 +539,29 @@ public:
         return static_cast<uint32_t>(raw + 0.5L);
     }
 
+    std::optional<BlakeHash::Result256> check_plot_id_filter(const uint32_t plot_id_filter, const std::array<uint8_t, 32> &challenge)
+    {
+        BlakeHash::Result256 challenge_plot_id_hash = hashing.challengeWithPlotIdHash(challenge.data());
+
+        const uint32_t PLOT_ID_MASK = (1 << plot_id_filter) - 1; // mask for the plot_id_filter bits
+        // check lowest bits in challenge_plot_id_hash, if all bits are zero it passes.
+        if ((challenge_plot_id_hash.r[0] & PLOT_ID_MASK)==0)
+        {
+            return challenge_plot_id_hash;
+        }
+        return std::nullopt;
+    }
+
+    FragmentsPattern requiredPatternFromChallenge(BlakeHash::Result256 challenge) {
+        // if the highest order bit is 0, return RL else return RR
+        uint32_t highest_order_bits = challenge.r[3];
+        uint32_t highest_order_bit = highest_order_bits >> 31; // get the highest order bit
+        if (highest_order_bit == 0) {
+            return FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;
+        }
+        return FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;
+    }
+
     // Quality Chaining functions
     BlakeHash::Result256 firstLinkHash(const QualityLink &link, const std::array<uint8_t, 32> &challenge)
     {
