@@ -132,7 +132,7 @@ public:
             // 4) For each Quality Chain, grow and expand the number of chains link by link until we reach the chain length limit (NUM_CHAIN_LINKS).
             for (const auto &firstLink : firstLinks)
             {
-                std::vector<QualityChain> qualityChains = createQualityChains(firstLink, links);
+                std::vector<QualityChain> qualityChains = createQualityChains(firstLink, links, next_challenge);
                 // add to all chains
                 all_chains.insert(all_chains.end(), qualityChains.begin(), qualityChains.end());
             }
@@ -141,7 +141,7 @@ public:
         return all_chains;
     }
 
-    std::vector<QualityChain> createQualityChains(const QualityLink &firstLink, const std::vector<QualityLink> &link_set)
+    std::vector<QualityChain> createQualityChains(const QualityLink &firstLink, const std::vector<QualityLink> &link_set, const BlakeHash::Result256 &next_challenge)
     {
         // QualityChainer quality_chainer(plot_.value().params, challenge_, chaining_hash_pass_threshold);
 
@@ -153,10 +153,12 @@ public:
         QualityChain chain;
         chain.chain_links[0] = firstLink; // the first link is always the first in the chain
 
-        chain.chain_hash = proof_core_.firstLinkHash(firstLink, challenge_); // set the hash for the first link
+        chain.chain_hash = proof_core_.firstLinkHash(firstLink, next_challenge); // set the hash for the first link
         quality_chains.push_back(chain);
 
         stats_.num_first_chain_links++;
+
+        std::cout << "First challenge hash: " << next_challenge.toString() << std::endl;
 
         for (int depth = 1; depth < NUM_CHAIN_LINKS; ++depth)
         {
@@ -177,6 +179,7 @@ public:
             for (auto &qc : quality_chains)
             {
                 auto new_links = proof_core_.getNewLinksForChain(qc.chain_hash, link_set, depth);
+                std::cout << "Next challenge hash (" << depth << "): " << qc.chain_hash.toString() << std::endl;
 
                 // if we have new links, create new chains
                 for (const auto &new_link_result : new_links)

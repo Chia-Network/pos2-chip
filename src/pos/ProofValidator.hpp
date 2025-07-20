@@ -320,51 +320,91 @@ public:
         }
         std::cout << "Filtered fragments after scan filter: " << filtered_fragments.size() << std::endl;
 
-        /*std::vector<ProofFragment> passing_scan_fragments;
-        int fragment_position = pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR
-                                    ? static_cast<int>(QualityLinkProofFragmentPositions::RR)
-                                    : static_cast<int>(QualityLinkProofFragmentPositions::LR);
-        passing_scan_fragments.push_back(full_proof_fragments[fragment_position]);*/
-        
-        //auto filtered_fragments = scan_filter.scan(passing_scan_fragments);
+        uint32_t l_partition = proof_core_.fragment_codec.get_lateral_to_t4_partition(
+            filtered_fragments[0].fragment);
+        uint32_t r_partition = proof_core_.fragment_codec.get_r_t4_partition(
+            filtered_fragments[0].fragment);
 
-        // The first Quality Link of a proof could originate from either LR or RR fragments.
-        // Add these to a scan fragments list to test against the scan filter.
-        /*std::vector<ProofFragmentScanFilter::ScanResult> scan_fragments;
+        std::cout << "Lateral partition: " << l_partition
+                  << ", R partition: " << r_partition << std::endl;
+
+        auto next_challenge = challenge_plot_id_hash; // Now we can start checking the links in the Quality Chain.a
+
+        for (int quality_chain_index = 0; quality_chain_index < NUM_CHAIN_LINKS; quality_chain_index++)
         {
-            ProofFragmentScanFilter::ScanResult first_fragment;
-            first_fragment.fragment = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::LR)];
-            first_fragment.index = static_cast<int>(QualityLinkProofFragmentPositions::LR); 
-            scan_fragments.push_back(first_fragment);
+            auto result = checkLink(full_proof_fragments, next_challenge, l_partition, r_partition, quality_chain_index);
+            if (!result.has_value())
+            {
+                std::cerr << "Invalid link at chain index " << quality_chain_index << std::endl;
+                return false; // invalid link, return false
+            }
+            else
+            {
+                std::cout << "Valid link found at chain index " << quality_chain_index << std::endl;
+                // update the challenge for the next iteration
+                next_challenge = result.value();
+            }
+            
         }
-        {
-            ProofFragmentScanFilter::ScanResult second_fragment;
-            second_fragment.fragment = full_proof_fragments[static_cast<int>(QualityLinkProofFragmentPositions::RR)];
-            second_fragment.index = static_cast<int>(QualityLinkProofFragmentPositions::RR);
-            scan_fragments.push_back(second_fragment);
-    }
-
-
-        auto filtered_fragments = scan_filter.filterFragmentsByHash(scan_fragments);
-
-        
-        if (filtered_fragments.empty())
-        {
-            std::cerr << "No fragments passed the scan filter." << std::endl;
-            return false;
-        }
-        std::cout << "Filtered fragments after scan filter: " << filtered_fragments.size() << std::endl; */
 
         //QualityChainer quality_chainer(params_, challenge, proof_core_.quality_chain_pass_threshold());
-        if (verifyDepth(0, BlakeHash::Result256(), full_proof_fragments, challenge))
+        /*if (verifyDepth(0, challenge_plot_id_hash, full_proof_fragments))
         {
             std::cout << "Chain verified successfully." << std::endl;
             return true; // if we reach here, the chain is valid
-        }
-        return false;
+        }*/
+        std::cout << "Chain verified successfully with quality string: " << next_challenge.toString() << std::endl;
+        return true;
     }
 
-    bool verifyDepth(int depth, BlakeHash::Result256 current_hash, const std::vector<uint64_t> &proof_fragments, const std::array<uint8_t, 32> &challenge, uint32_t partition_A = 0, uint32_t partition_B = 0)
+    std::optional<BlakeHash::Result256> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t partition_A, uint32_t partition_B, int chain_index)
+    {
+        FragmentsPattern pattern = proof_core_.requiredPatternFromChallenge(challenge);
+
+        std::cout << "Checking link at chain index " << chain_index
+                  << " with pattern: " << FragmentsPatternToString(pattern) << std::endl
+                  << " and challenge: " << challenge.toString() << std::endl;
+
+        QualityLink quality_link;
+        if (pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
+        {
+            quality_link.fragments[0] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::LL)];
+            quality_link.fragments[1] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::RL)];
+            quality_link.fragments[2] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::RR)];
+            quality_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;
+        }
+        else
+        {
+            quality_link.fragments[0] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::LL)];
+            quality_link.fragments[1] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::LR)];
+            quality_link.fragments[2] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::RL)];
+            quality_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;
+        }
+        BlakeHash::Result256 next_challenge = proof_core_.hashing.chainHash(challenge, quality_link.fragments);
+
+        if (chain_index == 0) {
+            return next_challenge;
+        }
+        uint32_t qc_pass_threshold = proof_core_.quality_chain_pass_threshold(chain_index);
+
+        if (next_challenge.r[0] < qc_pass_threshold)
+        {
+            // if the next challenge is below the pass threshold, we have a valid link
+            std::cout << "Valid link found at chain index " << chain_index << std::endl 
+                        << "Next challenge: " << next_challenge.toString() << std::endl;
+            return next_challenge; // return the next challenge as the new hash
+        }
+        else
+        {
+            std::cout << "Invalid link at chain index " << chain_index << std::endl
+                        << "Next challenge: " << next_challenge.toString() << std::endl
+                        << "Pass threshold: " << qc_pass_threshold << std::endl;
+            return std::nullopt; // invalid link, return nullopt
+        }
+
+    }
+
+    /*bool verifyDepth(int depth, const BlakeHash::Result256 &current_challenge, const std::vector<uint64_t> &proof_fragments, uint32_t partition_A = 0, uint32_t partition_B = 0)
     {
         if (depth == NUM_CHAIN_LINKS)
         {
@@ -441,7 +481,7 @@ public:
         }
         // if all links failed, we don't have a valid chain
         return false;
-    }
+    }*/
 
 private:
     ProofParams params_;
