@@ -562,6 +562,9 @@ public:
         return static_cast<uint32_t>(raw + 0.5L);
     }
 
+    // hashes challenge with plot id, 
+    // returns hash if passes plot id filter,
+    // otherwise returns null
     std::optional<BlakeHash::Result256> check_plot_id_filter(const uint32_t plot_id_filter, const std::array<uint8_t, 32> &challenge)
     {
         BlakeHash::Result256 challenge_plot_id_hash = hashing.challengeWithPlotIdHash(challenge.data());
@@ -575,6 +578,7 @@ public:
         return std::nullopt;
     }
 
+    // Determines the required fragments pattern based on the challenge.
     FragmentsPattern requiredPatternFromChallenge(BlakeHash::Result256 challenge)
     {
         // if the highest order bit is 0, return RL else return RR
