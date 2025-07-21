@@ -42,7 +42,7 @@ constexpr int NUM_CHAIN_LINKS = 16;
 #ifdef USE_UPFRONT_CHAINING_FACTOR
 // first chain link is always passed in from passing fragment scan filter
 constexpr double CHAINING_FACTORS[NUM_CHAIN_LINKS - 1] = {
-    4.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.25,
+    4.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
     // 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1
 };
 #else
