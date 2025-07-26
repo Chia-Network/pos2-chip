@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
         //}
 
         prover.setChallenge(challenge);
-        std::vector<QualityChain> chains = prover.prove();
+        std::vector<QualityChain> chains = prover.prove(0);
         if (chains.size() > 0)
         {
             std::cout << "Found " << chains.size() << " chains." << std::endl;

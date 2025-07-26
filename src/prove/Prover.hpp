@@ -14,8 +14,6 @@
 #include <iostream>
 #include <string>
 
-
-
 class Prover
 {
 public:
@@ -25,7 +23,7 @@ public:
     }
     ~Prover() = default;
 
-    std::vector<QualityChain> prove()
+    std::vector<QualityChain> prove(uint32_t plot_id_filter)
     {
         // Proving works as follows:
         // 1) Read plot file and get plot data and specific parameters.
@@ -48,26 +46,39 @@ public:
 
         PlotFile::PlotFileContents plot = plot_.value();
 
+        // 2) Does it pass plot id filter?
+        ProofCore proof_core(plot.params);
+        auto plot_id_filter_result = proof_core.check_plot_id_filter(plot_id_filter, challenge_);
+        if (!plot_id_filter_result.has_value())
+        {
+            std::cerr << "Plot ID filter did not pass challenge.";
+            return {}; // No chains can be created if plot ID filter fails.
+        }
+        BlakeHash::Result256 next_challenge = plot_id_filter_result.value();
+
         // 2) Scan the plot data for fragments that pass the Proof Fragment Scan Filter
-        ProofFragmentScanFilter scan_filter(plot.params, challenge_);
+        ProofFragmentScanFilter scan_filter(plot.params, next_challenge);
         std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.scan(plot.data.t3_proof_fragments);
         stats_.num_scan_filter_passed++;
         stats_.num_fragments_passed_scan_filter += filtered_fragments.size();
 
         // 3) For each passing fragment, get their Quality Links (if any) that seed the initial entries in the Quality Chains.
         // hand off to helper that builds and returns all quality chains
-        return processFilteredFragments(plot, filtered_fragments);
+        return processFilteredFragments(plot, filtered_fragments, next_challenge);
     }
 
     // Build quality chains from the filtered fragments
     std::vector<QualityChain> processFilteredFragments(
         const PlotFile::PlotFileContents &plot,
-        const std::vector<ProofFragmentScanFilter::ScanResult> &filtered_fragments)
+        const std::vector<ProofFragmentScanFilter::ScanResult> &filtered_fragments,
+        const BlakeHash::Result256 &next_challenge)
     {
         std::vector<QualityChain> all_chains;
         ProofFragmentCodec fragment_codec(plot.params);
         ProofCore proof_core(plot.params);
-        //uint32_t chaining_hash_pass_threshold = proof_core.quality_chain_pass_threshold();
+        FragmentsPattern firstPattern = proof_core.requiredPatternFromChallenge(next_challenge);
+        std::cout << "Required pattern from challenge: " << static_cast<int>(firstPattern) << std::endl;
+        // uint32_t chaining_hash_pass_threshold = proof_core.quality_chain_pass_threshold();
 
         std::cout << "Found fragments passing filter: " << filtered_fragments.size() << std::endl;
         for (const auto &frag_res : filtered_fragments)
@@ -80,8 +91,8 @@ public:
             std::cout << "          Partition A(L): " << l_partition << std::endl;
             std::cout << "          Partition R(R): " << r_partition << std::endl;
 
-            std::vector<QualityLink> firstLinks = getQualityLinks(FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION, frag_res.index, r_partition);
-            
+            std::vector<QualityLink> firstLinks = getFirstQualityLinks(FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION, firstPattern, frag_res.index, r_partition);
+
             // output first links fragemnts in hex
             std::cout << " # First Quality Links: " << firstLinks.size() << std::endl;
             for (const auto &link : firstLinks)
@@ -92,7 +103,7 @@ public:
                           << link.fragments[2] << std::dec
                           << " | Pattern: " << static_cast<int>(link.pattern);
             }
-            
+
             std::vector<QualityLink> links = getQualityLinks(l_partition, r_partition);
             std::cout << " # First Quality Links: " << firstLinks.size() << std::endl;
             std::cout << " # Links: " << links.size() << std::endl;
@@ -121,7 +132,7 @@ public:
             // 4) For each Quality Chain, grow and expand the number of chains link by link until we reach the chain length limit (NUM_CHAIN_LINKS).
             for (const auto &firstLink : firstLinks)
             {
-                std::vector<QualityChain> qualityChains = createQualityChains(firstLink, links);
+                std::vector<QualityChain> qualityChains = createQualityChains(firstLink, links, next_challenge);
                 // add to all chains
                 all_chains.insert(all_chains.end(), qualityChains.begin(), qualityChains.end());
             }
@@ -130,11 +141,9 @@ public:
         return all_chains;
     }
 
-    std::vector<QualityChain> createQualityChains(const QualityLink &firstLink, const std::vector<QualityLink> &link_set)
+    std::vector<QualityChain> createQualityChains(const QualityLink &firstLink, const std::vector<QualityLink> &link_set, const BlakeHash::Result256 &next_challenge)
     {
-        //QualityChainer quality_chainer(plot_.value().params, challenge_, chaining_hash_pass_threshold);
-
-
+        // QualityChainer quality_chainer(plot_.value().params, challenge_, chaining_hash_pass_threshold);
 
         std::vector<QualityChain> quality_chains;
 
@@ -144,30 +153,33 @@ public:
         QualityChain chain;
         chain.chain_links[0] = firstLink; // the first link is always the first in the chain
 
-        chain.chain_hash = proof_core_.firstLinkHash(firstLink, challenge_); // set the hash for the first link
+        chain.chain_hash = proof_core_.firstLinkHash(firstLink, next_challenge); // set the hash for the first link
         quality_chains.push_back(chain);
 
         stats_.num_first_chain_links++;
 
+        std::cout << "First challenge hash: " << next_challenge.toString() << std::endl;
+
         for (int depth = 1; depth < NUM_CHAIN_LINKS; ++depth)
         {
-            //std::cout << "=== Depth " << depth + 1 << " ===\n";
+            // std::cout << "=== Depth " << depth + 1 << " ===\n";
 
             // If we have no chains, we cannot grow further
             if (quality_chains.empty())
             {
-                //std::cout << "No chains to grow at depth " << depth + 1 << std::endl;
+                // std::cout << "No chains to grow at depth " << depth + 1 << std::endl;
                 break;
             }
-            //std::cout << "  Current number of chains: " << quality_chains.size() << std::endl;
+            // std::cout << "  Current number of chains: " << quality_chains.size() << std::endl;
 
             std::vector<QualityChain> new_chains;
-            //size_t total_hashes = 0;
+            // size_t total_hashes = 0;
 
             // For each chain-so-far, try appending every possible link
             for (auto &qc : quality_chains)
             {
                 auto new_links = proof_core_.getNewLinksForChain(qc.chain_hash, link_set, depth);
+                std::cout << "Next challenge hash (" << depth << "): " << qc.chain_hash.toString() << std::endl;
 
                 // if we have new links, create new chains
                 for (const auto &new_link_result : new_links)
@@ -187,7 +199,7 @@ public:
         return quality_chains;
     }
 
-    std::vector<QualityLink> getQualityLinks(FragmentsParent parent, uint64_t t3_fragment_index, uint32_t t4_partition)
+    std::vector<QualityLink> getFirstQualityLinks(FragmentsParent parent, FragmentsPattern required_pattern, uint64_t t3_fragment_index, uint32_t t4_partition)
     {
         std::vector<QualityLink> links;
         std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
@@ -202,10 +214,38 @@ public:
                 // we found a T4 entry that matches the T3 index
                 // now get it's parents and other fragments
                 for (size_t t5_index = 0; t5_index < t5_to_t4_back_pointers.size(); t5_index++)
-                //for (const auto &t5_entry : t5_to_t4_back_pointers)
+                // for (const auto &t5_entry : t5_to_t4_back_pointers)
                 {
                     T5Pairing t5_entry = t5_to_t4_back_pointers[t5_index];
-                    if (t5_entry.t4_index_l == t4_index || t5_entry.t4_index_r == t4_index)
+
+                    if ((required_pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR) && (t5_entry.t4_index_l == t4_index))
+                    {
+                        QualityLink link;
+                        // LR link
+                        link.fragments[0] = t3_proof_fragments[entry.fragment_index_l]; // LL
+                        link.fragments[1] = t3_proof_fragments[entry.fragment_index_r]; // LR
+                        T4BackPointers other_entry = t4_to_t3_back_pointers[t5_entry.t4_index_r];
+                        link.fragments[2] = t3_proof_fragments[other_entry.fragment_index_l]; // RL
+                        link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;              // this is an LR link, so outside index is RR
+                        link.outside_t3_index = other_entry.fragment_index_r;                 // RR
+
+                        links.push_back(link);
+                    }
+                    else if ((required_pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR) && (t5_entry.t4_index_r == t4_index))
+                    {
+                        // RR link
+                        QualityLink link;
+                        T4BackPointers other_entry = t4_to_t3_back_pointers[t5_entry.t4_index_l];
+                        link.fragments[0] = t3_proof_fragments[other_entry.fragment_index_l]; // LL
+                        link.fragments[1] = t3_proof_fragments[entry.fragment_index_l];       // RL
+                        link.fragments[2] = t3_proof_fragments[entry.fragment_index_r];       // RR
+                        link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;              // this is an RR link, so outside index is LR
+                        link.outside_t3_index = other_entry.fragment_index_r;                 // LR
+
+                        links.push_back(link);
+                    }
+
+                    /*if (t5_entry.t4_index_l == t4_index || t5_entry.t4_index_r == t4_index)
                     {
 
                         if (t5_entry.t4_index_l == t4_index)
@@ -216,10 +256,14 @@ public:
                             link.fragments[1] = t3_proof_fragments[entry.fragment_index_r]; // LR
                             T4BackPointers other_entry = t4_to_t3_back_pointers[t5_entry.t4_index_r];
                             link.fragments[2] = t3_proof_fragments[other_entry.fragment_index_l]; // RL
-                            link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;       // this is an LR link, so outside index is RR
-                            link.outside_t3_index = other_entry.fragment_index_r;              // RR
+                            link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;              // this is an LR link, so outside index is RR
+                            link.outside_t3_index = other_entry.fragment_index_r;                 // RR
 
-                            links.push_back(link);
+                            if (required_pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
+                            {
+                                // we only add links that match the required pattern
+                                links.push_back(link);
+                            }
                         }
                         else
                         {
@@ -229,12 +273,16 @@ public:
                             link.fragments[0] = t3_proof_fragments[other_entry.fragment_index_l]; // LL
                             link.fragments[1] = t3_proof_fragments[entry.fragment_index_l];       // RL
                             link.fragments[2] = t3_proof_fragments[entry.fragment_index_r];       // RR
-                            link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;       // this is an RR link, so outside index is LR
-                            link.outside_t3_index = other_entry.fragment_index_r;              // LR
-                            
-                            links.push_back(link);
+                            link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;              // this is an RR link, so outside index is LR
+                            link.outside_t3_index = other_entry.fragment_index_r;                 // LR
+
+                            if (required_pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
+                            {
+                                // we only add links that match the required pattern
+                                links.push_back(link);
+                            }
                         }
-                    }
+                    }*/
                 }
             }
         }
@@ -246,7 +294,7 @@ public:
 
         std::vector<QualityLink> links;
 
-        //std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
+        // std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
 
         std::vector<QualityLink> other_partition_links = getQualityLinksFromT4PartitionToT3Partition(partition_B, partition_A, FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION);
         std::cout << "Found " << other_partition_links.size() << " links from partition B to A." << std::endl;
@@ -286,13 +334,12 @@ public:
                 // we found a link that points to partition A. Now, in T5 find the parent nodes, where either the l or r pointer points to this entry in T4 partition B.
                 std::vector<T5Pairing> t5_parent_nodes;
                 for (size_t t5_index = 0; t5_index < t5_b_to_t4_b.size(); t5_index++)
-                //for (const auto &t5_entry : t5_b_to_t4_b)
+                // for (const auto &t5_entry : t5_b_to_t4_b)
                 {
                     T5Pairing t5_entry = t5_b_to_t4_b[t5_index];
                     if (t5_entry.t4_index_l == t4_index)
                     {
                         QualityLink link;
-                        
 
                         // if t4 is the left pointer of t4 index, then the t3 entry is an LR link.
                         // and fragments will be 0:LL, 1:LR, 2:RL with outside index being RR.
@@ -302,8 +349,8 @@ public:
                         link.fragments[0] = t3_proof_fragments[entry.fragment_index_l];       // LL
                         link.fragments[1] = t3_proof_fragments[entry.fragment_index_r];       // LR
                         link.fragments[2] = t3_proof_fragments[other_entry.fragment_index_l]; // RL
-                        link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;       // this is an LR link, so outside index is RR
-                        link.outside_t3_index = other_entry.fragment_index_r;              // RR
+                        link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;              // this is an LR link, so outside index is RR
+                        link.outside_t3_index = other_entry.fragment_index_r;                 // RR
 
                         links.push_back(link);
                     }
@@ -311,14 +358,14 @@ public:
                     {
                         // if t4 is the right pointer of t4 index, then the t3 entry is an RR link.
                         QualityLink link;
-                        
+
                         // get other side child node
                         T4BackPointers other_entry = t4_b_to_t3[t5_entry.t4_index_l];
                         link.fragments[0] = t3_proof_fragments[other_entry.fragment_index_l]; // LL
                         link.fragments[1] = t3_proof_fragments[entry.fragment_index_l];       // RL
                         link.fragments[2] = t3_proof_fragments[entry.fragment_index_r];       // RR
-                        link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;       // this is an RR link, so outside index is LR
-                        link.outside_t3_index = other_entry.fragment_index_r;              // LR
+                        link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;              // this is an RR link, so outside index is LR
+                        link.outside_t3_index = other_entry.fragment_index_r;                 // LR
 
                         links.push_back(link);
                     }
@@ -333,36 +380,34 @@ public:
         return links;
     }
 
-    std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain chain) {
+    std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain chain)
+    {
         std::vector<uint64_t> proof_fragments;
         std::cout << "Getting all proof fragments for chain with " << chain.chain_links.size() << " links." << std::endl;
         for (int link_id = 0; link_id < chain.chain_links.size(); link_id++)
-        //for (const auto &link : chain.chain_links)
+        // for (const auto &link : chain.chain_links)
         {
             const QualityLink &link = chain.chain_links[link_id];
-        
+
             if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
             {
-                proof_fragments.push_back(link.fragments[0]); // LL
+                proof_fragments.push_back(link.fragments[0]);                                             // LL
                 uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
-                proof_fragments.push_back(outside_fragment); // LR
-                proof_fragments.push_back(link.fragments[1]); // RL
-                proof_fragments.push_back(link.fragments[2]); // RR
+                proof_fragments.push_back(outside_fragment);                                              // LR
+                proof_fragments.push_back(link.fragments[1]);                                             // RL
+                proof_fragments.push_back(link.fragments[2]);                                             // RR
 
                 std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_LR " << outside_fragment << "]" << std::dec << std::endl;
-                
-                
             }
             else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
             {
-                proof_fragments.push_back(link.fragments[0]); // LL
-                proof_fragments.push_back(link.fragments[1]); // LR
-                proof_fragments.push_back(link.fragments[2]); // RL
+                proof_fragments.push_back(link.fragments[0]);                                             // LL
+                proof_fragments.push_back(link.fragments[1]);                                             // LR
+                proof_fragments.push_back(link.fragments[2]);                                             // RL
                 uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
-                proof_fragments.push_back(outside_fragment); // RR
+                proof_fragments.push_back(outside_fragment);                                              // RR
 
                 std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_RR " << outside_fragment << "]" << std::dec << std::endl;
-
             }
             else
             {
@@ -403,7 +448,6 @@ public:
     {
         plot_ = plot_contents;
     }
-
 
 private:
     std::optional<PlotFile::PlotFileContents> plot_;
