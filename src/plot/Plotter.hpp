@@ -22,7 +22,7 @@ private:
     MemoryGrid *memory_grid_;
     DiskGrid *disk_grid_;
     StripeIO *stripe_io_;
-    std::vector<std::vector<size_t>> sectionGridCounts_;
+    //std::vector<std::vector<size_t>> sectionGridCounts_;
 
 public:
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
@@ -33,25 +33,23 @@ public:
 
         size_t N_stripes = proof_params_.get_num_sections();
 
-        size_t ramBlockBytesTotalNeeded = 4000ULL * 1024ULL * 1024ULL; // 4000 MB total
+        size_t ramBlockBytesTotalNeeded = 4000ULL * 1024ULL; // 4000 MB total
         size_t diskBlockBytesTotalNeeded = 0;
         memory_grid_ = new MemoryGrid(N_stripes, ramBlockBytesTotalNeeded);
         disk_grid_ = new DiskGrid(N_stripes, diskBlockBytesTotalNeeded, "stripes.bin");
         stripe_io_ = new StripeIO(*memory_grid_, *disk_grid_);
 
-        sectionGridCounts_.resize(N_stripes, std::vector<size_t>(N_stripes, 0ULL));
+        //sectionGridCounts_.resize(N_stripes, std::vector<size_t>(N_stripes, 0ULL));
     }
 
-    
-
-    void transposeXsCandidatesToGrid(XsConstructor::StripeResult &result, size_t stripe)
+    void transposeXsCandidatesToGrid(XsConstructor::StripeResult &result, std::vector<std::vector<size_t>> &sectionGridCounts, size_t stripe)
     {
         size_t N_stripes = proof_params_.get_num_sections();
         std::vector<size_t> stripeBytes(N_stripes);
         for (size_t i = 0; i < N_stripes; ++i)
         {
             stripeBytes[i] = result.section_counts[i] * sizeof(Xs_Candidate);
-            sectionGridCounts_[i][stripe] = result.section_counts[i];
+            sectionGridCounts[i][stripe] = result.section_counts[i];
         }
         // write into stripe
         stripe_io_->pushStripe(StripeIO::Direction::HORIZONTAL, stripe,
@@ -60,15 +58,15 @@ public:
                                /*offsetInBlock=*/0);
     }
 
-    void transposeT1PairsToGrid(Table1Constructor::StripeResult &result, size_t column_stripe)
+    void transposeT1PairsToGrid(Table1Constructor::StripeResult &result, std::vector<std::vector<size_t>> &sectionGridCounts, size_t column_stripe)
     {
         size_t N_stripes = proof_params_.get_num_sections();
         std::vector<size_t> stripeBytes(N_stripes);
         for (size_t i = 0; i < N_stripes; ++i)
         {
             stripeBytes[i] = result.section_counts[i] * sizeof(T1Pairing);
-            sectionGridCounts_[column_stripe][i] = result.section_counts[i];
-            std::cout << "sectionGridCounts_[" << column_stripe << "][" << i << "] = " << sectionGridCounts_[column_stripe][i] << std::endl;
+            sectionGridCounts[column_stripe][i] = result.section_counts[i];
+            std::cout << "sectionGridCounts[" << column_stripe << "][" << i << "] = " << sectionGridCounts[column_stripe][i] << std::endl;
         }
 
         // make sure t1 pairs are all sorted by match_info within each section
@@ -87,7 +85,6 @@ public:
             offset += result.section_counts[i];
         }
 
-
         // write into stripe
         stripe_io_->pushStripe(StripeIO::Direction::VERTICAL, column_stripe,
                                result.candidates.data(),
@@ -95,22 +92,39 @@ public:
                                /*offsetInBlock=*/0);
     }
 
-    std::span<T1Pairing> transposeT1PairsFromGrid(size_t stripe, WorkingBuffer &working_buffer)
+    void transposeT2PairsToGrid(Table2Constructor::StripeResult &result, std::vector<std::vector<size_t>> &sectionGridCounts, size_t stripe)
+    {
+        size_t N_stripes = proof_params_.get_num_sections();
+        std::vector<size_t> stripeBytes(N_stripes);
+        for (size_t i = 0; i < N_stripes; ++i)
+        {
+            stripeBytes[i] = result.section_counts[i] * sizeof(T2Pairing);
+            sectionGridCounts[stripe][i] = result.section_counts[i];
+        }
+
+        // write into stripe
+        stripe_io_->pushStripe(StripeIO::Direction::HORIZONTAL, stripe,
+                               result.candidates.data(),
+                               stripeBytes.data(),
+                               /*offsetInBlock=*/0);
+    }
+
+    std::span<T1Pairing> transposeT1PairsFromGrid(size_t stripe, const std::vector<std::vector<size_t>> &sectionGridCounts, WorkingBuffer &working_buffer)
     {
         std::cout << "Transposing T1 pairs from grid for stripe " << stripe << std::endl;
         size_t N_stripes = proof_params_.get_num_sections();
         std::pmr::vector<size_t> numEntriesPerBlock(N_stripes, working_buffer.resource());
         std::pmr::vector<size_t> stripeBytes(N_stripes, working_buffer.resource());
 
-        // fill the numEntriesPerBlock with counts from sectionGridCounts_
+        // fill the numEntriesPerBlock with counts from sectionGridCounts
         // this is the number of entries per block in the stripe
         size_t totalEntries = 0;
         for (size_t i = 0; i < N_stripes; ++i)
         {
-            numEntriesPerBlock[i] = sectionGridCounts_[i][stripe];
+            numEntriesPerBlock[i] = sectionGridCounts[i][stripe];
             stripeBytes[i] = numEntriesPerBlock[i] * sizeof(T1Pairing);
             totalEntries += numEntriesPerBlock[i];
-            //std::cout << "Stripe " << stripe << ", section " << i << ": " << numEntriesPerBlock[i] << " entries" << std::endl;
+            // std::cout << "Stripe " << stripe << ", section " << i << ": " << numEntriesPerBlock[i] << " entries" << std::endl;
         }
 
         // allocate span in working buffer for entries expected in this stripe
@@ -119,7 +133,6 @@ public:
 
         // pull the stripe data into pairs
         stripe_io_->pullStripe(StripeIO::Direction::HORIZONTAL, stripe, pairs.data(), stripeBytes.data(), /*offsetInBlock=*/0);
-
 
         // check each group is sorted by match_info
         /*size_t offset = 0;
@@ -130,11 +143,11 @@ public:
             std::cout << "Checking section " << i << " for sorted pairs: range [" << start_data << " to " << end_data << "]" << std::endl;
             for (size_t j = start_data + 1; j < end_data; ++j)
             {
-               
+
                 if (pairs[j - 1].match_info > pairs[j].match_info)
                 {
                     std::cerr << "gack Error: T1 pairs not sorted in section " << i << " at index " << j << std::endl;
-                    
+
                 }
             }
             offset = end_data;
@@ -197,20 +210,18 @@ public:
         return std::span<T1Pairing>(sorted_pairs.data(), sorted_pairs.size());
     }
 
-    
-
-    std::span<Xs_Candidate> transposeXsCandidatesFromGrid(size_t stripe, WorkingBuffer &working_buffer)
+    std::span<Xs_Candidate> transposeXsCandidatesFromGrid(size_t stripe, const std::vector<std::vector<size_t>> &sectionGridCounts, WorkingBuffer &working_buffer)
     {
         size_t N_stripes = proof_params_.get_num_sections();
         std::pmr::vector<size_t> numEntriesPerBlock(N_stripes, working_buffer.resource());
         std::pmr::vector<size_t> stripeBytes(N_stripes, working_buffer.resource());
 
-        // fill the numEntriesPerBlock with counts from sectionGridCounts_
+        // fill the numEntriesPerBlock with counts from sectionGridCounts
         // this is the number of entries per block in the stripe
         size_t totalEntries = 0;
         for (size_t i = 0; i < N_stripes; ++i)
         {
-            numEntriesPerBlock[i] = sectionGridCounts_[stripe][i];
+            numEntriesPerBlock[i] = sectionGridCounts[stripe][i];
             stripeBytes[i] = numEntriesPerBlock[i] * sizeof(Xs_Candidate);
             totalEntries += numEntriesPerBlock[i];
         }
@@ -292,19 +303,19 @@ public:
         // 1) Construct Xs candidates
         XsConstructor xs_gen_ctor(proof_params_, working_buffer);
 
-        // prepare a 1-D “stripe” grid of size N×N blocks; we’ll only ever use col==0
         size_t N_stripes = proof_params_.get_num_sections();
 
-        // record how many bytes each stripe actually took
         std::vector<size_t> stripeBytes(N_stripes);
-        std::vector<std::vector<size_t>> sectionGridCounts(N_stripes, std::vector<size_t>(N_stripes, 0ULL));
+        std::vector<std::vector<size_t>> sectionGridCountsXs(N_stripes, std::vector<size_t>(N_stripes, 0ULL));
+        std::vector<std::vector<size_t>> sectionGridCountsT1(N_stripes, std::vector<size_t>(N_stripes, 0ULL));
+        std::vector<std::vector<size_t>> sectionGridCountsT2(N_stripes, std::vector<size_t>(N_stripes, 0ULL));
 
         // 1) for each stripe: build, push to stripeIO, then free the arena
         for (size_t stripe = 0; stripe < N_stripes; ++stripe)
         {
             working_buffer.reset();
             auto result = xs_gen_ctor.constructStripe(stripe);
-            transposeXsCandidatesToGrid(result, stripe);
+            transposeXsCandidatesToGrid(result, sectionGridCountsXs, stripe);
             std::cout << "Bytes used in working buffer for stripe " << stripe
                       << ": " << working_buffer.bytesUsed() << std::endl;
         }
@@ -323,7 +334,7 @@ public:
         // now try stripe version of plotter: let's pull section data for each stripe
         uint32_t section_l = 0;
         uint32_t section_r = proof_core_.matching_section(section_l);
-        std::span<Xs_Candidate> original_l_candidates_in_section = transposeXsCandidatesFromGrid(section_l, working_buffer);
+        std::span<Xs_Candidate> original_l_candidates_in_section = transposeXsCandidatesFromGrid(section_l, sectionGridCountsXs, working_buffer);
         auto wb_section_0_checkpoint = working_buffer.checkpoint();
         while (true)
         {
@@ -343,7 +354,7 @@ public:
             }
             else
             {
-                l_candidates_in_section = transposeXsCandidatesFromGrid(section_l, working_buffer);
+                l_candidates_in_section = transposeXsCandidatesFromGrid(section_l, sectionGridCountsXs, working_buffer);
             }
             if (section_r == 0)
             {
@@ -351,7 +362,7 @@ public:
             }
             else
             {
-                r_candidates_in_section = transposeXsCandidatesFromGrid(section_r, working_buffer);
+                r_candidates_in_section = transposeXsCandidatesFromGrid(section_r, sectionGridCountsXs, working_buffer);
             }
             std::cout << "section_l: " << section_l
                       << ", section_r: " << section_r
@@ -388,7 +399,7 @@ public:
 
             // transpose the pairs to grid
             std::cout << "Transposing Table 1 pairs to grid stripe " << section_l << std::endl;
-            transposeT1PairsToGrid(t1_results, section_l);
+            transposeT1PairsToGrid(t1_results, sectionGridCountsT1, section_l);
 
             // move to next section
             section_l = section_r;
@@ -425,7 +436,7 @@ public:
         // pull stripe method as with table 1
         section_l = 0;
         section_r = proof_core_.matching_section(section_l);
-        std::span<T1Pairing> original_t1_l_candidates_in_section = transposeT1PairsFromGrid(section_l, working_buffer);
+        std::span<T1Pairing> original_t1_l_candidates_in_section = transposeT1PairsFromGrid(section_l, sectionGridCountsT1, working_buffer);
         wb_section_0_checkpoint = working_buffer.checkpoint();
         std::vector<T2Pairing> t2_pairs;
         while (true)
@@ -446,7 +457,7 @@ public:
             }
             else
             {
-                l_candidates_in_section = transposeT1PairsFromGrid(section_l, working_buffer);
+                l_candidates_in_section = transposeT1PairsFromGrid(section_l, sectionGridCountsT1, working_buffer);
             }
             if (section_r == 0)
             {
@@ -454,7 +465,7 @@ public:
             }
             else
             {
-                r_candidates_in_section = transposeT1PairsFromGrid(section_r, working_buffer);
+                r_candidates_in_section = transposeT1PairsFromGrid(section_r, sectionGridCountsT1, working_buffer);
             }
             std::cout << "section_l: " << section_l
                       << ", section_r: " << section_r
@@ -462,8 +473,6 @@ public:
                       << ", r_candidates_in_section.size(): " << r_candidates_in_section.size() << std::endl;
 
             auto t2_results = t2_ctor.constructFromSections(l_candidates_in_section, r_candidates_in_section);
-            
-
 
 #ifdef RETAIN_X_VALUES
             if (validate_)
@@ -482,7 +491,10 @@ public:
             }
 #endif
 
-            // transpose the pairs to grid
+            // transpose the T2 pairs to grid
+            std::cout << "Transposing Table 2 pairs to grid stripe " << section_l << std::endl;
+            transposeT2PairsToGrid(t2_results, sectionGridCountsT2, section_l);
+
             /*std::cout << "Transposing Table 2 pairs to grid stripe " << section_l << std::endl;
             for (const auto &pair : t2_results.candidates)
             {
@@ -495,134 +507,132 @@ public:
             // break loop if finished doing section r as 0
             if (section_r == 0)
                 break;
-
-            
         }
 
-            /*
-                // 3) Table2 generic
-                Table2Constructor t2_ctor(proof_params_, working_buffer);
-                timer_.start("Constructing Table 2");
-                auto t2_pairs = t2_ctor.construct(t1_pairs);
-                timer_.stop();
-                std::cout << "Constructed " << t2_pairs.size() << " Table 2 pairs." << std::endl;
+        /*
+            // 3) Table2 generic
+            Table2Constructor t2_ctor(proof_params_, working_buffer);
+            timer_.start("Constructing Table 2");
+            auto t2_pairs = t2_ctor.construct(t1_pairs);
+            timer_.stop();
+            std::cout << "Constructed " << t2_pairs.size() << " Table 2 pairs." << std::endl;
+
+            #ifdef RETAIN_X_VALUES
+            if (validate_) {
+                for (const auto& pair : t2_pairs) {
+                    auto result = validator_.validate_table_2_pairs(pair.xs);
+                    if (!result.has_value()) {
+                        std::cerr << "Validation failed for Table 2 pair: ["
+                                  << pair.xs[0] << ", " << pair.xs[1] << ", " << pair.xs[2] << ", " << pair.xs[3] << "]\n";
+                        exit(23);
+                    }
+                }
+                std::cout << "Table 2 pairs validated successfully." << std::endl;
+            }
+            #endif
+
+            // 4) Table3 generic
+            Table3Constructor t3_ctor(proof_params_, working_buffer);
+            timer_.start("Constructing Table 3");
+            T3_Partitions_Results t3_results = t3_ctor.construct(t2_pairs);
+            timer_.stop();
+            std::cout << "Constructed " << t3_results.proof_fragments.size() << " Table 3 entries." << std::endl;
+
+            #ifdef RETAIN_X_VALUES
+            if (validate_) {
+                for (const auto& xs_array : t3_results.xs_correlating_to_proof_fragments) {
+                    auto result = validator_.validate_table_3_pairs(xs_array.data());
+                    if (!result.has_value()) {
+                        std::cerr << "Validation failed for Table 3 pair: ["
+                                  << xs_array[0] << ", " << xs_array[1] << ", " << xs_array[2] << ", " << xs_array[3]
+                                  << ", " << xs_array[4] << ", " << xs_array[5] << ", " << xs_array[6] << ", " << xs_array[7]
+                                  << "]\n";
+                        exit(23);
+                    }
+                }
+                std::cout << "Table 3 pairs validated successfully." << std::endl;
+            }
+            #endif
+
+            // 5) Prepare pruner
+
+            #ifdef RETAIN_X_VALUES_TO_T3
+            TablePruner pruner(proof_params_, t3_results.proof_fragments, t3_results.xs_correlating_to_proof_fragments);
+            #else
+            TablePruner pruner(proof_params_, t3_results.proof_fragments);
+            #endif
+
+            // 6) Partitioned Table4 + Table5
+            std::vector<std::vector<T4BackPointers>> all_t4;
+            std::vector<std::vector<T5Pairing>> all_t5;
+            ProofParams sub_params(plot_id_.data(), sub_k_);
+
+            for (size_t pid = 0; pid < t3_results.partitioned_pairs.size(); ++pid) {
+                const auto& partition = t3_results.partitioned_pairs[pid];
+
+                timer_.start("Building t3/4 partition " + std::to_string(pid));
+
+                Table4PartitionConstructor t4_ctor(sub_params, proof_params_.get_k(), working_buffer);
+                T4_Partition_Result t4_res = t4_ctor.construct(partition);
 
                 #ifdef RETAIN_X_VALUES
                 if (validate_) {
-                    for (const auto& pair : t2_pairs) {
-                        auto result = validator_.validate_table_2_pairs(pair.xs);
-                        if (!result.has_value()) {
-                            std::cerr << "Validation failed for Table 2 pair: ["
-                                      << pair.xs[0] << ", " << pair.xs[1] << ", " << pair.xs[2] << ", " << pair.xs[3] << "]\n";
+                    for (const auto& pair : t4_res.pairs) {
+                        std::vector<T4Pairing> res = validator_.validate_table_4_pairs(pair.xs);
+                        if (res.size() == 0) {
+                            std::cerr << "Validation failed for Table 4 pair" << std::endl;
                             exit(23);
                         }
                     }
-                    std::cout << "Table 2 pairs validated successfully." << std::endl;
+                    std::cout << "Table 4 pairs validated successfully." << std::endl;
                 }
                 #endif
 
-                // 4) Table3 generic
-                Table3Constructor t3_ctor(proof_params_, working_buffer);
-                timer_.start("Constructing Table 3");
-                T3_Partitions_Results t3_results = t3_ctor.construct(t2_pairs);
-                timer_.stop();
-                std::cout << "Constructed " << t3_results.proof_fragments.size() << " Table 3 entries." << std::endl;
+                Table5GenericConstructor t5_ctor(sub_params, working_buffer);
+                std::vector<T5Pairing> t5_pairs = t5_ctor.construct(t4_res.pairs);
 
                 #ifdef RETAIN_X_VALUES
                 if (validate_) {
-                    for (const auto& xs_array : t3_results.xs_correlating_to_proof_fragments) {
-                        auto result = validator_.validate_table_3_pairs(xs_array.data());
-                        if (!result.has_value()) {
-                            std::cerr << "Validation failed for Table 3 pair: ["
-                                      << xs_array[0] << ", " << xs_array[1] << ", " << xs_array[2] << ", " << xs_array[3]
-                                      << ", " << xs_array[4] << ", " << xs_array[5] << ", " << xs_array[6] << ", " << xs_array[7]
-                                      << "]\n";
+                    for (const auto& pair : t5_pairs) {
+                        if (!validator_.validate_table_5_pairs(pair.xs)) {
+                            std::cerr << "Validation failed for Table 5 pair" << std::endl;
                             exit(23);
                         }
                     }
-                    std::cout << "Table 3 pairs validated successfully." << std::endl;
+                    std::cout << "Table 5 pairs validated successfully." << std::endl;
                 }
                 #endif
 
-                // 5) Prepare pruner
+                TablePruner::PrunedStats stats = pruner.prune_t4_and_update_t5(t4_res.t4_to_t3_back_pointers, t5_pairs);
 
+                all_t4.push_back(std::move(t4_res.t4_to_t3_back_pointers));
+                all_t5.push_back(std::move(t5_pairs));
+
+                timer_.stop();
+                std::cout << "Processed partition " << pid << ": " << std::endl
+                          << "  T4 size: " << all_t4.back().size() << " (before pruning: " << stats.original_count << ")" << std::endl
+                          << "  T5 size: " << all_t5.back().size()
+                          << std::endl;
+            }
+
+            // 7) Finalize pruning
+            timer_.start("Finalizing Table 3");
+            T4ToT3LateralPartitionRanges t4_to_t3_lateral_partition_ranges = pruner.finalize_t3_and_prepare_mappings_for_t4();
+            timer_.stop();
+
+            timer_.start("Finalizing Table 4");
+            for (auto& t4bp : all_t4) pruner.finalize_t4_partition(t4bp);
+            timer_.stop();
+
+            return {
+                .t3_proof_fragments = t3_results.proof_fragments,
+                .t4_to_t3_lateral_ranges = t4_to_t3_lateral_partition_ranges,
+                .t4_to_t3_back_pointers = all_t4,
+                .t5_to_t4_back_pointers = all_t5,
                 #ifdef RETAIN_X_VALUES_TO_T3
-                TablePruner pruner(proof_params_, t3_results.proof_fragments, t3_results.xs_correlating_to_proof_fragments);
-                #else
-                TablePruner pruner(proof_params_, t3_results.proof_fragments);
+                .xs_correlating_to_proof_fragments = t3_results.xs_correlating_to_proof_fragments,
                 #endif
-
-                // 6) Partitioned Table4 + Table5
-                std::vector<std::vector<T4BackPointers>> all_t4;
-                std::vector<std::vector<T5Pairing>> all_t5;
-                ProofParams sub_params(plot_id_.data(), sub_k_);
-
-                for (size_t pid = 0; pid < t3_results.partitioned_pairs.size(); ++pid) {
-                    const auto& partition = t3_results.partitioned_pairs[pid];
-
-                    timer_.start("Building t3/4 partition " + std::to_string(pid));
-
-                    Table4PartitionConstructor t4_ctor(sub_params, proof_params_.get_k(), working_buffer);
-                    T4_Partition_Result t4_res = t4_ctor.construct(partition);
-
-                    #ifdef RETAIN_X_VALUES
-                    if (validate_) {
-                        for (const auto& pair : t4_res.pairs) {
-                            std::vector<T4Pairing> res = validator_.validate_table_4_pairs(pair.xs);
-                            if (res.size() == 0) {
-                                std::cerr << "Validation failed for Table 4 pair" << std::endl;
-                                exit(23);
-                            }
-                        }
-                        std::cout << "Table 4 pairs validated successfully." << std::endl;
-                    }
-                    #endif
-
-                    Table5GenericConstructor t5_ctor(sub_params, working_buffer);
-                    std::vector<T5Pairing> t5_pairs = t5_ctor.construct(t4_res.pairs);
-
-                    #ifdef RETAIN_X_VALUES
-                    if (validate_) {
-                        for (const auto& pair : t5_pairs) {
-                            if (!validator_.validate_table_5_pairs(pair.xs)) {
-                                std::cerr << "Validation failed for Table 5 pair" << std::endl;
-                                exit(23);
-                            }
-                        }
-                        std::cout << "Table 5 pairs validated successfully." << std::endl;
-                    }
-                    #endif
-
-                    TablePruner::PrunedStats stats = pruner.prune_t4_and_update_t5(t4_res.t4_to_t3_back_pointers, t5_pairs);
-
-                    all_t4.push_back(std::move(t4_res.t4_to_t3_back_pointers));
-                    all_t5.push_back(std::move(t5_pairs));
-
-                    timer_.stop();
-                    std::cout << "Processed partition " << pid << ": " << std::endl
-                              << "  T4 size: " << all_t4.back().size() << " (before pruning: " << stats.original_count << ")" << std::endl
-                              << "  T5 size: " << all_t5.back().size()
-                              << std::endl;
-                }
-
-                // 7) Finalize pruning
-                timer_.start("Finalizing Table 3");
-                T4ToT3LateralPartitionRanges t4_to_t3_lateral_partition_ranges = pruner.finalize_t3_and_prepare_mappings_for_t4();
-                timer_.stop();
-
-                timer_.start("Finalizing Table 4");
-                for (auto& t4bp : all_t4) pruner.finalize_t4_partition(t4bp);
-                timer_.stop();
-
-                return {
-                    .t3_proof_fragments = t3_results.proof_fragments,
-                    .t4_to_t3_lateral_ranges = t4_to_t3_lateral_partition_ranges,
-                    .t4_to_t3_back_pointers = all_t4,
-                    .t5_to_t4_back_pointers = all_t5,
-                    #ifdef RETAIN_X_VALUES_TO_T3
-                    .xs_correlating_to_proof_fragments = t3_results.xs_correlating_to_proof_fragments,
-                    #endif
-                };*/
+            };*/
     }
 
     ProofParams

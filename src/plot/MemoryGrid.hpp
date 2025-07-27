@@ -28,6 +28,10 @@ public:
     {
         pool_ = static_cast<std::byte*>(
             ::operator new (totalBytes_, std::align_val_t(align_)));
+        std::cout << "MemoryGrid created with N=" << N_ 
+                  << ", blockSize=" << blockSize_ 
+                  << ", totalBytes=" << totalBytes_ 
+                  << ", align=" << align_ << std::endl;
     }
 
     ~MemoryGrid() { ::operator delete(pool_, std::align_val_t(align_)); }
@@ -127,6 +131,13 @@ public:
     {
         assert(row < N_ && col < N_);
         assert(atPosBytes + srcBytes <= blockSize_);
+        assert(blockSize_ > 0);
+        if (srcBytes == 0) {
+            return; // nothing to write
+        }
+        if (atPosBytes + srcBytes > blockSize_) {
+            throw std::out_of_range("writeBlock: atPosBytes + srcBytes exceeds block size");
+        }
         file_.seekp(blockOffset(row, col)+ atPosBytes);
         file_.write(reinterpret_cast<const char*>(src), srcBytes);
         file_.flush();
@@ -140,6 +151,12 @@ public:
     {
         assert(row < N_ && col < N_);
         assert(bytes + fromPosBytes <= blockSize_);
+        if (bytes == 0) {
+            return; // nothing to read
+        }
+        if (fromPosBytes + bytes > blockSize_) {
+            throw std::out_of_range("readBlock: fromPosBytes + bytes exceeds block size");
+        }
         file_.seekg(blockOffset(row, col) + fromPosBytes);
         file_.read(reinterpret_cast<char*>(dst), bytes);
     }
@@ -199,6 +216,9 @@ public:
 
         if (bytesToCopyToMem > 0)
         {
+            float perc_used = static_cast<float>(bytesToCopyToMem) / memGrid.blockSize();
+            std::cout << "Writing to memory block (" << row << ", " << col << ") at offset " << offsetInMemoryBlock
+                      << ", bytes: " << bytesToCopyToMem << ", percent used: " << perc_used * 100 << "%" << std::endl;
             memGrid.writeBlock(row, col, src, bytesToCopyToMem, offsetInMemoryBlock);
         }
         if (bytesToCopyToDisk > 0)

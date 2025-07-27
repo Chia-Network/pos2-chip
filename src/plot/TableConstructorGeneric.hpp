@@ -824,6 +824,29 @@ public:
         }
     }
 
+    void new_handle_pair(const T2Pairing &l_candidate,
+                     const T2Pairing &r_candidate,
+                     std::pmr::vector<T3Pairing> &pairs,
+                     size_t left_index,
+                     size_t right_index) override
+    {
+        uint64_t meta_l = l_candidate.meta;
+        uint64_t meta_r = r_candidate.meta;
+        std::optional<T3Pairing> opt_res = proof_core_.pairing_t3(meta_l, meta_r, l_candidate.x_bits, r_candidate.x_bits);
+        if (opt_res.has_value())
+        {
+            T3Pairing pairing = opt_res.value();
+#ifdef RETAIN_X_VALUES_TO_T3
+            for (int i = 0; i < 4; i++)
+            {
+                pairing.xs[i] = l_candidate.xs[i];
+                pairing.xs[i + 4] = r_candidate.xs[i];
+            }
+#endif
+            pairs.push_back(pairing);
+        }
+    }
+
     T3_Partitions_Results post_construct(std::vector<T3Pairing> &pairings) const override
     {
         // do a radix sort on fragments
