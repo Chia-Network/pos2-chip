@@ -347,6 +347,7 @@ public:
 
     StripeResult constructFromSections(const std::span<PairingCandidate> &L_section_candidates, const std::span<PairingCandidate> &R_section_candidates)
     {
+        std::cout << "Constructing Table " << table_id_ << " from sections." << std::endl;
         // auto pairing_candidates_offsets = find_candidates_prefixes(previous_table_pairs);
         auto l_section_match_key_prefixes = find_match_key_prefixes(L_section_candidates);
         auto r_section_match_key_prefixes = find_match_key_prefixes(R_section_candidates);
@@ -775,6 +776,8 @@ struct T3_Partitions_Results
 #endif
 };
 
+
+
 class Table3Constructor : public TableConstructorGeneric<T2Pairing, T3Pairing, T3_Partitions_Results>
 {
 public:
@@ -951,6 +954,144 @@ private:
             .xs_correlating_to_proof_fragments = xs_correlating_to_proof_fragments
 #endif
         };
+    }
+};
+
+class Table3CondensedConstructor : public TableConstructorGeneric<T2Pairing, T3PairingCondensed, std::vector<T3PairingCondensed>>
+{
+public:
+    Table3CondensedConstructor(const ProofParams &proof_params, WorkingBuffer &working_buffer)
+        : TableConstructorGeneric(3, proof_params, working_buffer)
+    {
+    }
+
+    T2Pairing matching_target(const T2Pairing &prev_table_pair, uint32_t match_key_r) override
+    {
+        uint32_t r_match_target = proof_core_.matching_target(3, prev_table_pair.meta, match_key_r);
+        return T2Pairing{
+            .meta = prev_table_pair.meta,
+            .match_info = r_match_target,
+            .x_bits = prev_table_pair.x_bits,
+#ifdef RETAIN_X_VALUES_TO_T3
+            .xs = {
+                static_cast<uint32_t>(prev_table_pair.xs[0]),
+                static_cast<uint32_t>(prev_table_pair.xs[1]),
+                static_cast<uint32_t>(prev_table_pair.xs[2]),
+                static_cast<uint32_t>(prev_table_pair.xs[3])
+            }
+#endif
+        };
+    }
+
+    void handle_pair(const T2Pairing &l_candidate,
+                     const T2Pairing &r_candidate,
+                     std::vector<T3PairingCondensed> &pairs,
+                     size_t left_index,
+                     size_t right_index) override
+    {
+        uint64_t meta_l = l_candidate.meta;
+        uint64_t meta_r = r_candidate.meta;
+        std::optional<T3PairingCondensed> opt_res = proof_core_.pairing_t3_condensed(meta_l, meta_r, l_candidate.x_bits, r_candidate.x_bits);
+        if (opt_res.has_value())
+        {
+            T3PairingCondensed pairing = opt_res.value();
+#ifdef RETAIN_X_VALUES_TO_T3
+            for (int i = 0; i < 4; i++)
+            {
+                pairing.xs[i] = l_candidate.xs[i];
+                pairing.xs[i + 4] = r_candidate.xs[i];
+            }
+#endif
+            pairs.push_back(pairing);
+        }
+    }
+
+    void new_handle_pair(const T2Pairing &l_candidate,
+                     const T2Pairing &r_candidate,
+                     std::pmr::vector<T3PairingCondensed> &pairs,
+                     size_t left_index,
+                     size_t right_index) override
+    {
+        uint64_t meta_l = l_candidate.meta;
+        uint64_t meta_r = r_candidate.meta;
+        std::optional<T3PairingCondensed> opt_res = proof_core_.pairing_t3_condensed(meta_l, meta_r, l_candidate.x_bits, r_candidate.x_bits);
+        if (opt_res.has_value())
+        {
+            T3PairingCondensed pairing = opt_res.value();
+#ifdef RETAIN_X_VALUES_TO_T3
+            for (int i = 0; i < 4; i++)
+            {
+                pairing.xs[i] = l_candidate.xs[i];
+                pairing.xs[i + 4] = r_candidate.xs[i];
+            }
+#endif
+            pairs.push_back(pairing);
+        }
+    }
+
+    StripeResult new_post_construct(std::pmr::vector<T3PairingCondensed> &pairings) const
+    {
+        // do a radix sort on fragments
+        RadixSort<T3PairingCondensed, uint32_t, decltype(&T3PairingCondensed::proof_fragment)> radix_sort(&T3PairingCondensed::proof_fragment);
+
+        // 1) sort by fragments
+        std::pmr::vector<T3PairingCondensed> temp_buffer(pairings.size(), mr_);
+        // Create a span over the temporary buffer
+        std::span<T3PairingCondensed> buffer(temp_buffer.data(), temp_buffer.size());
+        radix_sort.sort(pairings, buffer, params_.get_k() * 2); // don't forget to sort full 2k bits
+
+        // 2) do section counts
+        std::pmr::vector<size_t> section_counts(mr_);
+        section_counts.resize(params_.get_num_sections(), 0ULL);
+        for (const auto &pairing : pairings)
+        {
+            // section is top bits from proof_fragment
+            uint32_t section = pairing.proof_fragment >> (params_.get_k() * 2 - params_.get_num_section_bits());
+            section_counts[section]++;
+            // output xs
+#ifdef RETAIN_X_VALUES_TO_T3
+            std::cout << "Pairing Xs: [" << pairing.xs[0] << ", " << pairing.xs[1] << ", "
+                      << pairing.xs[2] << ", " << pairing.xs[3] << ", "
+                      << pairing.xs[4] << ", " << pairing.xs[5] << ", "
+                      << pairing.xs[6] << ", " << pairing.xs[7] << "]"
+                      << ", Fragment: " << pairing.proof_fragment
+                      << ", Section: " << section << std::endl;
+#endif
+        }
+
+        // output our section counts
+        for (size_t i = 0; i < section_counts.size(); ++i)
+        {
+            std::cout << "Section " << i << ": " << section_counts[i] << " candidates" << std::endl;
+        }
+
+        StripeResult result;
+        result.candidates = std::span<T3PairingCondensed>(pairings.data(), pairings.size());
+        result.section_counts = std::span<size_t>(section_counts.data(), section_counts.size());
+
+        size_t total_pairings = pairings.size();
+        std::cout << "Total T3 pairings: " << total_pairings << std::endl;
+        for (size_t i = 0; i < total_pairings; i++)
+        {
+            const auto &pairing = pairings[i];
+            
+        //for (const auto &pairing : result.candidates) 
+    
+            // output xs
+#ifdef RETAIN_X_VALUES_TO_T3
+            std::cout << "Pairing Xs: [" << pairing.xs[0] << ", " << pairing.xs[1] << ", "
+                      << pairing.xs[2] << ", " << pairing.xs[3] << ", "
+                      << pairing.xs[4] << ", " << pairing.xs[5] << ", "
+                      << pairing.xs[6] << ", " << pairing.xs[7] << "]"
+                      << ", Fragment: " << pairing.proof_fragment
+                      << ", Section: " << (pairing.proof_fragment >> (params_.get_k() * 2 - params_.get_num_section_bits())) << std::endl;
+            if (pairing.xs[0] == 0 && pairing.xs[1] == 0 && pairing.xs[2] == 0 && pairing.xs[3] == 0) {
+                std::cout << "Found a pairing << " << i << " of total " << total_pairings << " with all xs zero, this is likely an error." << std::endl;
+                exit(1);
+            }
+                      #endif
+        }
+        return result;
     }
 };
 

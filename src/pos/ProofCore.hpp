@@ -130,6 +130,18 @@ struct T3Pairing
 #endif
 };
 
+// T3 Pairing structure for memory-grid optimization.
+// The proof_fragment, l_meta, and r_meta needed to generate the match_info for T4 and T5 partitions and pairings.
+struct T3PairingCondensed
+{
+    ProofFragment proof_fragment;  // 2k-bit encrypted x-values.
+    uint64_t l_meta; // 2k-bit meta for left-side match
+    uint64_t r_meta; // 2k-bit meta for right-side match
+    #ifdef RETAIN_X_VALUES
+    uint32_t xs[8]; // for debugging/development, 8 x-values from pairing.
+    #endif
+};
+
 // Split from T3Pairing, 2 for 1
 struct T3PartitionedPairing
 {
@@ -321,6 +333,31 @@ public:
         result.upper_partition = upper_partition;
         result.meta_upper_partition = upper_partition_pair.meta_result;
         result.match_info_upper_partition = ((1 - top_order_bit) << (params_.get_sub_k() - 1)) | upper_partition_pair.match_info_result;
+        return result;
+    }
+
+    std::optional<T3PairingCondensed> pairing_t3_condensed(uint64_t meta_l, uint64_t meta_r, uint32_t x_bits_l, uint32_t x_bits_r)
+    {
+        if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
+                            static_cast<uint32_t>(meta_r & 0xFFFFU)))
+            return std::nullopt;
+
+        T3PairingCondensed result;
+        result.l_meta = meta_l;
+        result.r_meta = meta_r;
+        uint64_t all_x_bits = (static_cast<uint64_t>(x_bits_l) << params_.get_k()) | x_bits_r;
+        ProofFragment proof_fragment = fragment_codec.encode(all_x_bits);
+        result.proof_fragment = proof_fragment;
+        #ifdef RETAIN_X_VALUES_TO_T3
+        result.xs[0] = (x_bits_l >> 24) & 0xFF;
+        result.xs[1] = (x_bits_l >> 16) & 0xFF;
+        result.xs[2] = (x_bits_l >> 8) & 0xFF;
+        result.xs[3] = x_bits_l & 0xFF;
+        result.xs[4] = (x_bits_r >> 24) & 0xFF;
+        result.xs[5] = (x_bits_r >> 16) & 0xFF;
+        result.xs[6] = (x_bits_r >> 8) & 0xFF;
+        result.xs[7] = x_bits_r & 0xFF;
+        #endif
         return result;
     }
 

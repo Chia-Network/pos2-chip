@@ -143,7 +143,7 @@ public:
             std::cerr << "Validation failed for left proof_fragment: ["
                       << result_l->proof_fragment << "] vs ["
                       << show_xs(l_xs, 8) << "]\n";
-            return t4_pairs; // std::nullopt;
+            return t4_pairs; // empty
         }
 
         if (!proof_core_.fragment_codec.validate_proof_fragment(result_r->proof_fragment, r_xs))
@@ -151,7 +151,7 @@ public:
             std::cerr << "Validation failed for right proof_fragment: ["
                       << result_r->proof_fragment << "] vs ["
                       << show_xs(r_xs, 8) << "]\n";
-            return t4_pairs; // std::nullopt;
+            return t4_pairs; // empty
         }
 
         // at least one of the lower and upper partitions must be the same
