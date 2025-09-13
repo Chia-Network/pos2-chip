@@ -335,8 +335,6 @@ int prove(const std::string& plot_file) {
     std::cout << "Plot file read successfully: " << plot_file << std::endl;
     plot.params.debugPrint();
 
-    XsEncryptor xs_encryptor(plot.params);
-
     // perform the proof/chain test
     chain_test(plot);
 
