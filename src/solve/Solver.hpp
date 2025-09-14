@@ -636,7 +636,10 @@ public:
             sub_timer.start();
             std::fill(hashes_bitmask.begin(), hashes_bitmask.end(), 0);
             auto R_sorted = R_list;
-            std::sort(std::execution::par_unseq,
+            std::sort(
+#ifdef __cpp_lib_execution
+                std::execution::par_unseq,
+#endif
                       R_sorted.begin(), R_sorted.end(),
                       [](auto &a, auto &b)
                       { return a.pair_hash < b.pair_hash; });
@@ -667,7 +670,9 @@ public:
 
             // parallel loop over each L element
             std::for_each(
+#ifdef __cpp_lib_execution
                 std::execution::par,
+#endif
                 L_list.begin(), L_list.end(),
                 [&](const T1_Match &lm)
                 {
@@ -735,7 +740,10 @@ public:
             // --- sort potential matches ---
             sub_timer.start();
             // sort parallel
-            std::sort(std::execution::par_unseq,
+            std::sort(
+#ifdef __cpp_lib_execution
+                std::execution::par_unseq,
+#endif
                       L_short_list.begin(), L_short_list.end(),
                       [](auto &a, auto &b)
                       { return a.pair_hash < b.pair_hash; });
@@ -1021,7 +1029,9 @@ public:
         if (false)
         {
             std::for_each(
+#ifdef __cpp_lib_execution
                 std::execution::par,
+#endif
                 sections.begin(), sections.end(),
                 [&](int section)
                 {
@@ -1127,7 +1137,9 @@ public:
                 std::iota(task_ids.begin(), task_ids.end(), 0);
 
                 std::for_each(
+#ifdef __cpp_lib_execution
                     std::execution::par,
+#endif
                     task_ids.begin(), task_ids.end(),
                     [&](int task_id)
                     {
@@ -1485,7 +1497,9 @@ public:
         {
             timer.start("Chacha multi-threaded bitmask test");
             std::for_each(
+#ifdef __cpp_lib_execution
                 std::execution::par,
+#endif
                 thread_ids.begin(), thread_ids.end(),
                 [&](int t)
                 {
@@ -1523,7 +1537,9 @@ public:
         {
             timer.start("Chacha multi-threaded bitmask test with prefetching");
             std::for_each(
+#ifdef __cpp_lib_execution
                 std::execution::par,
+#endif
                 thread_ids.begin(), thread_ids.end(),
                 [&](int t)
                 {
@@ -1677,7 +1693,9 @@ public:
         {
             timer.start("Chacha multi-threaded bitmask test (no prefetching)");
             std::for_each(
+#ifdef __cpp_lib_execution
                 std::execution::par,
+#endif
                 thread_ids.begin(), thread_ids.end(),
                 [&](int t)
                 {
@@ -1737,7 +1755,9 @@ public:
         {
             timer.start("Chacha multi-threaded bitmask test with prefetching");
             std::for_each(
+#ifdef __cpp_lib_execution
                 std::execution::par,
+#endif
                 thread_ids.begin(), thread_ids.end(),
                 [&](int t)
                 {
@@ -1897,7 +1917,9 @@ public:
 
         // Parallel for each index
         std::for_each(
+#ifdef __cpp_lib_execution
             std::execution::par,
+#endif
             indices.begin(), indices.end(),
             [&](int x1_index)
             {
@@ -1989,7 +2011,9 @@ public:
 
         // Parallel loop
         std::for_each(
+#ifdef __cpp_lib_execution
             std::execution::par,
+#endif
             indices.begin(), indices.end(),
             [&](int x1_index)
             {
