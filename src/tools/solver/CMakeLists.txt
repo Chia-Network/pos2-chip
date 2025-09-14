@@ -14,6 +14,8 @@ target_include_directories(solver PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../..
 )
 
-target_link_libraries(solver PRIVATE
-  atomic # required for Pi / 32-bit ARM
-)
+# required for Pi / 32-bit ARM
+# TODO: detect 32 bit ARM
+#target_link_libraries(solver PRIVATE
+#  atomic
+#)
