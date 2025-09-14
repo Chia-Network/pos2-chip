@@ -341,7 +341,9 @@ int prove(const std::string& plot_file) {
     chain_test(plot);
 
     // for exhaustive testing, requires plot and compilation with RETAIN_X_VALUES_TO_T3
-    // exhaustive_test(plot);
+#ifdef RETAIN_X_VALUES_TO_T3
+    exhaustive_test(plot);
+#endif
 
     return 0;
 }
