@@ -15,6 +15,7 @@
 #include <iostream>
 #include <iomanip>
 #include <bitset>
+#include <numeric> // for iota
 
 #include <execution>
 
