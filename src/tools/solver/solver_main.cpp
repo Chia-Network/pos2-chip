@@ -346,7 +346,7 @@ int prove(const std::string& plot_file) {
     return 0;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) try {
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <mode> <arg>\n"
                   << "Modes:\n"
@@ -386,4 +386,7 @@ int main(int argc, char* argv[]) {
                   << "Use 'benchmark' or 'prove'." << std::endl;
         return 1;
     }
+}
+catch (const std::exception& e) {
+    std::cerr << "Failed with exception: " << e.what() << std::endl;
 }
