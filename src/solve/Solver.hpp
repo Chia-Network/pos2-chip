@@ -10,7 +10,6 @@
 #include <array>
 #include <string>
 #include <vector>
-#include <sys/resource.h>
 #include <algorithm>
 #include <atomic>
 #include <iostream>
