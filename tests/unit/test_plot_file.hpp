@@ -15,7 +15,7 @@ TEST_CASE("plot-read-write")
     Timer timer{};
     timer.start("");
 
-    Plotter  plotter(PLOT_ID_HEX, K, SUB_K);
+    Plotter  plotter(hexToBytes(PLOT_ID_HEX), K, SUB_K);
     PlotData plot = plotter.run();
     timer.stop();
 
