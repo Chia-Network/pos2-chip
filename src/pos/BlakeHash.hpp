@@ -108,16 +108,15 @@
     g(state, 2, 7, 8, 13, block_words[2], block_words[6]);    \
     g(state, 3, 4, 9, 14, block_words[4], block_words[7]);    \
 /* Round 6 */                                                 \
-// TODO: uncomment below.
-/*g(state, 0, 4, 8,  12, block_words[11], block_words[15]); \
-g(state, 1, 5, 9,  13, block_words[5],  block_words[0]);  \
-g(state, 2, 6, 10, 14, block_words[1],  block_words[9]);  \
-g(state, 3, 7, 11, 15, block_words[8],  block_words[6]);  \
-\
-g(state, 0, 5, 10, 15, block_words[14], block_words[10]); \
-g(state, 1, 6, 11, 12, block_words[2],  block_words[12]); \
-g(state, 2, 7, 8,  13, block_words[3],  block_words[4]);  \
-g(state, 3, 4, 9,  14, block_words[7],  block_words[13]); \*/
+    g(state, 0, 4, 8,  12, block_words[11], block_words[15]); \
+    g(state, 1, 5, 9,  13, block_words[5],  block_words[0]);  \
+    g(state, 2, 6, 10, 14, block_words[1],  block_words[9]);  \
+    g(state, 3, 7, 11, 15, block_words[8],  block_words[6]);  \
+                                                              \
+    g(state, 0, 5, 10, 15, block_words[14], block_words[10]); \
+    g(state, 1, 6, 11, 12, block_words[2],  block_words[12]); \
+    g(state, 2, 7, 8,  13, block_words[3],  block_words[4]);  \
+    g(state, 3, 4, 9,  14, block_words[7],  block_words[13]); \
 
 class BlakeHash
 {
@@ -183,14 +182,14 @@ public:
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
         Result256 result;
-        result.r[0] = big_endian(state[0] ^ state[8]);
-        result.r[1] = big_endian(state[1] ^ state[9]);
-        result.r[2] = big_endian(state[2] ^ state[10]);
-        result.r[3] = big_endian(state[3] ^ state[11]);
-        result.r[4] = big_endian(state[4] ^ state[12]);
-        result.r[5] = big_endian(state[5] ^ state[13]);
-        result.r[6] = big_endian(state[6] ^ state[14]);
-        result.r[7] = big_endian(state[7] ^ state[15]);
+        result.r[0] = (state[0] ^ state[8]);
+        result.r[1] = (state[1] ^ state[9]);
+        result.r[2] = (state[2] ^ state[10]);
+        result.r[3] = (state[3] ^ state[11]);
+        result.r[4] = (state[4] ^ state[12]);
+        result.r[5] = (state[5] ^ state[13]);
+        result.r[6] = (state[6] ^ state[14]);
+        result.r[7] = (state[7] ^ state[15]);
         return result;
     }
 
@@ -201,8 +200,8 @@ public:
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
         Result64 result;
-        result.r[0] = big_endian(state[0] ^ state[8]);
-        result.r[1] = big_endian(state[1] ^ state[9]);
+        result.r[0] = (state[0] ^ state[8]);
+        result.r[1] = (state[1] ^ state[9]);
         return result;
     }
 
@@ -260,7 +259,7 @@ public:
 
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
-        return big_endian(state[0] ^ state[8]);
+        return (state[0] ^ state[8]);
     }
 
     Result64 generate_hash_64() const
@@ -271,8 +270,8 @@ public:
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
         Result64 result;
-        result.r[0] = big_endian(state[0] ^ state[8]);
-        result.r[1] = big_endian(state[1] ^ state[9]);
+        result.r[0] = (state[0] ^ state[8]);
+        result.r[1] = (state[1] ^ state[9]);
         return result;
     }
 
@@ -285,10 +284,10 @@ public:
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
         Result128 result;
-        result.r[0] = big_endian(state[0] ^ state[8]);
-        result.r[1] = big_endian(state[1] ^ state[9]);
-        result.r[2] = big_endian(state[2] ^ state[10]);
-        result.r[3] = big_endian(state[3] ^ state[11]);
+        result.r[0] = (state[0] ^ state[8]);
+        result.r[1] = (state[1] ^ state[9]);
+        result.r[2] = (state[2] ^ state[10]);
+        result.r[3] = (state[3] ^ state[11]);
         return result;
     }
 
@@ -300,25 +299,25 @@ public:
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
         Result256 result;
-        result.r[0] = big_endian(state[0] ^ state[8]);
-        result.r[1] = big_endian(state[1] ^ state[9]);
-        result.r[2] = big_endian(state[2] ^ state[10]);
-        result.r[3] = big_endian(state[3] ^ state[11]);
-        result.r[4] = big_endian(state[4] ^ state[12]);
-        result.r[5] = big_endian(state[5] ^ state[13]);
-        result.r[6] = big_endian(state[6] ^ state[14]);
-        result.r[7] = big_endian(state[7] ^ state[15]);
+        result.r[0] = (state[0] ^ state[8]);
+        result.r[1] = (state[1] ^ state[9]);
+        result.r[2] = (state[2] ^ state[10]);
+        result.r[3] = (state[3] ^ state[11]);
+        result.r[4] = (state[4] ^ state[12]);
+        result.r[5] = (state[5] ^ state[13]);
+        result.r[6] = (state[6] ^ state[14]);
+        result.r[7] = (state[7] ^ state[15]);
         return result;
     }
 
     // Returns the 32-bit big-endian representation of value.
-    static inline uint32_t big_endian(uint32_t value)
+    /*static inline uint32_t big_endian(uint32_t value)
     {
         return ((value & 0xFFU) << 24) |
                ((value & 0xFF00U) << 8) |
                ((value & 0xFF0000U) >> 8) |
                ((value & 0xFF000000U) >> 24);
-    }
+    }*/
 
 private:
     int k;                    // Output bit-size parameter (e.g., 32)

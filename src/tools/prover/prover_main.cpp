@@ -4,10 +4,10 @@
 
 int main(int argc, char *argv[])
 {
-    std::cout << "Prover: given a challenge and plot file, prove the solution." << std::endl;
-    if (argc < 2 || argc > 3)
+    std::cout << "Prover: given a challenge, scan filter bits, and plot file, prove the solution." << std::endl;
+    if (argc < 2 || argc > 4)
     {
-        std::cerr << "Usage: " << argv[0] << " [challenge] [plotfile]\n";
+        std::cerr << "Usage: " << argv[0] << " [challenge] [scan_filter_bits] [plotfile]\n";
         return 1;
     }
 
@@ -17,6 +17,49 @@ int main(int argc, char *argv[])
     std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
 
     Prover prover(challenge, argv[2]);
+
+    prover.setChallenge(challenge);
+    std::vector<QualityChain> chains = prover.prove(0);
+
+    if (chains.size() > 0)
+    {
+        std::cout << "Found " << chains.size() << " chains." << std::endl;
+
+        std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chains[0]);
+        std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
+
+        ProofParams params = prover.getProofParams();
+        ProofFragmentCodec fragment_codec(params);
+        // convert proof fragments to xbits hex
+        std::string xbits_hex;
+        std::vector<uint32_t> xbits_list;
+        for (const auto &fragment : proof_fragments)
+        {
+            std::cout << "ProofFragmentCodec: " << std::hex << fragment << std::dec;
+            std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(fragment);
+            for (const auto &x_bit : x_bits)
+            {
+                // at most 16 bits = 4 x 4 bits
+                xbits_hex += Utils::toHex(x_bit, 4);
+                xbits_list.push_back(x_bit);
+                std::cout << " " << x_bit;
+            }
+            std::cout << std::endl;
+        }
+
+        std::array<uint8_t, 32> plot_id_arr;
+        std::memcpy(plot_id_arr.data(), params.get_plot_id_bytes(), 32);
+        std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
+
+        std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << std::endl;
+
+        std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
+    }
+    else
+    {
+        std::cout << "No chains found." << std::endl;
+    }
+   
 
     // set random seed
     srand(static_cast<unsigned int>(time(nullptr)));
@@ -32,11 +75,11 @@ int main(int argc, char *argv[])
         challenge[2] = (i >> 16) & 0xFF;
         challenge[3] = (i >> 24) & 0xFF;
 
-        //for (int i = 0; i < 32; i++)
+        // for (int i = 0; i < 32; i++)
         //{
-        //    int randseed = rand() % 65536;
-        //    challenge[i] = randseed;
-        //}
+        //     int randseed = rand() % 65536;
+        //     challenge[i] = randseed;
+        // }
 
         prover.setChallenge(challenge);
         std::vector<QualityChain> chains = prover.prove(0);
