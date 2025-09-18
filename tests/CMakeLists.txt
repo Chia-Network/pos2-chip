@@ -12,4 +12,4 @@ add_test(NAME ${name}_test COMMAND ${name} )
 
 endmacro()
 
-new_test(plot_file test_all.cpp)
+new_test(plot_file test_plot_file.cpp)
