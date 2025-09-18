@@ -6,6 +6,7 @@
 #include <iostream>
 #include <optional>
 #include <limits>
+#include <vector>
 
 #include "ProofParams.hpp"
 #include "ProofHashing.hpp"
