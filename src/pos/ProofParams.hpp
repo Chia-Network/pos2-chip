@@ -182,15 +182,8 @@ public:
         std::cout << "]" << std::endl;
     }
 
-    bool operator==(ProofParams const &other) const
-    {
-        return k_ == other.k_ && sub_k_ == other.sub_k_ && match_key_bits_ == other.match_key_bits_ && std::memcmp(plot_id_bytes_, other.plot_id_bytes_, sizeof(plot_id_bytes_)) == 0;
-    }
-
-    bool operator!=(ProofParams const &other) const
-    {
-        return !(*this == other);
-    }
+    bool operator==(ProofParams const &other) const = default;
+    bool operator!=(ProofParams const &other) const = default;
 
 private:
     uint8_t plot_id_bytes_[32];    // Fixed-size storage for the 32-byte plot ID.

@@ -8,9 +8,7 @@ struct Range {
     uint64_t start;
     uint64_t end;
 
-    bool operator==(const Range& other) const {
-        return start == other.start && end == other.end;
-    }
+    bool operator==(const Range& other) const = default;
 };
 
 using T4ToT3LateralPartitionRanges = std::vector<Range>;
