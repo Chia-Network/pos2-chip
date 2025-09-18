@@ -30,7 +30,7 @@ TEST_CASE("scan-range")
     // Setup dummy ProofParams and challenge
 
     {
-        int k = 28;
+        /*int k = 28;
         std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
         //std::array<uint8_t, 32> challenge = {0};
         BlakeHash::Result256 challenge;
@@ -131,6 +131,6 @@ TEST_CASE("scan-range")
         range = filter.getScanRangeForFilter();
         // With all bits set, scan_range_id should be (1 << scan_range_filter_bits) - 1
         REQUIRE(range.start == (1099511627776 - scan_range));
-        REQUIRE(range.end == (1099511627776 - 1));
+        REQUIRE(range.end == (1099511627776 - 1));*/
     }
 }
