@@ -35,10 +35,8 @@ public:
 
     // Constructor.
     //   plotIdBytes: pointer to an array of exactly 32 bytes.
-    //   k_value: desired output bit-size, default is 32.
     // Throws std::invalid_argument if plotIdBytes is null.
-    BlakeHash(const uint8_t* plot_id_bytes, int k_value = 32)
-        : k(k_value)
+    BlakeHash(const uint8_t* plot_id_bytes)
     {
         if (!plot_id_bytes)
             throw std::invalid_argument("plotIdBytes pointer is null.");
@@ -173,6 +171,5 @@ public:
     }
 
 private:
-    int k;                      // Output bit-size parameter (e.g., 32)
     uint32_t block_words[16];   // 16 32-bit words; first 8 come from plotIdBytes, rest are zero.
 };
