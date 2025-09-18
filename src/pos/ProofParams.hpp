@@ -55,7 +55,12 @@ public:
     {
         assert(table_id >= 1);
         assert(table_id <= 5);
-        return match_key_bits_;
+        if (table_id == 3) {
+            return match_key_bits_;
+        }
+        else {
+            return 2;
+        }
     }
 
     // Returns the number of section bits.
