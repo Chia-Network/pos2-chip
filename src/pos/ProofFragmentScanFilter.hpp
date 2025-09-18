@@ -64,7 +64,7 @@ public:
         const std::vector<ScanResult> &candidates)
     {
         // output candidates
-        if (true)
+        if (false)
         {
             std::cout << "Filtering " << candidates.size() << " candidates by hash threshold." << std::endl;
             for (const auto &candidate : candidates)
