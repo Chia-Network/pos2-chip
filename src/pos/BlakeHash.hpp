@@ -23,7 +23,7 @@
     state[c] = state[c] + state[d];             \
     state[b] = rotr32(state[b] ^ state[c], 7);
 
-#define _b3_inline_rounds(input_byte_size)                    \
+#define _b3_inline_rounds                                     \
     uint32_t state[16] = {                                    \
         0x6A09E667, /*IV full*/                               \
         0xBB67AE85,                                           \
@@ -37,10 +37,10 @@
         0xBB67AE85,                                           \
         0x3C6EF372,                                           \
         0xA54FF53A,                                           \
-        0,                           /*count lo*/             \
-        0,                           /*count hi*/             \
-        (uint32_t)(input_byte_size), /*buffer length*/        \
-        11                           /*flags. Always 11*/     \
+        0,           /*count lo*/                             \
+        0,           /*count hi*/                             \
+        64,          /*block length*/                         \
+        11           /*flags: CHUNK_START, CHUNK_END, ROOT */ \
     };                                                        \
                                                               \
     /* Round 0 */                                             \
@@ -152,10 +152,8 @@ public:
 
     // Constructor.
     //   plotIdBytes: pointer to an array of exactly 32 bytes.
-    //   k_value: desired output bit-size, default is 32.
     // Throws std::invalid_argument if plotIdBytes is null.
-    BlakeHash(const uint8_t *plot_id_bytes, int k_value = 32)
-        : k(k_value)
+    BlakeHash(const uint8_t *plot_id_bytes)
     {
         if (!plot_id_bytes)
             throw std::invalid_argument("plotIdBytes pointer is null.");
@@ -178,7 +176,7 @@ public:
 
     static Result256 hash_block_256(const uint32_t block_words[16])
     {
-        _b3_inline_rounds(21);
+        _b3_inline_rounds;
 
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
@@ -196,7 +194,7 @@ public:
 
     static Result64 hash_block_64(const uint32_t block_words[16])
     {
-        _b3_inline_rounds(21);
+        _b3_inline_rounds;
 
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
@@ -207,7 +205,6 @@ public:
     }
 
     BlakeHash(const uint8_t *plot_id_bytes, const uint8_t *challenge_bytes)
-        : k(32) // Default output bit-size is 32.
     {
         if (!plot_id_bytes || !challenge_bytes)
             throw std::invalid_argument("plotIdBytes or challengeBytes pointer is null.");
@@ -256,7 +253,7 @@ public:
     uint32_t generate_hash_32() const
     {
 
-        _b3_inline_rounds(21);
+        _b3_inline_rounds;
 
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
@@ -266,7 +263,7 @@ public:
     Result64 generate_hash_64() const
     {
 
-        _b3_inline_rounds(21);
+        _b3_inline_rounds;
 
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
@@ -280,7 +277,7 @@ public:
     Result128 generate_hash() const
     {
 
-        _b3_inline_rounds(21);
+        _b3_inline_rounds;
 
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
@@ -295,7 +292,7 @@ public:
     Result256 generate_hash_256() const
     {
 
-        _b3_inline_rounds(21);
+        _b3_inline_rounds;
 
         // Finally, compute the result.
         // For each of r0..r3, compute: big_endian( state[i] XOR state[i+8] )
@@ -321,7 +318,6 @@ public:
     }*/
 
 private:
-    int k;                    // Output bit-size parameter (e.g., 32)
     uint32_t block_words[16]; // 16 32-bit words; first 8 come from plotIdBytes, rest are zero.
 };
 
