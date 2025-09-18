@@ -11,18 +11,18 @@ class PlotFile
 {
 public:
     // Current on-disk format version, update this when the format changes.
-    static constexpr uint32_t X_VALUES_VERSION_ADD = 100;
+    static constexpr uint8_t X_VALUES_VERSION_ADD = 100;
     #ifdef RETAIN_X_VALUES_TO_T3
-    static constexpr uint32_t FORMAT_VERSION = X_VALUES_VERSION_ADD+2;
+    static constexpr uint8_t FORMAT_VERSION = X_VALUES_VERSION_ADD+2;
     #else
-    static constexpr uint32_t FORMAT_VERSION = 2;
+    static constexpr uint8_t FORMAT_VERSION = 2;
     #endif
 
     struct PlotFileContents {
         PlotData    data;
         ProofParams params;
     };
-    
+
     // Write PlotData to a binary file.
     static void writeData(const std::string &filename, PlotData const &data, ProofParams const &params)
     {
@@ -31,18 +31,17 @@ public:
             throw std::runtime_error("Failed to open " + filename);
 
         // 1) Write format version, note this will be different if we are writting x values for debugging.
-        uint32_t version = FORMAT_VERSION;
+        uint8_t version = FORMAT_VERSION;
         out.write((char *)&version, sizeof(version));
         // 2) Write plot ID
         out.write((char *)params.get_plot_id_bytes(), 32);
-        // 3) Write k and sub_k
-        uint32_t k = params.get_k();
-        uint32_t sub_k = params.get_sub_k();
+        // 3) Write k and sub_k and strength
+        const uint8_t k = params.get_k();
+        const uint8_t sub_k = params.get_sub_k();
+        const uint8_t match_key_bits = params.get_match_key_bits();
         out.write((char *)&k, sizeof(k));
         out.write((char *)&sub_k, sizeof(sub_k));
-        // write array of match key bits
-        std::array<uint8_t, 5> match_key_bits = params.get_match_key_bits();
-        out.write((char *)match_key_bits.data(), sizeof(uint8_t) * match_key_bits.size());
+        out.write((char *)&match_key_bits, sizeof(match_key_bits));
 
         // 4) Write plot data
         writeVector(out, data.t3_proof_fragments);
@@ -62,7 +61,7 @@ public:
             throw std::runtime_error("Failed to open " + filename);
 
         // 1) Read format version
-        uint32_t version;
+        uint8_t version;
         in.read((char *)&version, sizeof(version));
         if (version != FORMAT_VERSION) {
             // version mismatch, check if plot requires RETAIN_X_VALUES_TO_T3
@@ -85,16 +84,15 @@ public:
         // 2) Read plot ID
         uint8_t plot_id_bytes[32];
         in.read((char *)plot_id_bytes, 32);
-        // 3) Read k and sub_k
-        uint32_t k;
-        uint32_t sub_k;
+        // 3) Read k and sub_k and match key bits
+        uint8_t k;
+        uint8_t sub_k;
+        uint8_t match_key_bits;
         in.read((char *)&k, sizeof(k));
         in.read((char *)&sub_k, sizeof(sub_k));
-        // read array of match key bits
-        std::array<uint8_t, 5> match_key_bits;
-        in.read((char *)match_key_bits.data(), sizeof(uint8_t) * match_key_bits.size());
+        in.read((char *)&match_key_bits, sizeof(match_key_bits));
         // 4) Set proof parameters - creates set fault!
-        ProofParams params = ProofParams(plot_id_bytes, k);
+        ProofParams params = ProofParams(plot_id_bytes, k, match_key_bits);
         if (params.get_sub_k() != sub_k) {
             throw std::runtime_error("Plot file sub_k " + std::to_string(sub_k) + " does not match expected sub_k " + std::to_string(params.get_sub_k()) + ".");
         }

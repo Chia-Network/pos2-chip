@@ -6,6 +6,7 @@
 #include <iostream>
 #include <iomanip>
 #include <array>
+#include <cassert>
 
 class ProofParams
 {
@@ -13,12 +14,11 @@ public:
     // Constructor.
     //   plot_id_bytes: pointer to a 32-byte plot ID.
     //   k: number of bits per x, must be even
-    //   sub_k_val: optional sub_k parameter; if sub_k_val is 0, sub_k is not used.
-    //   match_key_bits: array of 5 values specifying the number of match key bits for tables 1..5.
-    //                   Default is {2,2,2,2,2}.
-    ProofParams(const uint8_t *plot_id_bytes,
-                size_t k)
-        : k_(k), num_pairing_meta_bits_(2 * k), match_key_bits_({2, 2, 2, 2, 2})
+    //   match_key_bits: the number of match key bits for table 3
+    ProofParams(const uint8_t * const plot_id_bytes,
+                const size_t k,
+                const uint8_t strength = 2)
+        : k_(k), num_pairing_meta_bits_(2 * k), match_key_bits_(strength)
     {
         // Copy the 32-byte plot ID.
         for (int i = 0; i < 32; ++i)
@@ -44,7 +44,14 @@ public:
     // Number of match key bits based on table_id (1-5).
     inline size_t get_num_match_key_bits(size_t table_id) const
     {
-        return match_key_bits_[table_id - 1];
+        assert(table_id >= 1);
+        assert(table_id <= 5);
+        if (table_id == 3) {
+            return match_key_bits_;
+        }
+        else {
+            return 2;
+        }
     }
 
     // Returns the number of section bits.
@@ -141,7 +148,7 @@ public:
     }
 
     // Returns the number of match key bits for tables 1..5.
-    const std::array<uint8_t, 5> &get_match_key_bits() const
+    const uint8_t get_match_key_bits() const
     {
         return match_key_bits_;
     }
@@ -162,14 +169,7 @@ public:
         std::cout << "num_partitions: " << num_partitions_ << std::endl;
         std::cout << "sub_k: " << sub_k_ << std::endl;
         std::cout << "num sections: " << get_num_sections() << std::endl;
-        std::cout << "match_key_bits: [";
-        for (size_t i = 0; i < match_key_bits_.size(); ++i)
-        {
-            std::cout << (int)match_key_bits_[i];
-            if (i + 1 < match_key_bits_.size())
-                std::cout << ", ";
-        }
-        std::cout << "]" << std::endl;
+        std::cout << "strength: " << match_key_bits_ << std::endl;;
     }
 
     bool operator==(ProofParams const &other) const
@@ -191,5 +191,5 @@ private:
     size_t sub_k_;
     size_t num_partition_bits_;
     size_t num_partitions_;
-    std::array<uint8_t, 5> match_key_bits_; // match key bits for tables 1..5
+    uint8_t match_key_bits_; // match key bits for tables 1..5
 };
