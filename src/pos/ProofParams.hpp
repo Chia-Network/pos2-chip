@@ -17,26 +17,37 @@ public:
     //   match_key_bits: array of 5 values specifying the number of match key bits for tables 1..5.
     //                   Default is {2,2,2,2,2}.
     ProofParams(const uint8_t *plot_id_bytes,
-                size_t k,
-                size_t sub_k_val = 0,
-                const std::array<uint8_t, 5> &match_key_bits = {2, 2, 2, 2, 2})
-        : k_(k), num_pairing_meta_bits_(2 * k), sub_k_(sub_k_val), match_key_bits_(match_key_bits)
+                size_t k)
+                //size_t sub_k_val = 0,
+                //uint8_t t3_match_key_bits = 2)
+        : k_(k), num_pairing_meta_bits_(2 * k)
     {
         // Copy the 32-byte plot ID.
         for (int i = 0; i < 32; ++i)
             plot_id_bytes_[i] = plot_id_bytes[i];
 
+        // set sub_k based on k
+        // for k 32/30/28 it will be 22/21/20 respectively
+        sub_k_ = k/2 + 6;
+
         // Partitioning setup if sub_k is used.
-        if (sub_k_ != 0)
-        {
+        //if (sub_k_ != 0)
+        //{
             num_partition_bits_ = k_ - sub_k_;
             num_partitions_ = 1ULL << num_partition_bits_;
-        }
-        else
-        {
-            num_partition_bits_ = 0;
-            num_partitions_ = 0;
-        }
+        //}
+        //else
+        //{
+        //    num_partition_bits_ = 0;
+        //    num_partitions_ = 0;
+        //}
+        
+        const uint8_t default_t3_match_key_bits = 2;
+        match_key_bits_ = {2, 2, default_t3_match_key_bits, 2, 2};
+    }
+
+    void set_t3_match_key_bits(uint8_t t3_match_key_bits) {
+        match_key_bits_[2] = t3_match_key_bits;
     }
 
     // Destructor – nothing to free since we use a fixed-size array.

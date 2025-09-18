@@ -7,24 +7,17 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2 || argc > 3)
+    if (argc < 2 || argc > 2)
     {
-        std::cerr << "Usage: " << argv[0] << " <k> [sub_k]\n";
+        std::cerr << "Usage: " << argv[0] << " <k>\n";
         return 1;
     }
 
     int k = std::atoi(argv[1]);
-    int sub_k = 16; // default value
-    if (argc == 3)
-    {
-        sub_k = std::atoi(argv[2]);
-    }
-
-    if (k <= 0 || sub_k <= 0 || sub_k > k)
+    if (k <= 0)
     {
         std::cerr << "Error: invalid parameters k=" << k
-                  << ", sub_k=" << sub_k
-                  << ". Must satisfy 0 < sub_k ≤ k.\n";
+                  << ", k must be 28, 30, or 32 (testnet: any even number 16-32).\n";
         return 1;
     }
 
@@ -33,7 +26,9 @@ int main(int argc, char *argv[])
 
     Timer timer;
     timer.start("Plotting");
-    Plotter plotter(Utils::hexToBytes(plot_id_hex), k, sub_k);
+    ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k);
+
+    Plotter plotter(proof_params);
     plotter.setValidate(true);
     PlotData plot = plotter.run();
     timer.stop();
@@ -153,7 +148,7 @@ int main(int argc, char *argv[])
     bool writeToFile = true;
     if (writeToFile)
     {
-        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k);
+        std::string filename = "plot_" + std::to_string(k);
         #ifdef RETAIN_X_VALUES_TO_T3
         filename += "_xvalues";
         #endif
@@ -179,6 +174,10 @@ int main(int argc, char *argv[])
         else
         {
             std::cerr << "Read plot does not match original." << std::endl;
+            std::cerr << "read_plot.data: ";
+            read_plot.params.debugPrint();
+            std::cerr << "original.data: ";
+            plotter.getProofParams().debugPrint();
         }
     }
 

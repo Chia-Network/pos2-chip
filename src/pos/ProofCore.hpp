@@ -277,6 +277,13 @@ public:
     // meta, order bits, and the full proof fragments.
     std::optional<T3Pairing> pairing_t3(uint64_t meta_l, uint64_t meta_r, uint32_t x_bits_l, uint32_t x_bits_r)
     {
+        // TODO: if match key bits are 2, then use match_filter_4
+        //      if match key bits are 3 or more, then use test bits.
+        uint8_t t3_match_key_bits = params_.get_num_match_key_bits(3);
+        if (t3_match_key_bits != 2) {
+            std::cerr << "pairing_t3: t3_match_key_bits " << t3_match_key_bits << " yet supported for this table. Test bits implementation pending." << std::endl;
+            exit(1);
+        }
         if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
                             static_cast<uint32_t>(meta_r & 0xFFFFU)))
             return std::nullopt;

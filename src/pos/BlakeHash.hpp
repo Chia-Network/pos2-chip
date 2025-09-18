@@ -4,6 +4,10 @@
 #include <cstddef>
 #include <cstring>
 #include <stdexcept>
+#include <array>
+#include <string>
+#include <sstream>
+#include <iomanip>
 
 //----------------------------------------------------------------------
 // BlakeHash.hpp
@@ -121,25 +125,29 @@
 class BlakeHash
 {
 public:
-    struct Result64
+    template <size_t Words>
+    struct BlakeResult
     {
-        uint32_t r[2];
-    };
+        std::array<uint32_t, Words> r;
+        static constexpr size_t SIZE = Words;
 
-    struct Result128
-    {
-        uint32_t r[4];
-    };
+        uint32_t operator[](size_t i) const { return r[i]; }
+        uint32_t &operator[](size_t i) { return r[i]; }
 
-    struct Result256
-    {
-        uint32_t r[8];
+        constexpr size_t size() const { return SIZE; }
+        uint32_t *data() { return r.data(); }
+        const uint32_t *data() const { return r.data(); }
+
+        auto begin() { return r.begin(); }
+        auto end() { return r.end(); }
+        auto begin() const { return r.begin(); }
+        auto end() const { return r.end(); }
 
         std::string toString() const
         {
             std::ostringstream oss;
             oss << std::hex << std::uppercase << std::setfill('0');
-            for (int i = 0; i < 8; ++i)
+            for (size_t i = 0; i < Words; ++i)
             {
                 if (i > 0)
                     oss << ' ';
@@ -148,6 +156,10 @@ public:
             return oss.str();
         }
     };
+
+    using Result64 = BlakeResult<2>;
+    using Result128 = BlakeResult<4>;
+    using Result256 = BlakeResult<8>;
 
     // Constructor.
     //   plotIdBytes: pointer to an array of exactly 32 bytes.

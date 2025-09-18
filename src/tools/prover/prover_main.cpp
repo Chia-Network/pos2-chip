@@ -2,7 +2,7 @@
 #include "prove/Prover.hpp"
 #include "common/Utils.hpp"
 
-int main(int argc, char *argv[])
+int main(int argc, char *argv[]) try
 {
     std::cout << "Prover: given a challenge, scan filter bits, and plot file, prove the solution." << std::endl;
     if (argc < 2 || argc > 4)
@@ -130,4 +130,10 @@ int main(int argc, char *argv[])
     std::cout << "   Found 1 in " << (float)total_trials / (float)num_chains_found << " trials." << std::endl;
     std::cout << "Prover done." << std::endl;
     prover.showStats();
+    return 0;
+}
+catch (const std::exception &ex)
+{
+    std::cerr << "Failed with exception: " << ex.what() << std::endl;
+    return 1;
 }

@@ -323,7 +323,7 @@ int benchmark(int k)
     std::cout << "BIPARTITE" << std::endl;
 #endif
 
-    ProofParams params(plot_id.data(), k, 20);
+    ProofParams params(plot_id.data(), k);
     params.show();
 
     Solver solver(params);
@@ -385,11 +385,11 @@ int prove(const std::string& plot_file) {
 int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_list, int k) {
     // convert plot_id_hex to bytes
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
-    int sub_k = 16;
-    if (k == 28) {
-        sub_k = 20;
-    }
-    ProofParams params(plot_id.data(), k, sub_k);
+    //int sub_k = 16;
+    //if (k == 28) {
+    //    sub_k = 20;
+    //}
+    ProofParams params(plot_id.data(), k);
     const uint8_t *plot_id_bytes = params.get_plot_id_bytes();
     for (size_t i = 0; i < 32; i++) {
         std::cout << "Plot ID Byte " << i << ": " << (int) plot_id_bytes[i] << std::endl;
