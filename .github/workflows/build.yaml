@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build-package:
-    name: Build ${{ matrix.os }}-${{ matrix.mode }}-${{ matrix.CC }}
+    name: Build ${{ matrix.os }}-${{ matrix.mode }} ${{ matrix.compiler }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -32,28 +32,29 @@ jobs:
         mode:
           - Release
           - Debug
-        CXX:
-          - ""
-          - clang++
+        compiler: ["", clang]
         exclude:
           - os: macos-13
-            CXX: clang++
+            compiler: clang
           - os: macos-14
-            CXX: clang++
+            compiler: clang
           - os: macos-15
-            CXX: clang++
+            compiler: clang
           - os: windows-2022
-            CXX: clang++
+            compiler: clang
           - os: windows-2025
-            CXX: clang++
+            compiler: clang
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Select Clang
+        if: ${{ matrix.compiler == 'clang' }}
+        run: |
+          echo "CXX=clang++" >> $GITHUB_ENV
+          echo "CC=clang" >> $GITHUB_ENV
       - name: Build
-        env:
-          CXX: ${{ matrix.CXX }}
         run: |
           cmake -B build -DCP_ENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=${{ matrix.mode }}
           cmake --build build --config ${{ matrix.mode }}
