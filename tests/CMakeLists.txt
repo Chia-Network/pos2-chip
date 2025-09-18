@@ -8,15 +8,6 @@ target_include_directories(${name} PRIVATE
   ../lib/doctest
 )
 
-target_compile_options(${name} PRIVATE
-  $<$<CXX_COMPILER_ID:Clang,AppleClang,GNU>:
-    -include test_util.h
-  >
-  $<$<CXX_COMPILER_ID:MSVC>:
-    /FItest_util.h
-  >
-)
-
 add_test(NAME ${name}_test COMMAND ${name} )
 
 endmacro()
