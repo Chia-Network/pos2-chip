@@ -56,33 +56,17 @@ jobs:
           echo "CC=clang" >> $GITHUB_ENV
       - name: Build
         run: |
-          cmake -B build -DCP_ENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=${{ matrix.mode }}
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -G Ninja
           cmake --build build --config ${{ matrix.mode }}
-          cmake --build build --config ${{ matrix.mode }} --target tests
-      - name: Test (windows)
-        if: ${{ startsWith(matrix.os, 'windows') }}
-        run: |
-          build\${{ matrix.mode }}\test.exe
       - name: Test
-        if: ${{ !startsWith(matrix.os, 'windows') }}
         run: |
-          build/test
-      - name: Plotter (windows)
-        if: ${{ startsWith(matrix.os, 'windows') }}
-        run: |
-          build\src\tools\plotter\${{ matrix.mode }}\plotter.exe 18
-          build\src\tools\solver\${{ matrix.mode }}\solver.exe prove plot_18_16_xvalues_nonbipartitebeforet3_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin
+            cd build
+            ctest
       - name: Plotter
-        if: ${{ !startsWith(matrix.os, 'windows') }}
         run: |
           build/src/tools/plotter/plotter 18
           build/src/tools/solver/solver prove plot_18_16_xvalues_nonbipartitebeforet3_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin
-      - name: Benchmark (Windows)
-        if: ${{ matrix.mode == 'Release' && startsWith(matrix.os, 'windows') }}
-        run: |
-          build\src\tools\solver\${{ matrix.mode }}\solver.exe benchmark 28
       - name: Benchmark
-        if: ${{ matrix.mode == 'Release' && !startsWith(matrix.os, 'windows') }}
         run: |
           build/src/tools/solver/solver benchmark 28
 

@@ -1,3 +1,4 @@
+#include "test_util.h"
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
 

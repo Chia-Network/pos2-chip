@@ -1,33 +1,15 @@
 message("Tests Enabled")
 
-add_executable(tests
-  test_all.cpp
-)
-set_target_properties(tests PROPERTIES 
-  EXCLUDE_FROM_ALL ON
-  OUTPUT_NAME "test"
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-)
-target_compile_definitions(tests PRIVATE
-  CP_TEST_MODE=1
-)
-target_include_directories(tests PRIVATE
+macro(new_test name source_file)
+add_executable(${name} ${source_file})
+target_include_directories(${name} PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/../src
   ../lib/doctest
 )
 
-# target_link_libraries(tests PRIVATE lib_plotter)
+add_test(NAME ${name}_test COMMAND ${name} )
 
-target_compile_options(tests PRIVATE
-  $<$<CXX_COMPILER_ID:Clang,AppleClang,GNU>:
-    -include test_util.h
-  >
-  $<$<CXX_COMPILER_ID:MSVC>:
-    /FItest_util.h
-  >
-)
+endmacro()
 
-
-
-# target_link_libraries(tests PRIVATE cpos2_lib)
+new_test(plot_file test_plot_file.cpp)
