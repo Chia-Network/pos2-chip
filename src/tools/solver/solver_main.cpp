@@ -323,7 +323,7 @@ int benchmark(int k)
     std::cout << "BIPARTITE" << std::endl;
 #endif
 
-    ProofParams params(plot_id.data(), k, 20);
+    ProofParams params(plot_id.data(), k);
     params.show();
 
     Solver solver(params);
@@ -385,15 +385,9 @@ int prove(const std::string& plot_file) {
 int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_list, int k) {
     // convert plot_id_hex to bytes
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
-    int sub_k = 16;
-    if (k == 28) {
-        sub_k = 20;
-    }
-    ProofParams params(plot_id.data(), k, sub_k);
+    
+    ProofParams params(plot_id.data(), k);
     const uint8_t *plot_id_bytes = params.get_plot_id_bytes();
-    for (size_t i = 0; i < 32; i++) {
-        std::cout << "Plot ID Byte " << i << ": " << (int) plot_id_bytes[i] << std::endl;
-    }
 
     params.show();
 
@@ -413,12 +407,12 @@ int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_li
     std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
     for (size_t i = 0; i < all_proofs.size(); i++)
     {
-        std::cout << "Proof " << i << ": ";
+        /*std::cout << "Proof " << i << ": ";
         for (size_t j = 0; j < all_proofs[i].size(); j++)
         {
             std::cout << all_proofs[i][j] << " ";
         }
-        std::cout << std::endl;
+        std::cout << std::endl;*/
         std::cout << "Proof hex: " << Utils::proofToHex(params.get_k(), all_proofs[i]) << std::endl;
     }
 
@@ -496,7 +490,7 @@ int main(int argc, char* argv[]) {
         for (size_t i = 0; i < 256; i++) {
             std::string hexStr = xbits_hex.substr(i * 4, 4);
             x_bits_list.push_back(Utils::fromHex(hexStr));
-            std::cout << i << ": " << x_bits_list.back() << std::endl;
+            //std::cout << i << ": " << x_bits_list.back() << std::endl;
         }
         return xbits(plot_id_hex, x_bits_list, k);
 

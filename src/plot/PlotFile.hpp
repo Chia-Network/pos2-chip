@@ -94,7 +94,10 @@ public:
         std::array<uint8_t, 5> match_key_bits;
         in.read((char *)match_key_bits.data(), sizeof(uint8_t) * match_key_bits.size());
         // 4) Set proof parameters - creates set fault!
-        ProofParams params = ProofParams(plot_id_bytes, k, sub_k);
+        ProofParams params = ProofParams(plot_id_bytes, k);
+        if (params.get_sub_k() != sub_k) {
+            throw std::runtime_error("Plot file sub_k " + std::to_string(sub_k) + " does not match expected sub_k " + std::to_string(params.get_sub_k()) + ".");
+        }
         // 5) Read plot data
         PlotData data;
         data.t3_proof_fragments = readVector<uint64_t>(in);

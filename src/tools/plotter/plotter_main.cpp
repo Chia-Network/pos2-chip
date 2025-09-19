@@ -9,22 +9,15 @@ int main(int argc, char *argv[])
 {
     if (argc < 2 || argc > 3)
     {
-        std::cerr << "Usage: " << argv[0] << " <k> [sub_k]\n";
+        std::cerr << "Usage: " << argv[0] << " <k>\n";
         return 1;
     }
 
     int k = std::atoi(argv[1]);
-    int sub_k = 16; // default value
-    if (argc == 3)
-    {
-        sub_k = std::atoi(argv[2]);
-    }
 
-    if (k <= 0 || sub_k <= 0 || sub_k > k)
+    if ((k < 18) || (k > 32) || (k % 2 != 0))
     {
-        std::cerr << "Error: invalid parameters k=" << k
-                  << ", sub_k=" << sub_k
-                  << ". Must satisfy 0 < sub_k ≤ k.\n";
+        std::cerr << "Error: k must be an even integer between 18 and 32.\n";
         return 1;
     }
 
@@ -33,7 +26,7 @@ int main(int argc, char *argv[])
 
     Timer timer;
     timer.start("Plotting");
-    Plotter plotter(Utils::hexToBytes(plot_id_hex), k, sub_k);
+    Plotter plotter(Utils::hexToBytes(plot_id_hex), k);
     plotter.setValidate(true);
     PlotData plot = plotter.run();
     timer.stop();
@@ -153,7 +146,7 @@ int main(int argc, char *argv[])
     bool writeToFile = true;
     if (writeToFile)
     {
-        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k);
+        std::string filename = "plot_" + std::to_string(k);
         #ifdef RETAIN_X_VALUES_TO_T3
         filename += "_xvalues";
         #endif
