@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
     std::cout << "Verifying proof for k=" << k << ", plot ID=" << plot_id_hex << ", challenge=" << challenge_hex << ", proof=" << proof_hex << ", proofFragmentScanFilterBits=" << proof_fragment_scan_filter_bits << std::endl;
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
     std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
-    ProofParams params(plot_id.data(), k); // sub_k is 20 for now
+    ProofParams params(plot_id.data(), k, 20); // sub_k is 20 for now
     ProofValidator proof_validator(params);
     ProofCore proof_core(params);
 

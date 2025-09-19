@@ -43,12 +43,6 @@ public:
         // write array of match key bits
         std::array<uint8_t, 5> match_key_bits = params.get_match_key_bits();
         out.write((char *)match_key_bits.data(), sizeof(uint8_t) * match_key_bits.size());
-        // debug out writing match key bits
-        std::cerr << "Writing match key bits: ";
-        for (auto b : match_key_bits) {
-            std::cerr << (int)b << " ";
-        }
-        std::cerr << std::endl;
 
         // 4) Write plot data
         writeVector(out, data.t3_proof_fragments);
@@ -100,10 +94,7 @@ public:
         std::array<uint8_t, 5> match_key_bits;
         in.read((char *)match_key_bits.data(), sizeof(uint8_t) * match_key_bits.size());
         // 4) Set proof parameters - creates set fault!
-        ProofParams params = ProofParams(plot_id_bytes, k);
-        if (params.get_sub_k() != sub_k) {
-            throw std::runtime_error("Sub_k mismatch: file has " + std::to_string(sub_k) + ", computed " + std::to_string(params.get_sub_k()));
-        }
+        ProofParams params = ProofParams(plot_id_bytes, k, sub_k);
         // 5) Read plot data
         PlotData data;
         data.t3_proof_fragments = readVector<uint64_t>(in);

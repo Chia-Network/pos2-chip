@@ -17,14 +17,13 @@
 class Plotter {
 public:
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
-    Plotter(const ProofParams& proof_params)
-      : plot_id_(), proof_params_(proof_params), fragment_codec_(proof_params_), validator_(proof_params_) {
-
-        }
+    Plotter(const std::array<uint8_t, 32> plot_id, int k, int sub_k)
+      : plot_id_(plot_id), k_(k), sub_k_(sub_k),
+        proof_params_(plot_id_.data(), k_, sub_k_), fragment_codec_(proof_params_), validator_(proof_params_) {}
 
     // Execute the plotting pipeline
     PlotData run() {
-        proof_params_.show();
+        std::cout << "Starting plotter..." << std::endl;
 
         // 1) Construct Xs candidates
         XsConstructor xs_gen_ctor(proof_params_);
@@ -112,7 +111,7 @@ public:
         // 6) Partitioned Table4 + Table5
         std::vector<std::vector<T4BackPointers>> all_t4;
         std::vector<std::vector<T5Pairing>> all_t5;
-        ProofParams sub_params(plot_id_.data(), proof_params_.get_sub_k());
+        ProofParams sub_params(plot_id_.data(), sub_k_);
 
         for (size_t pid = 0; pid < t3_results.partitioned_pairs.size(); ++pid) {
             const auto& partition = t3_results.partitioned_pairs[pid];
@@ -207,6 +206,8 @@ public:
 private:
     // Plot identifiers and parameters
     std::array<uint8_t, 32> plot_id_;
+    int k_;
+    int sub_k_;
 
     // Core PoSpace objects
     ProofParams proof_params_;
