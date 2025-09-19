@@ -4,17 +4,18 @@
 #include <cstddef>
 #include <cstring>
 #include <stdexcept>
+#include <bit>
 
 //----------------------------------------------------------------------
 // BlakeHash.hpp
 //----------------------------------------------------------------------
 
 /*
-    BlakeHash implements a simplified Blake3-like (or Blake-inspired) hash function.
-    It takes a 32‐byte plot ID and an optional output bit‐size (default 32). The 32‐byte
+    BlakeHash implements a simplified Blake3 hash function.
+    It takes a 32‐byte plot ID and an optional output bit‐size (k-size). The 32‐byte
     plot ID is split into eight 32‑bit words (using little‑endian conversion), and stored
     in a fixed array along with eight zeroed words.
-    
+
     The generate_hash() method then builds a 16‑word state using Blake3 constants,
     mixes in the stored block using a series of "g" functions and bit rotations,
     and finally returns four 32‑bit words (r0, r1, r2, r3) after XORing portions
@@ -35,13 +36,14 @@ public:
 
     // Constructor.
     //   plotIdBytes: pointer to an array of exactly 32 bytes.
-    //   k_value: desired output bit-size, default is 32.
     // Throws std::invalid_argument if plotIdBytes is null.
-    BlakeHash(const uint8_t* plot_id_bytes, int k_value = 32)
-        : k(k_value)
+    BlakeHash(const uint8_t* const plot_id_bytes)
     {
         if (!plot_id_bytes)
             throw std::invalid_argument("plotIdBytes pointer is null.");
+
+        static_assert(std::endian::native == std::endian::little, "only little endian is supported");
+
         // Fill first 8 words from the 32-byte plot ID (little-endian conversion).
         for (int i = 0; i < 8; i++) {
             // Each word is 4 bytes.
@@ -67,7 +69,7 @@ public:
 
     // generate_hash() computes the hash and returns a BlakeHashResult containing 4 words.
     BlakeHashResult generate_hash() const {
-        // Create a local state initialized with Blake-inspired constants:
+        // Create a local state initialized with Blake constants:
         // (these constants mimic the ones used in the Python code)
         uint32_t state[16] = {
             0x6A09E667U, 0xBB67AE85U, 0x3C6EF372U, 0xA54FF53AU,
@@ -173,6 +175,5 @@ public:
     }
 
 private:
-    int k;                      // Output bit-size parameter (e.g., 32)
     uint32_t block_words[16];   // 16 32-bit words; first 8 come from plotIdBytes, rest are zero.
 };

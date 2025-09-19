@@ -13,3 +13,4 @@ add_test(NAME ${name}_test COMMAND ${name} )
 endmacro()
 
 new_test(plot_file test_plot_file.cpp)
+new_test(blake_hash test_blake.cpp)

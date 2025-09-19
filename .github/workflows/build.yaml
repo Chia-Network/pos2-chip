@@ -61,7 +61,7 @@ jobs:
       - name: Test
         run: |
             cd build
-            ctest
+            ctest --output-on-failure -j 4
       - name: Plotter
         run: |
           build/src/tools/plotter/plotter 18
