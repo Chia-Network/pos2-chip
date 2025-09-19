@@ -76,6 +76,7 @@ jobs:
           build/src/tools/plotter/plotter 18
           build/src/tools/solver/solver prove plot_18_16_xvalues_nonbipartitebeforet3_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin
       - name: Benchmark
+        if: ${{ matrix.mode == 'Release' }}
         run: |
           build/src/tools/solver/solver benchmark 28
 
