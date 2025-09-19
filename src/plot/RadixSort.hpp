@@ -14,8 +14,12 @@
 template <typename T, typename KeyType, typename KeyExtractor = decltype(&T::match_info)>
 class RadixSort {
 public:
-    explicit RadixSort(KeyExtractor extractor = &T::match_info)
+    explicit RadixSort(KeyExtractor extractor)
         : key_extractor_(extractor)
+    {}
+
+    explicit RadixSort()
+        : key_extractor_(&T::match_info)
     {}
 
     // Sort the vector 'data' in place, using 'buffer' as temporary storage.

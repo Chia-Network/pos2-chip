@@ -1,1 +1,1 @@
-option(CP_ENABLE_TESTS "Enable tests" ON)
+option(CP_RETAIN_X_VALUES "Retain X values for testing." OFF)

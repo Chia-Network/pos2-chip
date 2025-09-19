@@ -2,15 +2,20 @@ add_executable(solver
   solver_main.cpp
 )
 
-# Locate TBB
-find_package(TBB REQUIRED)
+if (CP_RETAIN_X_VALUES)
+  target_compile_definitions(solver PRIVATE
+    -DRETAIN_X_VALUES=1
+    -DRETAIN_X_VALUES_TO_T3=1
+  )
+endif()
+
 
 target_include_directories(solver PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../..
 )
 
-# Link against TBB
-target_link_libraries(solver PRIVATE
-  TBB::tbb
-  atomic # required for Pi / 32-bit ARM
-)
+# required for Pi / 32-bit ARM
+# TODO: detect 32 bit ARM
+#target_link_libraries(solver PRIVATE
+#  atomic
+#)

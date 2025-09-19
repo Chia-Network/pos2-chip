@@ -1,0 +1,73 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('{0}-{1}', github.workflow_ref, github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build-package:
+    name: Build ${{ matrix.os }}-${{ matrix.mode }} ${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-13
+          - macos-14
+          - macos-15
+          - ubuntu-22.04
+          - ubuntu-24.04
+          - windows-2022
+          - windows-2025
+        mode:
+          - Release
+          - Debug
+        compiler: ["", clang]
+        exclude:
+          - os: macos-13
+            compiler: clang
+          - os: macos-14
+            compiler: clang
+          - os: macos-15
+            compiler: clang
+          - os: windows-2022
+            compiler: clang
+          - os: windows-2025
+            compiler: clang
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select Clang
+        if: ${{ matrix.compiler == 'clang' }}
+        run: |
+          echo "CXX=clang++" >> $GITHUB_ENV
+          echo "CC=clang" >> $GITHUB_ENV
+      - name: Build
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -G Ninja
+          cmake --build build --config ${{ matrix.mode }}
+      - name: Test
+        run: |
+            cd build
+            ctest
+      - name: Plotter
+        run: |
+          build/src/tools/plotter/plotter 18
+          build/src/tools/solver/solver prove plot_18_16_xvalues_nonbipartitebeforet3_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin
+      - name: Benchmark
+        run: |
+          build/src/tools/solver/solver benchmark 28
+
+

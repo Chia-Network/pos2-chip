@@ -1,16 +1,11 @@
 #pragma once
 
-// When testing, include as well so that we can intercept panic() calls.
-#if CP_TEST_MODE
-    #ifndef DOCTEST_LIBRARY_INCLUDED
-        #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-    #endif
-
-    #define DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
-    #include "doctest.h"
-#else
-    #define REQUIRE(x)  // For panic calls
+#ifndef DOCTEST_LIBRARY_INCLUDED
+    #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #endif
+
+#define DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS
+#include "doctest.h"
 
 #include <assert.h>
 #include <stdarg.h>

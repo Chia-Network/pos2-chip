@@ -28,8 +28,6 @@ This repository provides a **public reference implementation** of the new ProofÂ
 - `make` (or your preferred build tool)
 - A Unixâ€‘style shell (Linux/macOS) or PowerShell/Bash on Windows
 
----
-
 ## Building
 
 1. **Clone** the repo:
@@ -43,7 +41,6 @@ This repository provides a **public reference implementation** of the new ProofÂ
 ```bash
    ./build-release.sh
 ```
-
 
 ### Manually, directly via CMake:
 2. Configure with CMake (Release mode enables optimizations):

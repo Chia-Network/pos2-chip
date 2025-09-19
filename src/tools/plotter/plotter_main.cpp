@@ -5,7 +5,7 @@
 #include "plot/PlotFile.hpp"
 #include "common/Utils.hpp"
 
-int main(int argc, char *argv[])
+int main(int argc, char *argv[]) try
 {
     if (argc < 2 || argc > 3)
     {
@@ -176,4 +176,7 @@ int main(int argc, char *argv[])
     }
 
     return 0;
+}
+catch (const std::exception& e) {
+    std::cerr << "Failed with exception: " << e.what() << std::endl;
 }

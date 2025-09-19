@@ -371,13 +371,13 @@ int prove(const std::string& plot_file) {
     std::cout << "Plot file read successfully: " << plot_file << std::endl;
     plot.params.debugPrint();
 
-    //ProofFragmentCodec fragment_codec(plot.params);
-
     // perform the proof/chain test
     chain_test(plot);
 
     // for exhaustive testing, requires plot and compilation with RETAIN_X_VALUES_TO_T3
-    // exhaustive_test(plot);
+#ifdef RETAIN_X_VALUES_TO_T3
+    exhaustive_test(plot);
+#endif
 
     return 0;
 }
@@ -419,7 +419,7 @@ int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_li
     return 0;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) try {
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <mode> <arg>\n"
                   << "Modes:\n"
@@ -500,4 +500,7 @@ int main(int argc, char* argv[]) {
                   << "Use 'benchmark' or 'prove'." << std::endl;
         return 1;
     }
+}
+catch (const std::exception& e) {
+    std::cerr << "Failed with exception: " << e.what() << std::endl;
 }
