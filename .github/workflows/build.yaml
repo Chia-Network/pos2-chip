@@ -33,7 +33,7 @@ jobs:
           - Release
           - Debug
         compiler: ["", clang]
-        toolchain: [default, ubsan, asan]
+        toolchain: [default, ubsan, asan, tsan]
         exclude:
           - os: macos-13
             compiler: clang
@@ -53,6 +53,10 @@ jobs:
             toolchain: asan
           - os: windows-2025
             toolchain: asan
+          - os: windows-2022
+            toolchain: tsan
+          - os: windows-2025
+            toolchain: tsan
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
