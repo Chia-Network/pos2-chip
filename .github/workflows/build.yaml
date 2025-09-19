@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build-package:
-    name: Build ${{ matrix.os }}-${{ matrix.mode }} ${{ matrix.compiler }}
+    name: Build ${{ matrix.os }}-${{ matrix.mode }}-${{ matrix.toolchain }} ${{ matrix.compiler }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -33,6 +33,7 @@ jobs:
           - Release
           - Debug
         compiler: ["", clang]
+        toolchain: [default, ubsan]
         exclude:
           - os: macos-13
             compiler: clang
@@ -44,6 +45,10 @@ jobs:
             compiler: clang
           - os: windows-2025
             compiler: clang
+          - os: windows-2022
+            toolchain: ubsan
+          - os: windows-2025
+            toolchain: ubsan
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,7 +61,7 @@ jobs:
           echo "CC=clang" >> $GITHUB_ENV
       - name: Build
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -G Ninja
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -G Ninja --toolchain ${{ matrix.toolchain }}.cmake
           cmake --build build --config ${{ matrix.mode }}
       - name: Test
         run: |
