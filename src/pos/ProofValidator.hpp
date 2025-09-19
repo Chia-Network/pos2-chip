@@ -239,7 +239,7 @@ public:
     }
 
     // validates a full proof consisting of 32 x-values of k-bits (in 32 bit element array)
-    bool validate_full_proof(const std::vector<uint32_t> &full_proof, const std::array<uint8_t, 32> &challenge)
+    bool validate_full_proof(const std::vector<uint32_t> &full_proof, const std::array<uint8_t, 32> &challenge, int proof_fragment_scan_filter_bits)
     {
         if (full_proof.size() != 32 * NUM_CHAIN_LINKS)
         {
@@ -298,7 +298,7 @@ public:
 
         // Now we have all the proof fragments, we can build the Quality String.
         // First, test for the Proof Fragment Scan Filter, which finds the first set of fragments (Quality Link) in the Quality Chain.
-        ProofFragmentScanFilter scan_filter(params_, next_challenge);
+        ProofFragmentScanFilter scan_filter(params_, next_challenge, proof_fragment_scan_filter_bits);
 
         // The first challenge defines the pattern, scan range, and scan filter for the first fragment.
         FragmentsPattern pattern = proof_core_.requiredPatternFromChallenge(next_challenge);

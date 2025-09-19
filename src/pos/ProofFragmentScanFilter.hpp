@@ -21,7 +21,7 @@ public:
         }
     };
 
-    ProofFragmentScanFilter(const ProofParams &proof_params, const BlakeHash::Result256 &challenge)
+    ProofFragmentScanFilter(const ProofParams &proof_params, const BlakeHash::Result256 &challenge, const int proof_fragment_scan_filter_bits)
         : params_(proof_params),
           proof_core_(proof_params),
           challenge_(challenge)
@@ -30,7 +30,7 @@ public:
         // compute our hashing threshold for the scan filter
         double t3_exp = proof_core_.num_expected_pruned_entries_for_t3();
         double per_range = t3_exp / numScanRanges();
-        double filter = 1 / (per_range * PROOF_FRAGMENT_SCAN_FILTER);
+        double filter = 1 / (per_range * (1 << proof_fragment_scan_filter_bits));
         filter_32bit_hash_threshold_ = static_cast<uint32_t>(filter * 0xFFFFFFFF);
     }
 
@@ -132,7 +132,7 @@ public:
         range.start = scan_span * scan_range_id;
         range.end = scan_span * (scan_range_id + 1) - 1;
         // debug out
-        if (true)
+        if (false)
         {
             std::cout << "Scan range id: " << scan_range_id << std::endl;
             std::cout << "Scan range: " << range.start << " - " << range.end << std::endl;
@@ -147,6 +147,7 @@ private:
     ProofParams params_;
     ProofCore proof_core_;
     BlakeHash::Result256 challenge_;
+    double proof_fragment_scan_filter_; // 1 / expected number of fragments to pass scan filter
     //BlakeHash blake_hash_;
     uint32_t filter_32bit_hash_threshold_;
 

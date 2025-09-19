@@ -49,7 +49,7 @@ constexpr double CHAINING_FACTORS[NUM_CHAIN_LINKS - 1] = {
 constexpr double CHAINING_FACTOR = 1.1;
 #endif
 
-constexpr double PROOF_FRAGMENT_SCAN_FILTER = 2.0; // 1 / expected number of fragments to pass scan filter.
+//constexpr double PROOF_FRAGMENT_SCAN_FILTER = 2.0; // 1 / expected number of fragments to pass scan filter.
 
 enum class FragmentsPattern : uint8_t
 {

@@ -23,7 +23,7 @@ public:
     }
     ~Prover() = default;
 
-    std::vector<QualityChain> prove(uint32_t plot_id_filter)
+    std::vector<QualityChain> prove(int proof_fragment_scan_filter_bits)
     {
         // Proving works as follows:
         // 1) Read plot file and get plot data and specific parameters.
@@ -48,16 +48,20 @@ public:
 
         // 2) Does it pass plot id filter?
         ProofCore proof_core(plot.params);
-        auto plot_id_filter_result = proof_core.check_plot_id_filter(plot_id_filter, challenge_);
-        if (!plot_id_filter_result.has_value())
-        {
-            std::cerr << "Plot ID filter did not pass challenge.";
-            return {}; // No chains can be created if plot ID filter fails.
-        }
-        BlakeHash::Result256 next_challenge = plot_id_filter_result.value();
+
+        BlakeHash::Result256 next_challenge = proof_core.hashing.challengeWithPlotIdHash(challenge_.data());
+
+        // below is commented out, since assume harvesters already did plot id filtering
+        //auto plot_id_filter_result = proof_core.check_plot_id_filter(plot_id_filter, challenge_);
+        //if (!plot_id_filter_result.has_value())
+        //{
+        //    std::cerr << "Plot ID filter did not pass challenge.";
+        //    return {}; // No chains can be created if plot ID filter fails.
+        //}
+        //BlakeHash::Result256 next_challenge = plot_id_filter_result.value();
 
         // 2) Scan the plot data for fragments that pass the Proof Fragment Scan Filter
-        ProofFragmentScanFilter scan_filter(plot.params, next_challenge);
+        ProofFragmentScanFilter scan_filter(plot.params, next_challenge, proof_fragment_scan_filter_bits);
         std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.scan(plot.data.t3_proof_fragments);
         stats_.num_scan_filter_passed++;
         stats_.num_fragments_passed_scan_filter += filtered_fragments.size();
@@ -77,7 +81,10 @@ public:
         ProofFragmentCodec fragment_codec(plot.params);
         ProofCore proof_core(plot.params);
         FragmentsPattern firstPattern = proof_core.requiredPatternFromChallenge(next_challenge);
+
+        #ifdef DEBUG_CHAINING
         std::cout << "Required pattern from challenge: " << static_cast<int>(firstPattern) << std::endl;
+        #endif
         // uint32_t chaining_hash_pass_threshold = proof_core.quality_chain_pass_threshold();
 
         std::cout << "Found fragments passing filter: " << filtered_fragments.size() << std::endl;
@@ -87,13 +94,17 @@ public:
             // extract R pointer
             uint32_t l_partition = fragment_codec.get_lateral_to_t4_partition(fragment);
             uint32_t r_partition = fragment_codec.get_r_t4_partition(fragment);
+
+            #ifdef DEBUG_CHAINING
             // std::cout << "          Total partitions: " << plot.params.get_num_partitions() << std::endl;
             std::cout << "          Partition A(L): " << l_partition << std::endl;
             std::cout << "          Partition R(R): " << r_partition << std::endl;
+            #endif
 
             std::vector<QualityLink> firstLinks = getFirstQualityLinks(FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION, firstPattern, frag_res.index, r_partition);
 
             // output first links fragemnts in hex
+            #ifdef DEBUG_CHAINING
             std::cout << " # First Quality Links: " << firstLinks.size() << std::endl;
             for (const auto &link : firstLinks)
             {
@@ -103,10 +114,14 @@ public:
                           << link.fragments[2] << std::dec
                           << " | Pattern: " << static_cast<int>(link.pattern);
             }
+            #endif
 
             std::vector<QualityLink> links = getQualityLinks(l_partition, r_partition);
+
+            #ifdef DEBUG_CHAINING
             std::cout << " # First Quality Links: " << firstLinks.size() << std::endl;
             std::cout << " # Links: " << links.size() << std::endl;
+            #endif
 
             // analysis code
             if (false)
@@ -158,7 +173,10 @@ public:
 
         stats_.num_first_chain_links++;
 
+
+        #ifdef DEBUG_CHAINING
         std::cout << "First challenge hash: " << next_challenge.toString() << std::endl;
+        #endif
 
         for (int depth = 1; depth < NUM_CHAIN_LINKS; ++depth)
         {
@@ -179,7 +197,10 @@ public:
             for (auto &qc : quality_chains)
             {
                 auto new_links = proof_core_.getNewLinksForChain(qc.chain_hash, link_set, depth);
+
+                #ifdef DEBUG_CHAINING
                 std::cout << "Next challenge hash (" << depth << "): " << qc.chain_hash.toString() << std::endl;
+                #endif
 
                 // if we have new links, create new chains
                 for (const auto &new_link_result : new_links)
@@ -297,17 +318,25 @@ public:
         // std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
 
         std::vector<QualityLink> other_partition_links = getQualityLinksFromT4PartitionToT3Partition(partition_B, partition_A, FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION);
+        
+        #ifdef DEBUG_CHAINING
         std::cout << "Found " << other_partition_links.size() << " links from partition B to A." << std::endl;
+        #endif
 
         std::vector<QualityLink> challenge_partition_links = getQualityLinksFromT4PartitionToT3Partition(partition_A, partition_B, FragmentsParent::PARENT_NODE_IN_CHALLENGE_PARTITION);
 
+        #ifdef DEBUG_CHAINING
         std::cout << "Found " << challenge_partition_links.size() << " links from partition A to B." << std::endl;
+        #endif
 
         // combine both links
         links.reserve(other_partition_links.size() + challenge_partition_links.size());
         links.insert(links.end(), other_partition_links.begin(), other_partition_links.end());
         links.insert(links.end(), challenge_partition_links.begin(), challenge_partition_links.end());
+
+        #ifdef DEBUG_CHAINING
         std::cout << "Total links found: " << links.size() << std::endl;
+        #endif
         return links;
     }
 
@@ -318,10 +347,12 @@ public:
         // 1. get t3 partition A range, and scan R side links from partitionB that link to partition_A
         Range t3_partition_range = plot_.value().data.t4_to_t3_lateral_ranges[partition_t3];
         std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
+        #ifdef DEBUG_CHAINING
         std::cout << "Partition T3: " << partition_t3 << std::endl;
         std::cout << "t3_partition_range: " << t3_partition_range.start << " - " << t3_partition_range.end << std::endl;
         // 2. get t4 partition B, and find r links that point to t3 partition A range
         std::cout << "Partition Parent T4: " << partition_parent_t4 << std::endl;
+        #endif
         std::vector<T4BackPointers> t4_b_to_t3 = plot_.value().data.t4_to_t3_back_pointers[partition_parent_t4];
         std::vector<T5Pairing> t5_b_to_t4_b = plot_.value().data.t5_to_t4_back_pointers[partition_parent_t4];
         int links_found = 0;
@@ -374,8 +405,10 @@ public:
                 links_found++;
             }
         }
+        #ifdef DEBUG_CHAINING
         std::cout << "Found " << links_found << " links in partition B: " << partition_parent_t4 << " that point to partition A: " << partition_t3 << std::endl;
         std::cout << "Quality Links found: " << links.size() << std::endl;
+        #endif
 
         return links;
     }
@@ -383,7 +416,9 @@ public:
     std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain chain)
     {
         std::vector<uint64_t> proof_fragments;
+        #ifdef DEBUG_CHAINING
         std::cout << "Getting all proof fragments for chain with " << chain.chain_links.size() << " links." << std::endl;
+        #endif
         for (int link_id = 0; link_id < chain.chain_links.size(); link_id++)
         // for (const auto &link : chain.chain_links)
         {
@@ -397,7 +432,9 @@ public:
                 proof_fragments.push_back(link.fragments[1]);                                             // RL
                 proof_fragments.push_back(link.fragments[2]);                                             // RR
 
+                #ifdef DEBUG_CHAINING
                 std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_LR " << outside_fragment << "]" << std::dec << std::endl;
+                #endif
             }
             else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
             {
@@ -407,7 +444,9 @@ public:
                 uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
                 proof_fragments.push_back(outside_fragment);                                              // RR
 
+                #ifdef DEBUG_CHAINING
                 std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_RR " << outside_fragment << "]" << std::dec << std::endl;
+                #endif
             }
             else
             {

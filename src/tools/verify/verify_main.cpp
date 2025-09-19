@@ -8,10 +8,10 @@
 
 int main(int argc, char *argv[])
 {
-    std::cout << "Verify: given a k-size, hex proof, and 32 byte hex challenge, verify the proof." << std::endl;
+    std::cout << "Verify: given a k-size, hex proof, 32 byte hex challenge, and proof_fragment_scan_filter_bits, verify the proof." << std::endl;
     if (argc < 4 || argc > 5)
     {
-        std::cerr << "Usage: " << argv[0] << " [k] [hexPlotId] [hexProof] [hexChallenge]\n";
+        std::cerr << "Usage: " << argv[0] << " [k] [hexPlotId] [hexProof] [hexChallenge] [proofFragmentScanFilterBits]\n";
         return 1;
     }
     int k = std::stoi(argv[1]);
@@ -34,7 +34,16 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    std::cout << "Verifying proof for k=" << k << ", plot ID=" << plot_id_hex << ", challenge=" << challenge_hex << ", proof=" << proof_hex << std::endl;
+    int proof_fragment_scan_filter_bits = 0;
+    if (argc == 6) {
+        proof_fragment_scan_filter_bits = std::stoi(argv[5]);
+        if (proof_fragment_scan_filter_bits < 0 || proof_fragment_scan_filter_bits > 16) {
+            std::cerr << "Error: proofFragmentScanFilterBits must be between 0 and 16." << std::endl;
+            return 1;
+        }
+    }
+
+    std::cout << "Verifying proof for k=" << k << ", plot ID=" << plot_id_hex << ", challenge=" << challenge_hex << ", proof=" << proof_hex << ", proofFragmentScanFilterBits=" << proof_fragment_scan_filter_bits << std::endl;
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
     std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
     ProofParams params(plot_id.data(), k); // sub_k is 20 for now
@@ -44,7 +53,7 @@ int main(int argc, char *argv[])
     std::vector<uint32_t> proof = Utils::hexToProof(k, proof_hex);
 
     // get all sub-proofs, which are collections of 32 x-values
-    if (proof_validator.validate_full_proof(proof, challenge))
+    if (proof_validator.validate_full_proof(proof, challenge, proof_fragment_scan_filter_bits))
     {
         std::cout << "Proof is valid." << std::endl;
     }

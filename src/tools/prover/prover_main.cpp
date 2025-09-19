@@ -24,13 +24,15 @@ try
 
     std::string challenge_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
     std::string plotfile;
-    int proof_fragment_scan_filter_bits = 4; // default 4 bits
+    int proof_fragment_scan_filter_bits = 5; // default 5 bits
+
+    int total_trials = 1000; // default 1000 trials
 
     if (mode == "challenge")
     {
         if ((argc < 4) || (argc > 5))
         {
-            std::cerr << "Usage: " << argv[0] << " challenge [challengehex] [plotfile] [scan_filter_bits=5 (optional)] \n";
+            std::cerr << "Usage: " << argv[0] << " challenge [challengehex] [plotfile] [proof_fragment_scan_filter_bits=5 (optional)] \n";
             return 1;
         }
         std::cout << "challenge not implemented yet." << std::endl;
@@ -41,16 +43,30 @@ try
             proof_fragment_scan_filter_bits = std::stoi(argv[4]);
         }
     }
-    // support: prover check [plotfile]
+    // support: prover check [plotfile] [n_trials=1000]
     else if (mode == "check")
     {
-        if (argc != 3)
+        if (argc != 3 && argc != 4 && argc != 5)
         {
-            std::cerr << "Usage: " << argv[0] << " check [plotfile]\n";
+            std::cerr << "Usage: " << argv[0] << " check [plotfile] [proof_fragment_scan_filter_bits=5 (optional)] [total_trials=1000 (optional)]\n";
             return 1;
         }
         plotfile = argv[2];
-        std::cout << "Check mode: plot file = " << plotfile << std::endl;
+
+        if (argc >= 4)
+        {
+            proof_fragment_scan_filter_bits = std::stoi(argv[3]);
+        }
+        if (proof_fragment_scan_filter_bits < 1 || proof_fragment_scan_filter_bits > 16)
+        {
+            std::cerr << "Error: scan_filter_bits must be between 1 and 16." << std::endl;
+            return 1;
+        }
+        if (argc >= 5)
+        {
+            total_trials = std::stoi(argv[4]);
+        }
+        std::cout << "Check mode: plot file = " << plotfile << ", proof_fragment_scan_filter_bit = " << proof_fragment_scan_filter_bits << ", total_trials = " << total_trials << std::endl;
     }
     else {
         std::cerr << "Unknown mode: " << mode << std::endl;
@@ -72,7 +88,7 @@ try
         Prover prover(challenge, plotfile);
 
         prover.setChallenge(challenge);
-        std::vector<QualityChain> chains = prover.prove(0);
+        std::vector<QualityChain> chains = prover.prove(proof_fragment_scan_filter_bits);
 
         if (chains.size() > 0)
         {
@@ -122,7 +138,6 @@ try
         // set random seed
         srand(static_cast<unsigned int>(time(nullptr)));
         int num_chains_found = 0;
-        int total_trials = 1000; // 2^8
         for (int i = 0; i < total_trials; i++)
         {
             std::cout << "----------- Trial " << i << "/" << total_trials << " ------ " << std::endl;
@@ -140,13 +155,16 @@ try
             // }
 
             prover.setChallenge(challenge);
-            std::vector<QualityChain> chains = prover.prove(0);
+            std::vector<QualityChain> chains = prover.prove(proof_fragment_scan_filter_bits);
             if (chains.size() > 0)
             {
                 std::cout << "Found " << chains.size() << " chains." << std::endl;
                 num_chains_found += chains.size();
 
-                std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chains[0]);
+                for (int chain_solution = 0; chain_solution < chains.size(); chain_solution++) {
+                    
+
+                std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chains[chain_solution]);
                 // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
                 ProofParams params = prover.getProofParams();
@@ -156,26 +174,28 @@ try
                 std::vector<uint32_t> xbits_list;
                 for (const auto &fragment : proof_fragments)
                 {
-                    // std::cout << "ProofFragmentCodec: " << std::hex << fragment << std::dec;
+                    //std::cout << "ProofFragmentCodec: " << std::hex << fragment << std::dec;
                     std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(fragment);
                     for (const auto &x_bit : x_bits)
                     {
                         // at most 16 bits = 4 x 4 bits
                         xbits_hex += Utils::toHex(x_bit, 4);
                         xbits_list.push_back(x_bit);
-                        std::cout << " " << x_bit;
+                        //std::cout << " " << x_bit;
                     }
-                    std::cout << std::endl;
+                    //std::cout << std::endl;
                 }
 
                 std::array<uint8_t, 32> plot_id_arr;
                 std::memcpy(plot_id_arr.data(), params.get_plot_id_bytes(), 32);
                 std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
 
+                std::cout << "Chain solution " << chain_solution << ": ";
                 std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << std::endl;
+            }
 
                 std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
-                return 0;
+                
             }
             else
             {
