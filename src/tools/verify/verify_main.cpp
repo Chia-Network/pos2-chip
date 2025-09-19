@@ -9,15 +9,15 @@
 int main(int argc, char *argv[])
 {
     std::cout << "Verify: given a k-size, hex proof, 32 byte hex challenge, and proof_fragment_scan_filter_bits, verify the proof." << std::endl;
-    if (argc < 4 || argc > 5)
+    if (argc != 6)
     {
         std::cerr << "Usage: " << argv[0] << " [k] [hexPlotId] [hexProof] [hexChallenge] [proofFragmentScanFilterBits]\n";
         return 1;
     }
     int k = std::stoi(argv[1]);
-    if (k != 28 && k != 30 && k != 32)
+    if (k < 18 || k > 32 || (k % 2) != 0)
     {
-        std::cerr << "Error: k-size must be 28, 30, or 32." << std::endl;
+        std::cerr << "Error: k-size must be even and between 18 and 32.\n";
         return 1;
     }
     std::string plot_id_hex = argv[2];
@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
     ProofParams params(plot_id.data(), k); 
     ProofValidator proof_validator(params);
-    ProofCore proof_core(params);
+    //ProofCore proof_core(params);
 
     std::vector<uint32_t> proof = Utils::hexToProof(k, proof_hex);
 
