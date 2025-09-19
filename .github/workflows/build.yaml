@@ -57,6 +57,8 @@ jobs:
             toolchain: tsan
           - os: windows-2025
             toolchain: tsan
+          - mode: Debug
+            toolchain: default
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
