@@ -13,3 +13,6 @@ add_test(NAME ${name}_test COMMAND ${name} )
 endmacro()
 
 new_test(plot_file test_plot_file.cpp)
+new_test(proof_fragment_scan_filter test_ProofFragmentScanFilter.cpp)
+new_test(chaining test_chaining.cpp)
+new_test(utils test_Utils.cpp)

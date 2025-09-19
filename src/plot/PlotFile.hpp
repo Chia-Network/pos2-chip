@@ -45,12 +45,12 @@ public:
         out.write((char *)match_key_bits.data(), sizeof(uint8_t) * match_key_bits.size());
 
         // 4) Write plot data
-        writeVector(out, data.t3_encrypted_xs);
+        writeVector(out, data.t3_proof_fragments);
         writeRanges(out, data.t4_to_t3_lateral_ranges);
         writeNestedVector(out, data.t4_to_t3_back_pointers);
         writeNestedVector(out, data.t5_to_t4_back_pointers);
         #ifdef RETAIN_X_VALUES_TO_T3
-        writeVector(out, data.xs_correlating_to_encrypted_xs);
+        writeVector(out, data.xs_correlating_to_proof_fragments);
         #endif
     }
 
@@ -94,15 +94,18 @@ public:
         std::array<uint8_t, 5> match_key_bits;
         in.read((char *)match_key_bits.data(), sizeof(uint8_t) * match_key_bits.size());
         // 4) Set proof parameters - creates set fault!
-        ProofParams params = ProofParams(plot_id_bytes, k, sub_k);
+        ProofParams params = ProofParams(plot_id_bytes, k);
+        if (params.get_sub_k() != sub_k) {
+            throw std::runtime_error("Plot file sub_k " + std::to_string(sub_k) + " does not match expected sub_k " + std::to_string(params.get_sub_k()) + ".");
+        }
         // 5) Read plot data
         PlotData data;
-        data.t3_encrypted_xs = readVector<uint64_t>(in);
+        data.t3_proof_fragments = readVector<uint64_t>(in);
         data.t4_to_t3_lateral_ranges = readRanges(in);
         data.t4_to_t3_back_pointers = readNestedVector<T4BackPointers>(in);
         data.t5_to_t4_back_pointers = readNestedVector<T5Pairing>(in);
         #ifdef RETAIN_X_VALUES_TO_T3
-        data.xs_correlating_to_encrypted_xs    = readVector<std::array<uint32_t,8>>(in);
+        data.xs_correlating_to_proof_fragments    = readVector<std::array<uint32_t,8>>(in);
         #endif
         return {
             .data = data,

@@ -9,22 +9,15 @@ int main(int argc, char *argv[]) try
 {
     if (argc < 2 || argc > 3)
     {
-        std::cerr << "Usage: " << argv[0] << " <k> [sub_k]\n";
+        std::cerr << "Usage: " << argv[0] << " <k>\n";
         return 1;
     }
 
     int k = std::atoi(argv[1]);
-    int sub_k = 16; // default value
-    if (argc == 3)
-    {
-        sub_k = std::atoi(argv[2]);
-    }
 
-    if (k <= 0 || sub_k <= 0 || sub_k > k)
+    if ((k < 18) || (k > 32) || (k % 2 != 0))
     {
-        std::cerr << "Error: invalid parameters k=" << k
-                  << ", sub_k=" << sub_k
-                  << ". Must satisfy 0 < sub_k ≤ k.\n";
+        std::cerr << "Error: k must be an even integer between 18 and 32.\n";
         return 1;
     }
 
@@ -33,7 +26,7 @@ int main(int argc, char *argv[]) try
 
     Timer timer;
     timer.start("Plotting");
-    Plotter plotter(Utils::hexToBytes(plot_id_hex), k, sub_k);
+    Plotter plotter(Utils::hexToBytes(plot_id_hex), k);
     plotter.setValidate(true);
     PlotData plot = plotter.run();
     timer.stop();
@@ -60,7 +53,7 @@ int main(int argc, char *argv[]) try
                       << "     T5 entries: " << plot.t5_to_t4_back_pointers[partition_id].size() << std::endl;
         }
     }
-    std::cout << "Total T3 entries: " << plot.t3_encrypted_xs.size() << "\n";
+    std::cout << "Total T3 entries: " << plot.t3_proof_fragments.size() << "\n";
     std::cout << "Total T4 entries: " << t4_to_t3_count << "\n";
     std::cout << "Total T5 entries: " << t5_to_t4_count << "\n";
     std::cout << "----------------------" << std::endl;
@@ -74,7 +67,7 @@ int main(int argc, char *argv[]) try
 
         // first validate all xs in T3
         timer.start("Validating Table 3 - Final");
-        for (const auto& xs_array : plot.xs_correlating_to_encrypted_xs) {
+        for (const auto& xs_array : plot.xs_correlating_to_proof_fragments) {
             auto result = validator.validate_table_3_pairs(xs_array.data());
             if (!result.has_value()) {
                 std::cerr << "Validation failed for Table 3 pair: ["
@@ -88,7 +81,7 @@ int main(int argc, char *argv[]) try
         timer.stop();
 
 
-        XsEncryptor xs_encryptor = plotter.getXsEncryptor();
+        ProofFragmentCodec fragment_codec = plotter.getProofFragment();
         timer.start("Validating Table 5 - Final");
         int total_validated = 0;
         std::cout << "Partition..." << std::flush;
@@ -98,10 +91,10 @@ int main(int argc, char *argv[]) try
             for (size_t i = 0; i < plot.t5_to_t4_back_pointers[partition_id].size(); ++i)
             {
                 uint32_t back_pointer_index = plot.t5_to_t4_back_pointers[partition_id][i].t4_index_l;
-                uint64_t back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].encx_index_l;
-                uint64_t back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].encx_index_r;
-                uint64_t encrypted_xs_l = plot.t3_encrypted_xs[back_l];
-                uint64_t encrypted_xs_r = plot.t3_encrypted_xs[back_r];
+                uint64_t back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_l;
+                uint64_t back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_r;
+                uint64_t proof_fragment_l = plot.t3_proof_fragments[back_l];
+                uint64_t proof_fragment_r = plot.t3_proof_fragments[back_r];
                 auto res = validator.validate_table_5_pairs(plot.t5_to_t4_back_pointers[partition_id][i].xs);
                 if (!res)
                 {
@@ -112,11 +105,11 @@ int main(int argc, char *argv[]) try
                     }
                     exit(23);
                 }
-                bool valid_l = xs_encryptor.validate_encrypted_xs(encrypted_xs_l, plot.t5_to_t4_back_pointers[partition_id][i].xs);
-                bool valid_r = xs_encryptor.validate_encrypted_xs(encrypted_xs_r, plot.t5_to_t4_back_pointers[partition_id][i].xs + 8);
+                bool valid_l = fragment_codec.validate_proof_fragment(proof_fragment_l, plot.t5_to_t4_back_pointers[partition_id][i].xs);
+                bool valid_r = fragment_codec.validate_proof_fragment(proof_fragment_r, plot.t5_to_t4_back_pointers[partition_id][i].xs + 8);
                 if (!valid_l || !valid_r)
                 {
-                    std::cerr << "Encrypted_xs do not match x-values " << i << std::endl;
+                    std::cerr << "Fragments do not match x-values " << i << std::endl;
                     for (int i = 0; i < 8; i++)
                     {
                         std::cerr << plot.t5_to_t4_back_pointers[partition_id][i].xs[i] << ", ";
@@ -126,15 +119,15 @@ int main(int argc, char *argv[]) try
                 }
 
                 back_pointer_index = plot.t5_to_t4_back_pointers[partition_id][i].t4_index_r;
-                back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].encx_index_l;
-                back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].encx_index_r;
-                encrypted_xs_l = plot.t3_encrypted_xs[back_l];
-                encrypted_xs_r = plot.t3_encrypted_xs[back_r];
-                valid_l = xs_encryptor.validate_encrypted_xs(encrypted_xs_l, plot.t5_to_t4_back_pointers[partition_id][i].xs + 16);
-                valid_r = xs_encryptor.validate_encrypted_xs(encrypted_xs_r, plot.t5_to_t4_back_pointers[partition_id][i].xs + 24);
+                back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_l;
+                back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_r;
+                proof_fragment_l = plot.t3_proof_fragments[back_l];
+                proof_fragment_r = plot.t3_proof_fragments[back_r];
+                valid_l = fragment_codec.validate_proof_fragment(proof_fragment_l, plot.t5_to_t4_back_pointers[partition_id][i].xs + 16);
+                valid_r = fragment_codec.validate_proof_fragment(proof_fragment_r, plot.t5_to_t4_back_pointers[partition_id][i].xs + 24);
                 if (!valid_l || !valid_r)
                 {
-                    std::cerr << "Encrypted_xs do not match x-values " << i << std::endl;
+                    std::cerr << "Fragments xs do not match x-values " << i << std::endl;
                     for (int i = 0; i < 8; i++)
                     {
                         std::cerr << plot.t5_to_t4_back_pointers[partition_id][i].xs[i] << ", ";
@@ -153,7 +146,7 @@ int main(int argc, char *argv[]) try
     bool writeToFile = true;
     if (writeToFile)
     {
-        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(sub_k);
+        std::string filename = "plot_" + std::to_string(k);
         #ifdef RETAIN_X_VALUES_TO_T3
         filename += "_xvalues";
         #endif

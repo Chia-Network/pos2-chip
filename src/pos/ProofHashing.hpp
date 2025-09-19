@@ -51,6 +51,50 @@ public:
     // Prepares Blake hash data for pairing.
     void set_data_for_pairing(uint32_t salt, uint64_t meta_l, uint64_t meta_r, int num_meta_bits);
 
+    BlakeHash::Result256 challengeWithPlotIdHash(const uint8_t *challenge_32_bytes)
+    {   
+        uint32_t block_words[16];
+        const uint8_t *plot_id_bytes = params_.get_plot_id_bytes();
+        // Fill the first 8 words with the plot ID.
+
+        // set data from plot id
+        for (int i = 0; i < 8; i++) {
+            block_words[i] = 
+                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 0]))        |
+                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 1]) << 8)   |
+                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 2]) << 16)  |
+                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 3]) << 24);
+        }
+        // set data from challenge
+        for (int i = 0; i < 8; i++) {
+            block_words[i + 8] = 
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 0]))        |
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 1]) << 8)   |
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 2]) << 16)  |
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 3]) << 24);
+        }
+        
+        return BlakeHash::hash_block_256(block_words);
+    }
+
+    BlakeHash::Result256 chainHash(BlakeHash::Result256 prev_chain_hash, const uint64_t *link_fragments)
+    {
+        uint32_t block_words[16];
+        for (int i = 0; i < 8; i++) {
+            block_words[i] = prev_chain_hash.r[i];
+        }
+        block_words[8] = static_cast<uint32_t>(link_fragments[0] & 0xFFFFFFFF);
+        block_words[9] = static_cast<uint32_t>(link_fragments[0] >> 32);
+        block_words[10] = static_cast<uint32_t>(link_fragments[1] & 0xFFFFFFFF);
+        block_words[11] = static_cast<uint32_t>(link_fragments[1] >> 32);
+        block_words[12] = static_cast<uint32_t>(link_fragments[2] & 0xFFFFFFFF);
+        block_words[13] = static_cast<uint32_t>(link_fragments[2] >> 32);
+        block_words[14] = 0; // Zero out the last two words.
+        block_words[15] = 0;
+
+        return BlakeHash::hash_block_256(block_words);
+    }
+
 private:
     // Prepares Blake hash data for computing the matching target.
     void _set_data_for_matching_target(uint32_t salt, uint32_t match_key, uint64_t meta, int num_meta_bits);
@@ -81,16 +125,8 @@ inline uint32_t ProofHashing::matching_target(int table_id, uint32_t match_key,
                                               uint64_t meta, int num_meta_bits, int num_target_bits) {
     // Use table_id as the salt.
     _set_data_for_matching_target(static_cast<uint32_t>(table_id), match_key, meta, num_meta_bits);
-    BlakeHash::BlakeHashResult res = blake_.generate_hash();
+    uint32_t match_target_bits = blake_.generate_hash_32() & ((1ULL << num_target_bits) - 1);
 
-    uint32_t match_target_bits = 0;
-    if (num_target_bits == 32) {
-        match_target_bits = res.r0;
-    } else if (num_target_bits < 32) {
-        match_target_bits = res.r0 & ((1ULL << num_target_bits) - 1);
-    } else {
-        throw std::invalid_argument("num_target_bits > 32 not supported");
-    }
     return match_target_bits;
 }
 
@@ -139,20 +175,20 @@ inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64
                                            int in_meta_bits, int num_match_info_bits,
                                            int out_num_meta_bits, int num_test_bits) {
     set_data_for_pairing(static_cast<uint32_t>(table_id), meta_l, meta_r, in_meta_bits);
-    BlakeHash::BlakeHashResult res = blake_.generate_hash();
+    BlakeHash::Result128 res = blake_.generate_hash();
 
     PairingResult pr = {0, 0, 0};
 
     // Special case: table 5 returns only test bits for match filter.
     if (num_match_info_bits == 0 && out_num_meta_bits == 0 && num_test_bits > 0) {
-        pr.test_result = res.r0 & ((1ULL << num_test_bits) - 1);
+        pr.test_result = res.r[0] & ((1ULL << num_test_bits) - 1);
         return pr;
     }
 
     if (num_match_info_bits == 32)
-        pr.match_info_result = res.r0;
+        pr.match_info_result = res.r[0];
     else if (num_match_info_bits < 32)
-        pr.match_info_result = res.r0 & ((1ULL << num_match_info_bits) - 1);
+        pr.match_info_result = res.r[0] & ((1ULL << num_match_info_bits) - 1);
     else {
         // num_match_info_bits > 32
         //match_info_result = (res.r0 | (static_cast<uint64_t>(res.r1) << 32))
@@ -165,9 +201,9 @@ inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64
     }
 
     if (out_num_meta_bits == 64)
-        pr.meta_result = res.r1 + (static_cast<uint64_t>(res.r2) << 32);
+        pr.meta_result = res.r[1] + (static_cast<uint64_t>(res.r[2]) << 32);
     else if (out_num_meta_bits < 64)
-        pr.meta_result = (res.r1 + (static_cast<uint64_t>(res.r2) << 32))
+        pr.meta_result = (res.r[1] + (static_cast<uint64_t>(res.r[2]) << 32))
                       & ((1ULL << out_num_meta_bits) - 1);
     else {
         throw std::invalid_argument("num_bits_meta > 64 not supported");
@@ -177,7 +213,7 @@ inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64
         return pr;
     }
 
-    uint32_t test_result = res.r3 & ((1ULL << num_test_bits) - 1);
+    uint32_t test_result = res.r[3] & ((1ULL << num_test_bits) - 1);
     pr.test_result = test_result;
     return pr;
 }

@@ -92,6 +92,8 @@
         "stop_token": "cpp",
         "thread": "cpp",
         "cfenv": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "coroutine": "cpp",
+        "__config": "cpp"
     }
 }
