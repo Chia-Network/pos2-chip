@@ -147,7 +147,7 @@ public:
         return k_ / 2 + 6;
     }
 
-    // Returns the number of match key bits for tables 1..5.
+    // Returns the number of match key bits for table 3
     const uint8_t get_match_key_bits() const
     {
         return match_key_bits_;
