@@ -76,7 +76,6 @@ public:
 
         char magic[4] = {};
         in.read(magic, sizeof(magic));
-        printf("%c%c%c%c\n", magic[0], magic[1], magic[2], magic[3]);
         if (memcmp(magic, "pos2", 4) != 0)
             throw std::runtime_error("Plot file invalid magic bytes, not a plot file");
 
