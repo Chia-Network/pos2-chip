@@ -291,7 +291,7 @@ To build a Quality Chain, each Chain Link becomes a candidate for adding to the 
 
 There may be lots of parallel Quality Chains. Each Quality Chain then tests whether it passes the block or pool partial difficulty for a winning proof.
 
-A block win is a rare event, so is unlikely to have more than 1 passing Quality Chain. A pool partial win can be more frequent depending on a farmer's pool settings: for this case we require that a farmer submit at most one valid proof per plot ID, so they don't solve using more compute than necessary. This is easy to implement for the pool but would be a difficult (and unnecessary) condition for the blockchain itself.
+A block win is a rare event, so it is unlikely to have more than 1 passing Quality Chain. A pool partial win can be more frequent depending on a farmer's pool's settings: for this case we require that a farmer submit at most one valid proof per plot ID, so they don't solve using more compute than necessary. This is easy to implement for the pool but would be a difficult (and unnecessary) condition for the blockchain itself.
 
 ### Major Design Rationale
 
@@ -354,7 +354,7 @@ Left-side and right-side pairs live in disjoint datasets. The pairing order is i
 
 Benes compression (see [blog post 1](https://www.chia.net/2024/08/08/approaching-the-next-generation-of-proof-of-space/), [blog post 2](https://www.chia.net/2024/12/11/upcoming-changes-for-chias-new-proof-of-space-format/), and the [Security](#security) section) uses a novel compression algorithm to give the best compression on plot structured data, saving multiple bits per entry versus ANS compression. However, it has two main drawbacks:
 
-- (1) plotting needs huge RAM and many random reads at large k-sizes. A straight k-32 Benes plot would demand GPU clusters.
+- (1) plotting needs huge amounts RAM and many random reads at large k-sizes. A straight k-32 Benes plot would demand GPU clusters.
 - (2) too many disk reads for HDD usage, requiring 3-9x the disk seeks of other compression methods.
 
 This would fragment the ecosystem across high/low-end systems and HDD/SSD storage, leaving baseline system farmers with plots that are larger and less competitive than their Benes compressed counterparts.
@@ -370,7 +370,7 @@ Partitions are structured to reduce HDD seeks to allow for construction of Quali
 ![Partition mappings](./assets/partitions-mappings.png)
 *Showing mapping from T3 Proof Fragments to lateral (L) partition from T4/5.*
 
-Each table is divided into partitions, and partitions can either be lower or upper partitions. In the example above there are 8 partitions, with 4 lower and 4 upper. The Proof Fragment bits define the partitions (see [Technical Specifications](#proof-of-space-specification)). The Proof Fragments in T3 may have one or both of the following pointers from T4: a lateral (L) pointer, and/or a crossover (R) pointer.  These two pointers will always reside in different partitions—one in the lower, and one in the upper—but never in the same partition. The L pointers from a partition in T4 will all map to the same partition in T3. The R pointers to an encrypted X will come from any of the opposite side partitions in T4. An additional benefit is that no R pointer from T4 will point to the same partition as an L pointer in T4, which is important to reduce unused paths that could be dropped for an attacker as we want to build chains between two unique partitions.
+Each table is divided into partitions, and partitions can either be lower or upper partitions. In the example above there are 8 partitions, with 4 lower and 4 upper. The Proof Fragment bits define the partitions (see [Technical Specifications](#proof-of-space-specification)). The Proof Fragments in T3 may have one or both of the following pointers from T4: a lateral (L) pointer, and/or a crossover (R) pointer.  These two pointers will always reside in different partitions—one in the lower, and one in the upper—but never in the same partition. The L pointers from a partition in T4 will all map to the same partition in T3. The R pointers to an Proof Fragment will come from any of the opposite side partitions in T4. An additional benefit is that no R pointer from T4 will point to the same partition as an L pointer in T4, which is important to reduce unused paths that could be dropped for an attacker as we want to build chains between two unique partitions.
 
 ![Partition mappings](./assets/partitions-mappings-example1.png)
 *In partition (L0', R) all L pointers from T4 come from the 0' partition, and all R pointers can come from any of the 0-3 partitions.*
@@ -478,7 +478,7 @@ The new Proof of Space format allows plots as small as 1.6GiB. Due to the symmet
 
 #### Plotting Performance and Requirements
 
-CPU plotting will be possible but will be less efficient than GPU. All times shown are for all-RAM plotting, although farmers can trade cpu RAM for temporary SSD storage, which results in slightly slower performance.
+CPU plotting will be possible but will be less efficient than GPU. All times shown are for fully in-RAM plotting, although farmers can trade cpu RAM for temporary SSD storage, which results in slightly slower performance.
 
 > [!NOTE]
 > Pending Plot ID Filter and Plot Difficulty settings. Aim will be for 3060 to plot >20TiB/day
@@ -583,7 +583,7 @@ In our data presented for the tables, while a full Total Cost of Ownership (TCO)
 
 #### Rental Attack Resistance Analysis
 
-A rental attack, aka a full plot grind attack, has the advantage it can pre-filter generatiion of plots to always pass the Plot ID Filter across 3-4 signage points. It only has to grind the full T3 table, then perform the Proof Fragment Scan Filter and if there are passing results, then only grind the T4 and T5 partitions required for the challengea.
+A rental attack, aka a full plot grind attack, has the advantage it can pre-filter generatiion of plots to always pass the Plot ID Filter across 3-4 signage points. It only has to grind the full T3 table, then perform the Proof Fragment Scan Filter and if there are passing results, then only grind the T4 and T5 partitions required for the challenges.
 
 $$
 \text{Time to grind} = \frac{\left(\text{T3 reconstruction time} + \frac{\text{T4 and T5 Filtered Partitions}}{\text{Proof Fragment Scan Filter}}\right)}{\text{Plot ID Filter} \times 3.5}
@@ -751,7 +751,7 @@ And similarly below a calculation of **relative price/TB** (a value of 2 means a
 
 Note, that the Proof Fragment Scan Filter has no effect on an attacker's T4 Partition attack, as they must complete the grind prior to using the filter. In this case, a lower Plot ID Filter is always better for resistance.
 
-While there are diminishing returns on resistance, there are still another benefits to a higher Proof Fragment Scan Filter: less work for the harvester to process challenges, and less HDD activity as we skip the large partition reads for constructing Quality Links.
+While there are diminishing returns on resistance, there are still other benefits for a higher Proof Fragment Scan Filter: less work for the harvester to process challenges, and less HDD activity as we skip the large partition reads for constructing Quality Links.
 
 While our models show we are comfortably resistant both in terms of energy and hardware costs against T3 grinding attacks with a high Proof Fragment Scan Filter, further analysis into future outlook is required.
 
@@ -786,7 +786,7 @@ In the above we see that a Proof Fragment Scan Filter of 64 shows some weaknesse
 
 A previous version of the proof of space did not split the L and R pointers across lower and upper partitions. This results in higher fanouts of T3 to T4, which substantially reduces the number of x-values to include in a T4 partitioned x-values set. Each partition in T4 would receive 2N inputs from T3, and generate N outputs, giving an average of 2 fanouts per T3 entry. 
 
-By splitting into lower and upper partitions, each T4 partitioned set receives 4N inputs from T3, and and filter 50% to return 2*N back pointers. Due to collisions and pruning, this averages closer to 1.35 back pointers to each Proof Fragment, instead of 2 from the earlier version-- which requires more storage for the T4 Partitioned Attack to reduce it's effectiveness.
+By splitting into lower and upper partitions, each T4 partitioned set receives 4N inputs from T3, and and filter 50% to return 2*N back pointers. Due to collisions and pruning, this averages closer to 1.35 back pointers to each Proof Fragment, instead of 2 from the earlier version——which requires more storage for the T4 Partitioned Attack to reduce it's effectiveness.
 
 ##### Shrink T4 and T5 relative to T3
 
@@ -837,9 +837,9 @@ Prior to chaining, the attack can solve all R Proof Fragments in a partition poi
 
 While the attack solving times may seem high, note these attacks are only performed after a passing Proof Fragment Scan Filter, and drops enough bits to make T4 storage almost zero (~30% compression). Small sub_k partitions don't provide enough unique Proof Fragments in chain selections, resulting in weak compression resistance.
 
-Larger sub_k sizes dramatically increase the number of unique Proof Fragments an attacker must solve for. When we reach sub_k=20 on a k28 we achieve **bit drop saturation** -- the cost to recompute dropped bits exceeds the cost of a plot grind. Due to the Proof Fragments choice of bit drops, processing these linearly results in even worse time (a sequence of 5504 Proof Fragment solves would take over a minute on a 3090). Note that bit dropping on any other element than the T4 R pointer will bit drop saturate earlier in lower sub_k sizes, so there are no incentives for an attacker to use other bits to drop.
+Larger sub_k sizes dramatically increase the number of unique Proof Fragments an attacker must solve for. When we reach sub_k=20 on a k28 we achieve **bit drop saturation**——the cost to recompute dropped bits exceeds the cost of a plot grind. Due to the Proof Fragment's choice of bit drops, processing these linearly results in even worse time (a sequence of 5504 Proof Fragment solves would take over a minute on a 3090). Note that bit dropping on any other element than the T4 R pointer will bit drop saturate earlier in lower sub_k sizes, so there are no incentives for an attacker to use other bits to drop.
 
-At large sub_k sizes there is a larger amount of data per partition that must be read to respond to the challenge-- this requires longer read times and some non-negligible ANS decompression time that can limit the number of plots a harvester can support. This can be eased with the Proof Fragment Scan Filter. 
+At large sub_k sizes there is a larger amount of data per partition that must be read to respond to the challenge. This requires longer read times and some non-negligible ANS decompression time that can limit the number of plots a harvester can support. This can be eased with the Proof Fragment Scan Filter. 
 
 Due to bit drop saturation forcing the attacker to resort to grinding attacks as a more economical option, we can tune T3 match key bits to increase resistance against grinding attacks, and trade-off plotting time. Since no changes to security in the first two tables are necessary against grinding attacks, the honest farmer's solver performance is unaffected. 
 
@@ -911,7 +911,7 @@ A chain branching factor is the average number of links eligible to create new c
 
 From the table we see that an honest farmer, with 8 chains, can support a farm with CPU around 2 PiB in size, whereas the attacker must resort to a GPU can with 1 bit drop support a farm with 1.4 PiB. With 12 chains, an attacker's supported farm size is crippled to just 6TiB, however the honest farmer would only support 218TiB on CPU (but more than enough on GPU).
 
-The table below explores more results by tuning the Chaining Factor. The **attacker false positives** is the ratio of times an attacker will have a Quality Chain passing the difficulty filter, but fail to have a valid proof. For example, using 12 chains with a branching factor of 1.35 with 1 bit drop, the attacker could only support 174 TiB, in addition to doing full proof recomputes on average 1733 times to find a valid proof. A raspberry Pi 5 could support a farm size of 1 PiB, which is a negligible cost for the CPU work compared to the storage energy required. Chaining with 16 Links has significant impact both on reducing honest farmer compute, and increasing resistance against attacks. It does, however, increase the number of Proof Fragments and final proof size to 512 x-values, which requires reducing the number of match bits in T1 so our Pi Solver can still compute in time. 
+The table below explores more results by tuning the Chaining Factor. The **attacker false positives** is the ratio of times an attacker will have a Quality Chain passing the difficulty filter, but fail to have a valid proof. For example, using 12 chains with a branching factor of 1.35 with 1 bit drop, the attacker could only support 174 TiB, in addition to doing full proof recomputes on average 1733 times to find a valid proof. A Raspberry Pi 5 could support a farm size of 1 PiB, which is a negligible cost for the CPU work compared to the storage energy required. Chaining with 16 Links has significant impact both on reducing honest farmer compute, and increasing resistance against attacks. It does, however, increase the number of Proof Fragments and final proof size to 512 x-values, which requires reducing the number of match bits in T1 so our Pi Solver can still compute in time. 
 
 Note that the # of chains influences the number of Proof Fragments and thus x-values in a proof, which requires more storage on the blockchain as well as increased solve time.
 
@@ -976,7 +976,7 @@ $$
 \frac{1}{512} = 0.1953\% 
 $$
 
-The net result is worse than honest plotting — dropping partitions decreases total performance.
+The net result is worse than honest plotting——dropping partitions decreases total performance.
 
 ##### Favoring Larger Plots
 
