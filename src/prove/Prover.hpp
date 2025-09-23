@@ -13,6 +13,44 @@
 #include <limits>
 #include <iostream>
 #include <string>
+#include <bit>
+
+// serializes the QualityProof into the form that will be hashed together with
+// the challenge to determine the quality of ths proof. The quality is used to
+// check if it passes the current difficulty. The format is:
+// 1 byte: plot strength
+// repeat 16 * 3 times:
+//   8 bytes: little-endian proof fragment
+inline std::vector<uint8_t> serializeQualityProof(QualityChain const& qp) {
+
+    static_assert(sizeof(ProofFragment) == 8, "proof fragments are expected to be 64 bits");
+
+    // Each chain link has 3 proof fragments, each 64-bits wide.
+    // The first byte is the strength
+
+    std::vector<uint8_t> blob(1 + NUM_CHAIN_LINKS * 3 * 8, 0);
+
+    size_t idx = 0;
+    blob[idx++] = qp.strength;
+
+    for (const QualityLink& ql : qp.chain_links) {
+        for (ProofFragment fragment : ql.fragments) {
+/*
+            // This requires C++23
+            if constexpr (std::endian::native == std::endian::big) {
+                const uint64_t val = std::byteswap(fragment);
+                memcpy(blob.data() + idx, &val, 8);
+            }
+            else
+*/
+            {
+                memcpy(blob.data() + idx, &fragment, 8);
+            }
+            idx += 8;
+        }
+    }
+    return blob;
+}
 
 class Prover
 {
@@ -78,7 +116,6 @@ public:
         const BlakeHash::Result256 &next_challenge)
     {
         std::vector<QualityChain> all_chains;
-        ProofFragmentCodec fragment_codec(plot.params);
         ProofCore proof_core(plot.params);
         FragmentsPattern firstPattern = proof_core.requiredPatternFromChallenge(next_challenge);
 
@@ -92,8 +129,8 @@ public:
         {
             uint64_t fragment = frag_res.fragment;
             // extract R pointer
-            uint32_t l_partition = fragment_codec.get_lateral_to_t4_partition(fragment);
-            uint32_t r_partition = fragment_codec.get_r_t4_partition(fragment);
+            uint32_t l_partition = proof_core.fragment_codec.get_lateral_to_t4_partition(fragment);
+            uint32_t r_partition = proof_core.fragment_codec.get_r_t4_partition(fragment);
 
             #ifdef DEBUG_CHAINING
             // std::cout << "          Total partitions: " << plot.params.get_num_partitions() << std::endl;
@@ -133,7 +170,7 @@ public:
                     for (int i = 0; i < 3; i++)
                     {
                         unique_fragments.insert(link.fragments[i]);
-                        std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(link.fragments[i]);
+                        std::array<uint32_t, 4> x_bits = proof_core.fragment_codec.get_x_bits_from_proof_fragment(link.fragments[i]);
                         unique_x_bits.insert(x_bits[0]);
                         unique_x_bits.insert(x_bits[1]);
                         unique_x_bits.insert(x_bits[2]);
@@ -166,6 +203,7 @@ public:
 
         // First, create new chain for each first link
         QualityChain chain;
+        chain.strength = plot_.value().params.get_strength();
         chain.chain_links[0] = firstLink; // the first link is always the first in the chain
 
         chain.chain_hash = proof_core_.firstLinkHash(firstLink, next_challenge); // set the hash for the first link
@@ -418,12 +456,10 @@ public:
         std::vector<uint64_t> proof_fragments;
         #ifdef DEBUG_CHAINING
         std::cout << "Getting all proof fragments for chain with " << chain.chain_links.size() << " links." << std::endl;
+        int link_id = 0;
         #endif
-        for (int link_id = 0; link_id < chain.chain_links.size(); link_id++)
-        // for (const auto &link : chain.chain_links)
+        for (const QualityLink &link : chain.chain_links)
         {
-            const QualityLink &link = chain.chain_links[link_id];
-
             if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
             {
                 proof_fragments.push_back(link.fragments[0]);                                             // LL
@@ -452,6 +488,9 @@ public:
             {
                 std::cerr << "Unknown fragment pattern: " << static_cast<int>(link.pattern) << std::endl;
             }
+        #ifdef DEBUG_CHAINING
+            ++link_id;
+        #endif
         }
 
         return proof_fragments;

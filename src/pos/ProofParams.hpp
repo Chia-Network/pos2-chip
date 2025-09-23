@@ -54,6 +54,10 @@ public:
         }
     }
 
+    uint8_t get_strength() const {
+        return match_key_bits_;
+    }
+
     // Returns the number of section bits.
     // If k is less than 28, returns 2; otherwise returns (k - 26).
     inline size_t get_num_section_bits() const

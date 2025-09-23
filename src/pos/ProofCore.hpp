@@ -97,6 +97,7 @@ struct QualityChain
 {
     std::array<QualityLink, NUM_CHAIN_LINKS> chain_links;
     BlakeHash::Result256 chain_hash;
+    uint8_t strength;
 };
 
 struct T1Pairing
