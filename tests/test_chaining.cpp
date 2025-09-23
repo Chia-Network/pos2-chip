@@ -1,3 +1,6 @@
+#include <span>
+#include <bit>
+
 #include "test_util.h"
 #include "pos/ProofCore.hpp"
 #include "pos/ProofFragment.hpp"
@@ -131,3 +134,75 @@ TEST_CASE("quality-chain-distribution")
     CHECK(average_chains_per_trial <= expected_avg_chains_per_trial + tolerance);
 }
 */
+
+std::string print_bits(const std::span<uint8_t> blob) {
+    std::string ret;
+    for (uint8_t b : blob) {
+        for (int mask = 0x80; mask != 0; mask >>= 1) {
+            if (b & mask) ret += '1';
+            else ret += '0';
+        }
+    }
+    return ret;
+}
+
+TEST_CASE("quality-proof-serialization")
+{
+    QualityChain qp;
+    qp.strength = 0x7f;
+    ProofFragment fr = 0;
+    for (int i = 0; i < NUM_CHAIN_LINKS; ++i) {
+        for (int pf = 0; pf < 3; ++pf) {
+            qp.chain_links[i].fragments[pf] = fr++;
+        }
+    }
+
+    std::vector<uint8_t> blob = serializeQualityProof(qp);
+    CHECK(blob[0] == 0x7f);
+    blob.erase(blob.begin());
+
+    CHECK(blob.size() == NUM_CHAIN_LINKS * 3 * 8);
+
+    for (int idx = 0; idx < NUM_CHAIN_LINKS * 3; ++idx) {
+        uint64_t val;
+        memcpy(&val, blob.data() + idx * 8, 8);
+/*
+        // This requires C++23
+        if constexpr (std::endian::native == std::endian::big) {
+            val = std::byteswap(val);
+        }
+*/
+        CHECK(val == idx);
+    }
+}
+
+TEST_CASE("quality-proof-serialization-individual-fields")
+{
+    QualityChain qp;
+    qp.strength = 2;
+
+    const std::string zero(64, '0');
+    const std::string one(64, '1');
+
+    for (int field = 0; field < NUM_CHAIN_LINKS * 3; ++field) {
+
+        // set exactly one field of all one-bits
+        int idx = 0;
+        for (int i = 0; i < NUM_CHAIN_LINKS; ++i) {
+            for (int pf = 0; pf < 3; ++pf) {
+                qp.chain_links[i].fragments[pf] = (field == idx) ? 0xffffffffffffffff : 0;
+                ++idx;
+            }
+        }
+
+        std::string expected_output;
+        for (int i = 0; i < field; ++i) expected_output += zero;
+        expected_output += one;
+        for (int i = field + 1; i < NUM_CHAIN_LINKS * 3; ++i) expected_output += zero;
+
+        std::vector<uint8_t> blob = serializeQualityProof(qp);
+        CHECK(blob[0] == 2);
+        blob.erase(blob.begin());
+        CHECK(print_bits(blob) == expected_output);
+    }
+}
