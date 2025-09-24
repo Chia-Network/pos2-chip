@@ -16,7 +16,7 @@ TEST_CASE("plot")
     std::string challenge_hex = "5700000000000000000000000000000000000000000000000000000000000000";
     
 
-    printfln("Creating a %d plot: %s", k, plot_id_hex);
+    printfln("Creating a %d plot: %s", k, plot_id_hex.c_str());
 
     Timer timer{};
     timer.start("");
