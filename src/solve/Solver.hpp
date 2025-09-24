@@ -154,8 +154,9 @@ public:
 
     // Main solver function.
     // Input: an array of 128 x1 candidates.
+    //.       x_solution is an dev-mode test array that the solver should solve to and test against (debug and verify).
     // Returns: a vector of complete proofs (each proof is an array of 256 uint64_t values).
-    std::vector<std::vector<uint32_t>> solve(const std::vector<uint32_t> &x_bits_list, const std::vector<uint32_t> &x_solution)
+    std::vector<std::vector<uint32_t>> solve(const std::vector<uint32_t> &x_bits_list, const std::vector<uint32_t> &x_solution = {})
     {
         XBitGroupMappings x_bits_group = compress_with_lookup(x_bits_list, params_.get_k() / 2);
 #ifdef DEBUG_VERIFY
