@@ -12,6 +12,7 @@ TEST_CASE("solve-partial")
     // TODO: add solve tests for k28,k30, and k32.
     int k = 18;
 
+    // xs were created by running a k 18 plot with RETAIN_X_VALUES on, and scanning challenges to find an example proof with full x values.
     std::vector<uint32_t> k18_xs_in_proof = {
         798, 230419, 149646, 201243, 53893, 20446, 153858, 42666,
         124164, 125343, 161808, 43119, 221663, 213995, 206, 168386,
