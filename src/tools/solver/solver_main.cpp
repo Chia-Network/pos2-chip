@@ -239,9 +239,7 @@ int do_exhaustive_test(const std::string& plot_file) {
 int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_list, int k, int strength) {
     // convert plot_id_hex to bytes
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
-    
     ProofParams params(plot_id.data(), k, strength);
-    const uint8_t *plot_id_bytes = params.get_plot_id_bytes();
 
     params.show();
 

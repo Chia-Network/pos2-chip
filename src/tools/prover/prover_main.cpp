@@ -161,41 +161,41 @@ try
                 std::cout << "Found " << chains.size() << " chains." << std::endl;
                 num_chains_found += chains.size();
 
-                for (int chain_solution = 0; chain_solution < chains.size(); chain_solution++) {
-                    
+                int idx = 0;
+                for (auto const& chain : chains) {
 
-                std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chains[chain_solution]);
-                // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
+                    std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chain);
+                    // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
-                ProofParams params = prover.getProofParams();
-                ProofFragmentCodec fragment_codec(params);
-                // convert proof fragments to xbits hex
-                std::string xbits_hex;
-                std::vector<uint32_t> xbits_list;
-                for (const auto &fragment : proof_fragments)
-                {
-                    //std::cout << "ProofFragmentCodec: " << std::hex << fragment << std::dec;
-                    std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(fragment);
-                    for (const auto &x_bit : x_bits)
+                    ProofParams params = prover.getProofParams();
+                    ProofFragmentCodec fragment_codec(params);
+                    // convert proof fragments to xbits hex
+                    std::string xbits_hex;
+                    std::vector<uint32_t> xbits_list;
+                    for (const auto &fragment : proof_fragments)
                     {
-                        // at most 16 bits = 4 x 4 bits
-                        xbits_hex += Utils::toHex(x_bit, 4);
-                        xbits_list.push_back(x_bit);
-                        //std::cout << " " << x_bit;
+                        //std::cout << "ProofFragmentCodec: " << std::hex << fragment << std::dec;
+                        std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(fragment);
+                        for (const auto &x_bit : x_bits)
+                        {
+                            // at most 16 bits = 4 x 4 bits
+                            xbits_hex += Utils::toHex(x_bit, 4);
+                            xbits_list.push_back(x_bit);
+                            //std::cout << " " << x_bit;
+                        }
+                        //std::cout << std::endl;
                     }
-                    //std::cout << std::endl;
+
+                    std::array<uint8_t, 32> plot_id_arr;
+                    std::memcpy(plot_id_arr.data(), params.get_plot_id_bytes(), 32);
+                    std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
+
+                    std::cout << "Chain solution " << idx << ": ";
+                    std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << " " << (int) params.get_strength() << std::endl;
+                    ++idx;
                 }
 
-                std::array<uint8_t, 32> plot_id_arr;
-                std::memcpy(plot_id_arr.data(), params.get_plot_id_bytes(), 32);
-                std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
-
-                std::cout << "Chain solution " << chain_solution << ": ";
-                std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << " " << (int) params.get_strength() << std::endl;
-            }
-
                 std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
-                
             }
             else
             {
