@@ -1865,9 +1865,9 @@ public:
             total += m;
         timings_.misc += timer.stop();
 
-        int total_checks = 0;
-        for (int m : num_checks_per_thread)
-            total_checks += m;
+        //int total_checks = 0;
+        //for (int m : num_checks_per_thread)
+        //    total_checks += m;
 
         timer.start("Compacting x2 potential matches");
         int write_pos = matches_per_thread[0];
