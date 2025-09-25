@@ -328,7 +328,7 @@ public:
     // pairing_t4:
     // Input: meta_l, meta_r (each 2k bits), order_bits_l, order_bits_r (each 2 bits).
     // Returns: a T4Pairing with match_info (sub_k bits) and meta (2k bits).
-    std::optional<T4Pairing> pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l, uint32_t order_bits_r)
+    std::optional<T4Pairing> pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l, uint32_t /*order_bits_r*/)
     {
 #if defined(T3_FACTOR_T4_T5_EVEN)
         int num_test_bits = 32;

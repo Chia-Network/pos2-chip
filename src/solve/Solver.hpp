@@ -191,6 +191,8 @@ public:
             }
             std::cout << std::endl;
         }
+#else
+        (void)x_solution;
 #endif
         const int num_k_bits_ = params_.get_k();
         num_x_pairs_ = x_bits_list.size();
@@ -427,7 +429,7 @@ public:
     }
 
     // Phase 11 helper: T3, T4, T5 matching – further pair and validate matches.
-    void matchT3T4T5Candidates(int num_k_bits,
+    void matchT3T4T5Candidates(int /*num_k_bits*/,
                                const std::vector<std::vector<T2_match>> &t2_matches,
                                std::vector<std::vector<T3_match>> &t3_matches,
                                std::vector<std::vector<T4_match>> &t4_matches,
@@ -2100,7 +2102,7 @@ public:
     }
 
     // Phase 4 helper: Build a bitmask from the sorted x1 hashes.
-    void buildX1Bitmask(int num_match_target_hashes,
+    void buildX1Bitmask(int /*num_match_target_hashes*/,
                         const std::vector<uint32_t> &x1_hashes,
                         std::vector<uint32_t> &x1_bitmask)
     {
