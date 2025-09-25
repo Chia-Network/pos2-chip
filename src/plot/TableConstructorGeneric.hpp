@@ -29,8 +29,8 @@ public:
 
     std::vector<std::vector<uint64_t>> find_candidates_prefixes(const std::vector<PairingCandidate> &pairing_candidates) const
     {
-        int num_sections = params_.get_num_sections();
-        int num_match_keys = params_.get_num_match_keys(table_id_);
+        const size_t num_sections = params_.get_num_sections();
+        const size_t num_match_keys = params_.get_num_match_keys(table_id_);
         // Allocate a 2D counts array: dimensions [num_sections][num_match_keys]
         std::vector<std::vector<uint64_t>> counts(num_sections, std::vector<uint64_t>(num_match_keys, 0ULL));
 
@@ -47,9 +47,9 @@ public:
         std::vector<std::vector<uint64_t>> prefixes(num_sections, std::vector<uint64_t>(num_match_keys + 1, 0ULL));
 
         uint64_t total_prefix = 0ULL;
-        for (uint64_t section = 0; section < num_sections; section++)
+        for (size_t section = 0; section < num_sections; section++)
         {
-            for (uint64_t mk = 0; mk < num_match_keys; mk++)
+            for (size_t mk = 0; mk < num_match_keys; mk++)
             {
                 prefixes[section][mk] = total_prefix;
                 total_prefix += counts[section][mk];
@@ -151,7 +151,7 @@ public:
 
         std::vector<T_Pairing> new_table_pairs;
 
-        int num_match_keys = params_.get_num_match_keys(table_id_);
+        const size_t num_match_keys = params_.get_num_match_keys(table_id_);
 
         for (uint32_t section = 0; section < params_.get_num_sections(); section++)
         {
@@ -177,7 +177,7 @@ public:
             uint64_t l_end = pairing_candidates_offsets[section_l][num_match_keys];
 
             // For each match_key in [0..num_match_keys_-1]
-            for (uint64_t match_key_r = 0; match_key_r < num_match_keys; match_key_r++)
+            for (size_t match_key_r = 0; match_key_r < num_match_keys; match_key_r++)
             {
                 uint64_t r_start = pairing_candidates_offsets[section_r][match_key_r];
                 uint64_t r_end = pairing_candidates_offsets[section_r][match_key_r + 1];
@@ -507,8 +507,6 @@ private:
                 pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
                 pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7]};
 #endif
-
-            T3PartitionedPairing partitioned_pairing;
 
             partitioned_pairs[pairing.lower_partition].push_back(T3PartitionedPairing{
                 .meta = pairing.meta_lower_partition,

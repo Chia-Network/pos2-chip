@@ -387,7 +387,6 @@ int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_li
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
     
     ProofParams params(plot_id.data(), k);
-    const uint8_t *plot_id_bytes = params.get_plot_id_bytes();
 
     params.show();
 
@@ -434,7 +433,7 @@ int main(int argc, char* argv[]) try {
         try {
             k = std::stoi(argv[2]);
             // k must be 28,30, or 32
-            if (!(k == 28 || k == 30 | k == 32)) {
+            if (k != 28 && k != 30 && k != 32) {
                 std::cerr << "Error: k-size must be 28, 30, or 32." << std::endl;
                 return 1;
             }

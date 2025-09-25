@@ -41,17 +41,17 @@ private:
 public:
     #ifdef RETAIN_X_VALUES_TO_T3
     TablePruner(const ProofParams &proof_params, std::vector<uint64_t> &t3, std::vector<std::array<uint32_t, 8>> &xs)
-    : params_(proof_params),
-      t3_proof_fragments(t3),
-        xs_correlating_to_proof_fragments(xs)
+    : t3_proof_fragments(t3),
+        xs_correlating_to_proof_fragments(xs),
+        params_(proof_params),
 {
     size_t num_bitmask_bytes = (t3_proof_fragments.size() + 7) / 8;
     t3_used_entries_bitmask.assign(num_bitmask_bytes, 0);
 }
     #else
     TablePruner(const ProofParams &proof_params, std::vector<uint64_t> &t3)
-    : params_(proof_params),
-      t3_proof_fragments(t3)
+    : t3_proof_fragments(t3),
+      params_(proof_params)
 {
     size_t num_bitmask_bytes = (t3_proof_fragments.size() + 7) / 8;
     t3_used_entries_bitmask.assign(num_bitmask_bytes, 0);
