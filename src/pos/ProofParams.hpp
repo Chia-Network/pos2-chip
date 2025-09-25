@@ -173,7 +173,7 @@ public:
         std::cout << "num_partitions: " << num_partitions_ << std::endl;
         std::cout << "sub_k: " << sub_k_ << std::endl;
         std::cout << "num sections: " << get_num_sections() << std::endl;
-        std::cout << "strength: " << match_key_bits_ << std::endl;;
+        std::cout << "strength: " << (int) match_key_bits_ << std::endl;;
     }
 
     bool operator==(ProofParams const &other) const

@@ -382,11 +382,11 @@ int prove(const std::string& plot_file) {
     return 0;
 }
 
-int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_list, int k) {
+int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_list, int k, int strength) {
     // convert plot_id_hex to bytes
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
     
-    ProofParams params(plot_id.data(), k);
+    ProofParams params(plot_id.data(), k, strength);
     const uint8_t *plot_id_bytes = params.get_plot_id_bytes();
 
     params.show();
@@ -455,6 +455,15 @@ int main(int argc, char* argv[]) try {
         return prove(plot_file);
 
     } else if (mode == "xbits") {
+        // must have 5 args: xbits <k-size> <plot_id_hex> <xbits_hex> <strength>
+        if (argc != 6) {
+            std::cerr << "Usage: " << argv[0] << " xbits <k-size> <plot_id_hex> <xbits_hex> [strength]\n"
+                      << "  k-size: integer (18-32 even)\n"
+                      << "  plot_id_hex: 64-hex-character string\n"
+                      << "  xbits_hex: 1024-hex-character string (256 uint32_t values)\n"
+                      << "  strength: optional integer (default 2)\n";
+            return 1;
+        }
         int k = 0;
         try {
             k = std::stoi(argv[2]);
@@ -484,7 +493,9 @@ int main(int argc, char* argv[]) try {
             std::cerr << "Error: xbits must be a 1024-hex-character string. (" << xbits_hex.length() << " found)" << std::endl;
             return 1;
         }
-        std::cout << "Running xbits with k-size = " << k << " plot id: " << plot_id_hex << " and xbits = " << xbits_hex << std::endl;
+
+        int plot_strength = argv[5] ? std::stoi(argv[5]) : 2; // default strength is 2
+        std::cout << "Running xbits with k-size = " << k << " plot id: " << plot_id_hex << " xbits = " << xbits_hex << " plot strength = " << plot_strength << std::endl;
         // convert xbits_hex to uint32_t array
         std::vector<uint32_t> x_bits_list;
         for (size_t i = 0; i < 256; i++) {
@@ -492,7 +503,7 @@ int main(int argc, char* argv[]) try {
             x_bits_list.push_back(Utils::fromHex(hexStr));
             //std::cout << i << ": " << x_bits_list.back() << std::endl;
         }
-        return xbits(plot_id_hex, x_bits_list, k);
+        return xbits(plot_id_hex, x_bits_list, k, plot_strength);
 
 
     } else {

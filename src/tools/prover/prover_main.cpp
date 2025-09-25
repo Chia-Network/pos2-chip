@@ -120,7 +120,7 @@ try
             std::memcpy(plot_id_arr.data(), params.get_plot_id_bytes(), 32);
             std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
 
-            std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << std::endl;
+            std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << " " << (int) params.get_strength() << std::endl;
 
             std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
         }
@@ -191,7 +191,7 @@ try
                 std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
 
                 std::cout << "Chain solution " << chain_solution << ": ";
-                std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << std::endl;
+                std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << " " << (int) params.get_strength() << std::endl;
             }
 
                 std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;

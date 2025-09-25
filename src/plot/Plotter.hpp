@@ -17,13 +17,14 @@
 class Plotter {
 public:
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
-    Plotter(const std::array<uint8_t, 32> plot_id, int k)
+    Plotter(const std::array<uint8_t, 32> plot_id, int k, int strength = 2)
       : plot_id_(plot_id), k_(k),
-        proof_params_(plot_id_.data(), k_), fragment_codec_(proof_params_), validator_(proof_params_) {}
+        proof_params_(plot_id_.data(), k_, strength), fragment_codec_(proof_params_), validator_(proof_params_) {}
 
     // Execute the plotting pipeline
     PlotData run() {
         std::cout << "Starting plotter..." << std::endl;
+        proof_params_.debugPrint();
 
         // 1) Construct Xs candidates
         XsConstructor xs_gen_ctor(proof_params_);
