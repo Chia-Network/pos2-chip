@@ -131,16 +131,16 @@ public:
         return pairs;
     }
 
-    virtual PairingCandidate matching_target(const PairingCandidate &prev_table_pair, uint32_t match_key_r)
+    virtual PairingCandidate matching_target(const PairingCandidate &/*prev_table_pair*/, uint32_t /*match_key_r*/)
     {
         throw std::runtime_error("matching_target not implemented");
     }
 
-    virtual void handle_pair(const PairingCandidate &l_candidate,
-                             const PairingCandidate &r_candidate,
-                             std::vector<T_Pairing> &pairs,
-                             size_t left_index,
-                             size_t right_index)
+    virtual void handle_pair(const PairingCandidate &/*l_candidate*/,
+                             const PairingCandidate &/*r_candidate*/,
+                             std::vector<T_Pairing> &/*pairs*/,
+                             size_t /*left_index*/,
+                             size_t /*right_index*/)
     {
         throw std::runtime_error("handle_pair not implemented");
     }
@@ -219,7 +219,7 @@ public:
     }
 
     // called following construct method - typically sort operations
-    virtual T_Result post_construct(std::vector<T_Pairing> &pairings) const
+    virtual T_Result post_construct(std::vector<T_Pairing> &/*pairings*/) const
     {
         throw std::runtime_error("post_construct not implemented");
     }
@@ -317,8 +317,8 @@ public:
     void handle_pair(const Xs_Candidate &l_candidate,
                      const Xs_Candidate &r_candidate,
                      std::vector<T1Pairing> &pairs,
-                     size_t left_index,
-                     size_t right_index)
+                     size_t /*left_index*/,
+                     size_t /*right_index*/)
     {
         uint32_t x_left = l_candidate.x;
         uint32_t x_right = r_candidate.x;
@@ -364,8 +364,8 @@ public:
     void handle_pair(const T1Pairing &l_candidate,
                      const T1Pairing &r_candidate,
                      std::vector<T2Pairing> &pairs,
-                     size_t left_index,
-                     size_t right_index)
+                     size_t /*left_index*/,
+                     size_t /*right_index*/)
     {
         uint64_t meta_l = l_candidate.meta;
         uint64_t meta_r = r_candidate.meta;
@@ -447,8 +447,8 @@ public:
     void handle_pair(const T2Pairing &l_candidate,
                      const T2Pairing &r_candidate,
                      std::vector<T3Pairing> &pairs,
-                     size_t left_index,
-                     size_t right_index) override
+                     size_t /*left_index*/,
+                     size_t /*right_index*/) override
     {
         uint64_t meta_l = l_candidate.meta;
         uint64_t meta_r = r_candidate.meta;
@@ -595,8 +595,8 @@ public:
     void handle_pair(const T3PartitionedPairing &l_candidate,
                      const T3PartitionedPairing &r_candidate,
                      std::vector<T4Pairing> &pairs,
-                     size_t left_index,
-                     size_t right_index) override
+                     size_t /*left_index*/,
+                     size_t /*right_index*/) override
     {
         uint64_t meta_l = l_candidate.meta;
         uint64_t meta_r = r_candidate.meta;
@@ -710,8 +710,8 @@ public:
     void handle_pair(const T4PairingPropagation &l_candidate,
                      const T4PairingPropagation &r_candidate,
                      std::vector<T5Pairing> &pairs,
-                     size_t left_index,
-                     size_t right_index) override
+                     size_t /*left_index*/,
+                     size_t /*right_index*/) override
     {
         uint64_t meta_l = l_candidate.meta;
         uint64_t meta_r = r_candidate.meta;
