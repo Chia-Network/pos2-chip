@@ -364,7 +364,7 @@ public:
 
     // checks whether a challenge is valid for a given link in the quality chain.
     // Returns the next challenge if valid, or std::nullopt if invalid.
-    std::optional<BlakeHash::Result256> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t partition_A, uint32_t partition_B, int chain_index)
+    std::optional<BlakeHash::Result256> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t /*partition_A*/, uint32_t /*partition_B*/, int chain_index)
     {
         FragmentsPattern pattern = proof_core_.requiredPatternFromChallenge(challenge);
 
