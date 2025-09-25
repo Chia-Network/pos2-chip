@@ -17,9 +17,13 @@ public:
     //   match_key_bits: the number of match key bits for table 3
     ProofParams(const uint8_t * const plot_id_bytes,
                 const size_t k,
-                const uint8_t strength = 2)
+                const uint8_t strength)
         : k_(k), num_pairing_meta_bits_(2 * k), strength_(strength)
     {
+        // strength must be >= 2
+        if (strength_ < 2) {
+            throw std::invalid_argument("ProofParams: strength must be at least 2.");
+        }
         // Copy the 32-byte plot ID.
         for (int i = 0; i < 32; ++i)
             plot_id_bytes_[i] = plot_id_bytes[i];

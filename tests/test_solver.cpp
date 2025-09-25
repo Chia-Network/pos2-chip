@@ -11,6 +11,7 @@ TEST_CASE("solve-partial")
 {
     // TODO: add solve tests for k28,k30, and k32.
     int k = 18;
+    int plot_strength = 2;
 
     // xs were created by running a k 18 plot with RETAIN_X_VALUES on, and scanning challenges to find an example proof with full x values.
     std::vector<uint32_t> k18_xs_in_proof = {
@@ -101,7 +102,7 @@ TEST_CASE("solve-partial")
     std::string plot_id_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
 
-    ProofParams params(plot_id.data(), k);
+    ProofParams params(plot_id.data(), k, plot_strength);
     ProofCore proof_core(params);
     ProofFragmentCodec fragment_codec(params);
 

@@ -176,9 +176,7 @@ int main(int argc, char *argv[]) try
         #ifdef RETAIN_X_VALUES_TO_T3
         filename += "_xvalues";
         #endif
-        #ifdef NON_BIPARTITE_BEFORE_T3
-        //filename += "_nonbipartitebeforet3";
-        #else
+        #ifndef NON_BIPARTITE_BEFORE_T3
         filename += "_bipartite";
         #endif
         filename += '_' + plot_id_hex + ".bin";

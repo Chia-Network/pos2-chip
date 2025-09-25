@@ -161,7 +161,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
     return 0;
 }
 
-int benchmark(int k)
+int benchmark(int k, int plot_strength)
 {
     const std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
     // hex to bytes
@@ -180,7 +180,7 @@ int benchmark(int k)
     std::cout << "BIPARTITE" << std::endl;
 #endif
 
-    ProofParams params(plot_id.data(), k);
+    ProofParams params(plot_id.data(), k, plot_strength);
     params.show();
 
     Solver solver(params);
@@ -277,7 +277,7 @@ int main(int argc, char* argv[]) try {
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <mode> <arg>\n"
                   << "Modes:\n"
-                  << "  benchmark <k-size>    Run benchmark with the given k-size integer.\n"
+                  << "  benchmark <k-size> [strength (default 2)]   Run benchmark with the given k-size integer and optional plot strength\n"
                   << "  prove     <plot file>  Run proof on the given plot file.\n";
         return 1;
     }
@@ -285,6 +285,7 @@ int main(int argc, char* argv[]) try {
     std::string mode = argv[1];
     if (mode == "benchmark") {
         int k = 0;
+        int plot_strength = argv[3] ? std::stoi(argv[3]) : 2; // default strength is 2
         try {
             k = std::stoi(argv[2]);
             // k must be 18...32 even
@@ -300,8 +301,8 @@ int main(int argc, char* argv[]) try {
             return 1;
         }
 
-        std::cout << "Running benchmark with k-size = " << k << std::endl;
-        return benchmark(k);
+        std::cout << "Running benchmark with k-size = " << k << " and plot strength = " << plot_strength << std::endl;
+        return benchmark(k, plot_strength);
 
     } else if (mode == "xbits") {
         // must have 5 args: xbits <k-size> <plot_id_hex> <xbits_hex> <strength>

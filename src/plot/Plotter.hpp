@@ -112,7 +112,7 @@ public:
         // 6) Partitioned Table4 + Table5
         std::vector<std::vector<T4BackPointers>> all_t4;
         std::vector<std::vector<T5Pairing>> all_t5;
-        ProofParams sub_params(plot_id_.data(), proof_params_.get_sub_k());
+        ProofParams sub_params(plot_id_.data(), proof_params_.get_sub_k(), 2);
 
         for (size_t pid = 0; pid < t3_results.partitioned_pairs.size(); ++pid) {
             const auto& partition = t3_results.partitioned_pairs[pid];
