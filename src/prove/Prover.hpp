@@ -258,7 +258,7 @@ public:
         return quality_chains;
     }
 
-    std::vector<QualityLink> getFirstQualityLinks(FragmentsParent parent, FragmentsPattern required_pattern, uint64_t t3_fragment_index, uint32_t t4_partition)
+    std::vector<QualityLink> getFirstQualityLinks(FragmentsParent /*parent*/, FragmentsPattern required_pattern, uint64_t t3_fragment_index, uint32_t t4_partition)
     {
         std::vector<QualityLink> links;
         std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
@@ -378,7 +378,7 @@ public:
         return links;
     }
 
-    std::vector<QualityLink> getQualityLinksFromT4PartitionToT3Partition(uint32_t partition_parent_t4, uint32_t partition_t3, FragmentsParent parent)
+    std::vector<QualityLink> getQualityLinksFromT4PartitionToT3Partition(uint32_t partition_parent_t4, uint32_t partition_t3, FragmentsParent /*parent*/)
     {
         std::vector<QualityLink> links;
 
@@ -393,7 +393,9 @@ public:
         #endif
         std::vector<T4BackPointers> t4_b_to_t3 = plot_.value().data.t4_to_t3_back_pointers[partition_parent_t4];
         std::vector<T5Pairing> t5_b_to_t4_b = plot_.value().data.t5_to_t4_back_pointers[partition_parent_t4];
+#ifdef DEBUG_CHAINING
         int links_found = 0;
+#endif
         for (size_t t4_index = 0; t4_index < t4_b_to_t3.size(); t4_index++)
         {
             T4BackPointers entry = t4_b_to_t3[t4_index];
@@ -440,7 +442,9 @@ public:
                     }
                 }
 
+#ifdef DEBUG_CHAINING
                 links_found++;
+#endif
             }
         }
         #ifdef DEBUG_CHAINING

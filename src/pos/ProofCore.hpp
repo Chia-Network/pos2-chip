@@ -58,7 +58,7 @@ enum class FragmentsPattern : uint8_t
 };
 
 // Utility function to convert FragmentsPattern to string
-static std::string FragmentsPatternToString(FragmentsPattern pattern)
+inline std::string FragmentsPatternToString(FragmentsPattern pattern)
 {
     switch (pattern)
     {
@@ -198,9 +198,9 @@ public:
 
     // Constructor: Initializes internal ProofHashing and ProofFragmentCodec objects.
     ProofCore(const ProofParams &proof_params)
-        : params_(proof_params),
-          hashing(proof_params),
-          fragment_codec(proof_params)
+        : hashing(proof_params),
+          fragment_codec(proof_params),
+          params_(proof_params)
     {
     }
 
@@ -328,7 +328,7 @@ public:
     // pairing_t4:
     // Input: meta_l, meta_r (each 2k bits), order_bits_l, order_bits_r (each 2 bits).
     // Returns: a T4Pairing with match_info (sub_k bits) and meta (2k bits).
-    std::optional<T4Pairing> pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l, uint32_t order_bits_r)
+    std::optional<T4Pairing> pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l, uint32_t /*order_bits_r*/)
     {
 #if defined(T3_FACTOR_T4_T5_EVEN)
         int num_test_bits = 32;
@@ -396,7 +396,7 @@ public:
 #ifdef NON_BIPARTITE_BEFORE_T3
         if (table_id <= 3)
         {
-            int match_section = matching_section(section_l);
+            uint32_t match_section = matching_section(section_l);
             if (section_r != match_section)
             {
                 // std::cout << "section_l " << section_l << " != match_section " << match_section << std::endl
@@ -651,10 +651,8 @@ public:
         FragmentsPattern pattern = requiredPatternFromChallenge(current_challenge);
 
         std::vector<NewLinksResult> new_links;
-        for (int i = 0; i < link_set.size(); ++i)
+        for (QualityLink const& link : link_set)
         {
-            const QualityLink &link = link_set[i];
-
             if (link.pattern != pattern)
             {
                 // skip links that do not match the required pattern
