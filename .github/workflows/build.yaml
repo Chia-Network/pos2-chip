@@ -81,7 +81,6 @@ jobs:
         run: |
           build/src/tools/plotter/plotter test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF 2
           build/src/tools/prover/prover challenge 5700000000000000000000000000000000000000000000000000000000000000 plot_18_2_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin 1
-          build/src/tools/solver/solver benchmark 18
       - name: Benchmark
         if: ${{ matrix.mode == 'Release' }}
         run: |
