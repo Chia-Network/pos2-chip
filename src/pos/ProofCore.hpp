@@ -221,19 +221,20 @@ public:
     std::optional<T1Pairing> pairing_t1(uint32_t x_l, uint32_t x_r)
     {
         // fast test for matching to speed up solver.
-        if (params_.get_num_match_key_bits(1) == 4)
+        /*if (params_.get_num_match_key_bits(1) == 4)
         {
             if (!match_filter_16(x_l & 0xFFFFU, x_r & 0xFFFFU))
                 return std::nullopt;
         }
-        else if (params_.get_num_match_key_bits(1) == 2)
+        else */
+        if (params_.get_num_match_key_bits(1) == 2)
         {
             if (!match_filter_4(x_l & 0xFFFFU, x_r & 0xFFFFU))
                 return std::nullopt;
         }
         else
         {
-            std::cerr << "pairing_t1: match_filter_4 not supported for this table." << std::endl;
+            std::cerr << "pairing_t1: match_filter not supported for this table." << std::endl;
             exit(1);
         }
 
@@ -279,41 +280,23 @@ public:
     // meta, order bits, and the full proof fragments.
     std::optional<T3Pairing> pairing_t3(uint64_t meta_l, uint64_t meta_r, uint32_t x_bits_l, uint32_t x_bits_r)
     {
-        int num_test_bits;
-        if (params_.get_strength() == 2)
-        {
-            if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
-                                static_cast<uint32_t>(meta_r & 0xFFFFU)))
-                return std::nullopt;
-            num_test_bits = 0;
-        }
+        int num_test_bits = params_.get_num_match_key_bits(3); // synonymous with get_strength()
         /*
-        // optional fast match test for plot strength 4, if needed.
-        else if (params_.get_num_match_key_bits(3) == 4)
-        {
-            if (!match_filter_16(static_cast<uint32_t>(meta_l & 0xFFFFU),
-                                 static_cast<uint32_t>(meta_r & 0xFFFFU)))
-                return std::nullopt;
-        }*/
-        // at higher plot strengths, we filter out non-matching pairs using test bits on the pairing hash.
-        else
-        {
-            num_test_bits = params_.get_num_match_key_bits(3);
-            /*
-            // commented out is an alternative explicit filter that would slow down plotting but not necessarily improve attack resistance significantly.
-            if (!hashing.t3_pairing_filter(meta_l, meta_r,
-                                        static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                        params_.get_num_match_key_bits(3)))
-                return std::nullopt;*/
-        }
+        // commented out is an alternative explicit filter that would slow down plotting but not necessarily improve attack resistance significantly.
+        if (!hashing.t3_pairing_filter(meta_l, meta_r,
+                                    static_cast<int>(params_.get_num_pairing_meta_bits()),
+                                    params_.get_num_match_key_bits(3)))
+            return std::nullopt;
+        */
 
         PairingResult lower_partition_pair = hashing.pairing(3, meta_l, meta_r,
                                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
                                                              static_cast<int>(params_.get_sub_k()) - 1,
                                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
                                                              num_test_bits);
-        // when plot strength > 2, we do an additional test to filter out non-matching pairs rather than the fast match test from earlier.
-        if ((num_test_bits > 0) && (lower_partition_pair.test_result != 0))
+
+        // pairing filter test
+        if (lower_partition_pair.test_result != 0)
             return std::nullopt;
 
         uint64_t all_x_bits = (static_cast<uint64_t>(x_bits_l) << params_.get_k()) | x_bits_r;
@@ -355,10 +338,10 @@ public:
     }
 
     // pairing_t4:
-    // Input: meta_l, meta_r (each 2k bits), order_bits_l, order_bits_r (each 2 bits).
+    // Input: meta_l, meta_r (each 2k bits), order_bits_l (2 bits).
     // Returns: a T4Pairing with match_info (sub_k bits) and meta (2k bits).
     std::optional<T4Pairing>
-    pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l, uint32_t order_bits_r)
+    pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l)
     {
 #if defined(T3_FACTOR_T4_T5_EVEN)
         int num_test_bits = 32;

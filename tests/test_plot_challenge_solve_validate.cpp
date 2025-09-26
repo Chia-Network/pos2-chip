@@ -19,7 +19,7 @@ TEST_CASE("plot-k18-strength2-4-5")
         {
         case 0:
             plot_strength = 2;
-            challenge_hex = "5700000000000000000000000000000000000000000000000000000000000000";
+            challenge_hex = "5c00000000000000000000000000000000000000000000000000000000000000";
             break;
         case 1:
             plot_strength = 4;
@@ -27,7 +27,7 @@ TEST_CASE("plot-k18-strength2-4-5")
             break;
         case 2:
             plot_strength = 5;
-            challenge_hex = "a103000000000000000000000000000000000000000000000000000000000000";
+            challenge_hex = "62000000000000000000000000000000000000000000000000000000000000";
             break;
         default:
             // return error
@@ -81,11 +81,15 @@ TEST_CASE("plot-k18-strength2-4-5")
             std::cerr << "Error: no quality chains found." << std::endl;
             return;
         }
+        // 16 is 128.
+        for (int nChain = 0; nChain < quality_chains.size(); nChain++)
+        {
+            
 
         std::vector<uint32_t> check_proof_xs;
 
         // at this point should have at least one quality chain, so get the proof fragments for the first one
-        std::vector<ProofFragment> proof_fragments = prover.getAllProofFragmentsForProof(quality_chains[0]);
+        std::vector<ProofFragment> proof_fragments = prover.getAllProofFragmentsForProof(quality_chains[nChain]);
         // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
         // get x bits list from proof fragments
@@ -139,11 +143,23 @@ TEST_CASE("plot-k18-strength2-4-5")
             return;
         }
 
+        
+    std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
+    for (size_t i = 0; i < all_proofs.size(); i++)
+    {
+        std::cout << "Proof " << i << " x-values (" << all_proofs[i].size() << "): ";
+        for (size_t j = 0; j < all_proofs[i].size(); j++)
+        {
+            std::cout << all_proofs[i][j] << ", ";
+        }
+        std::cout << std::endl;
+    }
+
         // at this point should have exactly one proof.
 
-        // std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
+        std::cout << "nChain: " << nChain << " found " << all_proofs.size() << " proofs." << std::endl;
         std::vector<uint32_t> &proof = all_proofs[0];
-        // std::cout << "Proof size: " << proof.size() << std::endl;
+        std::cout << "Proof size: " << proof.size() << std::endl;
 
         ENSURE(proof.size() == NUM_CHAIN_LINKS * 32); // should always have 32 x values per link
 #ifdef RETAIN_X_VALUES_TO_T3
@@ -165,6 +181,7 @@ TEST_CASE("plot-k18-strength2-4-5")
         ProofValidator proof_validator(prover.getProofParams());
         bool valid = proof_validator.validate_full_proof(proof, challenge, proof_fragment_filter_bits);
         ENSURE(valid);
+    }
     }
 }
 

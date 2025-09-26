@@ -172,7 +172,7 @@ public:
             if (sub_proof_core_.validate_match_info_pairing(
                     4, result_l->meta_lower_partition, result_l->match_info_lower_partition, result_r->match_info_lower_partition))
             {
-                std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_lower_partition, result_r->meta_lower_partition, result_l->order_bits, result_r->order_bits);
+                std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_lower_partition, result_r->meta_lower_partition, result_l->order_bits);
                 if (result.has_value())
                 {
                     t4_pairs.push_back(result.value());
@@ -185,7 +185,7 @@ public:
             if (sub_proof_core_.validate_match_info_pairing(
                     4, result_l->meta_upper_partition, result_l->match_info_upper_partition, result_r->match_info_upper_partition))
             {
-                std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_upper_partition, result_r->meta_upper_partition, result_l->order_bits, result_r->order_bits);
+                std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_upper_partition, result_r->meta_upper_partition, result_l->order_bits);
                 if (result.has_value())
                 {
                     t4_pairs.push_back(result.value());

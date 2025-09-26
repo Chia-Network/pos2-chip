@@ -153,9 +153,9 @@ public:
     }
 
     // Main solver function.
-    // Input: an array of 128 x1 candidates.
-    //.       x_solution is an dev-mode test array that the solver should solve to and test against (debug and verify).
-    // Returns: a vector of complete proofs (each proof is an array of 256 uint64_t values).
+    // Input: an array of 512 x1 candidates.
+    //        x_solution is an dev-mode test array that the solver should solve to and test against (debug and verify).
+    // Returns: a vector of complete proofs (each proof is an array of 512 uint32_t x-values).
     std::vector<std::vector<uint32_t>> solve(const std::vector<uint32_t> &x_bits_list, const std::vector<uint32_t> &x_solution = {})
     {
         XBitGroupMappings x_bits_group = compress_with_lookup(x_bits_list, params_.get_k() / 2);
@@ -241,7 +241,7 @@ public:
 
         // Phase 4: Build a bitmask from the sorted x1 hashes.
         std::vector<uint32_t> x1_bitmask;
-        buildX1Bitmask(num_match_target_hashes, x1_hashes, x1_bitmask);
+        buildX1Bitmask(x1_hashes, x1_bitmask);
 
         // Phase 5: Filter x2 candidates using the x1 bitmask.
         std::vector<uint32_t> x2_potential_match_xs;
@@ -960,7 +960,7 @@ public:
             std::cout << std::endl;
             std::cout << "x1_hashes size: " << x1_hashes.size() << std::endl;
             std::cout << "x2_match_hashes size: " << x2_match_hashes.size() << std::endl;
-
+            
             int k = params_.get_k();
             int num_section_bits = params_.get_num_section_bits();
             // verify section boundaries have section bits as part of hash range for section
@@ -984,7 +984,7 @@ public:
                         std::cout << "i      : " << i << std::endl;
                         std::cout << "start  : " << start_section << std::endl;
                         std::cout << "end    : " << end_section << std::endl;
-                        // exit(23);
+                        exit(23);
                     }
                 }
                 std::cout << "Section " << i << ": [" << start_section << ", " << end_section << ")" << std::endl;
@@ -998,11 +998,11 @@ public:
                 for (int j = start_section; j < end_section; j++)
                 {
                     uint32_t hash = x2_match_hashes[j];
-                    uint32_t section_bits = hash >> (num_match_target_hashes - params_.get_num_section_bits());
+                    uint32_t section_bits = hash >> (k - num_section_bits);
                     if (section_bits != i)
                     {
                         std::cout << "Section bits: " << section_bits << " != " << i << std::endl;
-                        // exit(23);
+                        exit(23);
                     }
                 }
                 std::cout << "Section " << i << ": [" << start_section << ", " << end_section << ")" << std::endl;
@@ -1038,6 +1038,7 @@ public:
         timer.start("Matching x1 and x2 sorted lists");
         if (false)
         {
+            // this section splits execution into NUM_SECTIONS tasks
             std::for_each(
 #ifdef __cpp_lib_execution
                 std::execution::par,
@@ -1105,7 +1106,8 @@ public:
         }
         else
         {
-            int num_task_bit_splits = 8; // 256 splits
+            // this section splits execution into NUM_SECTIONS * num_task_bit_splits tasks
+            int num_task_bit_splits = 4; // 16 splits
 
             for (int section = 0; section < NUM_SECTIONS; ++section)
             {
@@ -1117,17 +1119,35 @@ public:
                 int x2_end = (section + 1 == NUM_SECTIONS)
                                  ? static_cast<int>(x2_match_hashes.size())
                                  : section_boundaries_x2[section + 1];
-
-                auto task_boundaries_x1 = makeTaskBoundaries(
+                auto task_boundaries_x1 = makeTaskBoundariesSimple(
                     x1_start, x1_end,
                     x1_hashes,
                     num_task_bit_splits);
-                auto task_boundaries_x2 = makeTaskBoundaries(
+                /*auto test_task_boundaries_x1 = makeTaskBoundariesFast(
+                    x1_start, x1_end,
+                    x1_hashes,
+                    num_task_bit_splits);
+                if (task_boundaries_x1 != test_task_boundaries_x1) 
+                {
+                    std::cout << "ERROR: task_boundaries_x1 != test_task_boundaries_x1" << std::endl;
+                    exit(23);
+                }*/
+                auto task_boundaries_x2 = makeTaskBoundariesSimple(
                     x2_start, x2_end,
                     x2_match_hashes,
                     num_task_bit_splits);
-
-                if (false)
+                /*auto test_task_boundaries_x2 = makeTaskBoundariesSimple(
+                    x2_start, x2_end,
+                    x2_match_hashes,
+                    num_task_bit_splits);
+                if (task_boundaries_x2 != test_task_boundaries_x2) 
+                {
+                    std::cout << "ERROR: task_boundaries_x2 != test_task_boundaries_x2" << std::endl;
+                    exit(23);
+                }
+                */
+                
+                /*if (false)
                 {
                     // verify task boundaries
                     for (int i = 0; i < task_boundaries_x1.size(); i++)
@@ -1139,7 +1159,7 @@ public:
                         std::cout << "Task boundaries x1[" << i << "] first hash: " << first_hash_x1 << std::endl;
                         std::cout << "Task boundaries x2[" << i << "] first hash: " << first_hash_x2 << std::endl;
                     }
-                }
+                }*/
 
                 int total_tasks = 1 << num_task_bit_splits;
 
@@ -1218,6 +1238,8 @@ public:
         return t1_matches;
     }
 
+    /*
+    // kept for debugging.
     std::vector<int> computeSectionBoundariesSimple(const std::vector<uint32_t> &hashes)
     {
         int NUM_SECTIONS = params_.get_num_sections();
@@ -1240,9 +1262,11 @@ public:
             }
         }
         return section_boundaries;
-    }
+    }*/
 
-    std::vector<int> makeTaskBoundaries(
+    /*
+    TODO: This code has a bug and does not always match makeTaskBoundariesSimple.
+    std::vector<int> makeTaskBoundariesFast(
         int x1_start,
         int x1_end,
         const std::vector<uint32_t> &hashes,
@@ -1305,8 +1329,11 @@ public:
         bounds[num_splits] = x1_end;
         return bounds;
     }
+    */
 
-    /*std::vector<int> makeTaskBoundariesSimple(
+    // a simple (but working) version that has room for optimization
+    // see: makeTaskBoundariesFast above, but it doesn't always yield correct results.
+    std::vector<int> makeTaskBoundariesSimple(
         int x1_start, int x1_end,
         const std::vector<uint32_t> &hashes,
         int num_split_bits)
@@ -1333,7 +1360,7 @@ public:
         // set last task boundary to end of x1
         task_boundaries[num_split_sections] = x1_end;
         return task_boundaries;
-    }*/
+    }
 
     std::vector<int>
     computeSectionBoundaries(const std::vector<uint32_t> &hashes)
@@ -1892,7 +1919,8 @@ public:
         timings_.misc += timer.stop();
     }
 
-    void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
+
+void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
                           int x1_bits,
                           int x1_range_size,
                           std::vector<uint32_t> &x1s,
@@ -1945,28 +1973,31 @@ public:
                 // flat base index for this x1_index
                 std::size_t base = std::size_t(x1_index) * x1_range_size * num_match_keys;
 
-                for (int match_key = 0; match_key < num_match_keys; ++match_key)
+                // Move match_key loop inside: compute chacha once per x and then emit entries for all match keys.
+                for (uint32_t x = x1_range_start;
+                     x < x1_range_start + x1_range_size;
+                     ++x)
                 {
-                    std::size_t write_idx = base + std::size_t(match_key) * x1_range_size;
-
-                    for (uint32_t x = x1_range_start;
-                         x < x1_range_start + x1_range_size;
-                         ++x, ++write_idx)
+                    if ((x & 15u) == 0u)
                     {
-                        if ((x & 15) == 0)
-                        {
-                            proof_core.hashing.g_range_16(x, x_chachas);
-                        }
-                        uint32_t x_chacha = x_chachas[x & 15];
+                        proof_core.hashing.g_range_16(x, x_chachas);
+                    }
+                    uint32_t x_chacha = x_chachas[x & 15u];
 
-                        uint32_t hash = proof_core.matching_target(1, x, match_key);
+                    // offset within this x1 range for writing per-match_key blocks
+                    std::size_t offset = static_cast<std::size_t>(x - x1_range_start);
+
+                    // for each match_key compute target and final hash, write into precomputed slot
+                    for (int match_key = 0; match_key < num_match_keys; ++match_key)
+                    {
+                        uint32_t matching_target = proof_core.matching_target(1, x, match_key);
                         uint32_t section_bits =
                             (x_chacha >> (num_k_bits - num_section_bits)) & ((1u << num_section_bits) - 1);
                         uint32_t matching_section =
                             proof_core.matching_section(section_bits);
+                        uint32_t hash = (matching_section << (num_k_bits - num_section_bits)) | (match_key << (num_k_bits - num_section_bits - num_match_key_bits)) | matching_target;
 
-                        hash = (matching_section << (num_k_bits - num_section_bits)) | (match_key << (num_k_bits - num_section_bits - num_match_key_bits)) | hash;
-
+                        std::size_t write_idx = base + std::size_t(match_key) * x1_range_size + offset;
                         x1s[write_idx] = x;
                         x1_hashes[write_idx] = hash;
                     }
@@ -2105,8 +2136,7 @@ public:
     }
 
     // Phase 4 helper: Build a bitmask from the sorted x1 hashes.
-    void buildX1Bitmask(int num_match_target_hashes,
-                        const std::vector<uint32_t> &x1_hashes,
+    void buildX1Bitmask(const std::vector<uint32_t> &x1_hashes,
                         std::vector<uint32_t> &x1_bitmask)
     {
         const int num_k_bits = params_.get_k();

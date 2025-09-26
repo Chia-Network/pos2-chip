@@ -261,12 +261,12 @@ int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_li
     std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
     for (size_t i = 0; i < all_proofs.size(); i++)
     {
-        /*std::cout << "Proof " << i << ": ";
+        std::cout << "Proof " << i << " x-values (" << all_proofs[i].size() << "): ";
         for (size_t j = 0; j < all_proofs[i].size(); j++)
         {
-            std::cout << all_proofs[i][j] << " ";
+            std::cout << all_proofs[i][j] << ", ";
         }
-        std::cout << std::endl;*/
+        std::cout << std::endl;
         std::cout << "Proof hex: " << Utils::proofToHex(params.get_k(), all_proofs[i]) << std::endl;
     }
 
