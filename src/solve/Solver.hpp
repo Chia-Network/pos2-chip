@@ -984,7 +984,7 @@ public:
                         std::cout << "i      : " << i << std::endl;
                         std::cout << "start  : " << start_section << std::endl;
                         std::cout << "end    : " << end_section << std::endl;
-                        exit(23);
+                        abort();
                     }
                 }
                 std::cout << "Section " << i << ": [" << start_section << ", " << end_section << ")" << std::endl;
