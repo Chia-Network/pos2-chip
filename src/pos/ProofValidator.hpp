@@ -11,7 +11,7 @@
 #include "ProofCore.hpp"
 #include "pos/ProofFragmentScanFilter.hpp"
 
-#define DEBUG_PROOF_VALIDATOR true
+//#define DEBUG_PROOF_VALIDATOR true
 
 class ProofValidator
 {
@@ -19,7 +19,7 @@ public:
     ProofValidator(const ProofParams &proof_params)
         : params_(proof_params), 
           proof_core_(proof_params),
-          sub_proof_core_(ProofParams(proof_params.get_plot_id_bytes(), proof_params.get_sub_k()))
+          sub_proof_core_(ProofParams(proof_params.get_plot_id_bytes(), proof_params.get_sub_k(), proof_params.get_strength()))
     {
         // sub params are used in T4/5
     }
@@ -172,7 +172,7 @@ public:
             if (sub_proof_core_.validate_match_info_pairing(
                     4, result_l->meta_lower_partition, result_l->match_info_lower_partition, result_r->match_info_lower_partition))
             {
-                std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_lower_partition, result_r->meta_lower_partition, result_l->order_bits, result_r->order_bits);
+                std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_lower_partition, result_r->meta_lower_partition, result_l->order_bits);
                 if (result.has_value())
                 {
                     t4_pairs.push_back(result.value());
@@ -185,7 +185,7 @@ public:
             if (sub_proof_core_.validate_match_info_pairing(
                     4, result_l->meta_upper_partition, result_l->match_info_upper_partition, result_r->match_info_upper_partition))
             {
-                std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_upper_partition, result_r->meta_upper_partition, result_l->order_bits, result_r->order_bits);
+                std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_upper_partition, result_r->meta_upper_partition, result_l->order_bits);
                 if (result.has_value())
                 {
                     t4_pairs.push_back(result.value());

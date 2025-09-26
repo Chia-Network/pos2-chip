@@ -602,7 +602,7 @@ public:
     {
         uint64_t meta_l = l_candidate.meta;
         uint64_t meta_r = r_candidate.meta;
-        auto opt_res = proof_core_.pairing_t4(meta_l, meta_r, l_candidate.order_bits, r_candidate.order_bits);
+        auto opt_res = proof_core_.pairing_t4(meta_l, meta_r, l_candidate.order_bits);
         if (opt_res.has_value())
         {
             T4Pairing pairing = opt_res.value();

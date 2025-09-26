@@ -5,28 +5,54 @@
 #include "plot/PlotFile.hpp"
 #include "common/Utils.hpp"
 
+static void print_usage(const char* prog) {
+    std::cerr << "Usage:\n"
+              << "  " << prog << " test <k> <plot_id_hex> [strength]\n"
+              << "    <k>            : even integer between 18 and 32\n"
+              << "    <plot_id_hex>  : 64 hex characters\n"
+              << "    [strength]     : optional, defaults to 2\n";
+}
+
+// example usage: ./plotter test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF 2
 int main(int argc, char *argv[]) try
 {
-    if (argc < 2 || argc > 3)
-    {
-        std::cerr << "Usage: " << argv[0] << " <k>\n";
+    if (argc < 2) {
+        print_usage(argv[0]);
         return 1;
     }
 
-    int k = std::atoi(argv[1]);
+    std::string cmd = argv[1];
+    if (cmd != "test") {
+        print_usage(argv[0]);
+        return 1;
+    }
 
-    if ((k < 18) || (k > 32) || (k % 2 != 0))
-    {
+    // Expect: prog test <k> <plot_id_hex> [strength=2 (default)]
+    if (argc < 4 || argc > 5) {
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    int k = std::atoi(argv[2]);
+    std::string plot_id_hex = argv[3];
+    int strength = 2;
+    if (argc == 5) {
+        strength = std::atoi(argv[4]);
+    }
+
+    if ((k < 18) || (k > 32) || (k % 2 != 0)) {
         std::cerr << "Error: k must be an even integer between 18 and 32.\n";
         return 1;
     }
 
-    // 64‑hex‑character plot ID
-    std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+    if (plot_id_hex.size() != 64) {
+        std::cerr << "Error: plot_id_hex must be 64 hex characters.\n";
+        return 1;
+    }
 
     Timer timer;
     timer.start("Plotting");
-    Plotter plotter(Utils::hexToBytes(plot_id_hex), k);
+    Plotter plotter(Utils::hexToBytes(plot_id_hex), k, strength);
     plotter.setValidate(true);
     PlotData plot = plotter.run();
     timer.stop();
@@ -146,13 +172,11 @@ int main(int argc, char *argv[]) try
     bool writeToFile = true;
     if (writeToFile)
     {
-        std::string filename = "plot_" + std::to_string(k);
+        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(strength);
         #ifdef RETAIN_X_VALUES_TO_T3
         filename += "_xvalues";
         #endif
-        #ifdef NON_BIPARTITE_BEFORE_T3
-        filename += "_nonbipartitebeforet3";
-        #else
+        #ifndef NON_BIPARTITE_BEFORE_T3
         filename += "_bipartite";
         #endif
         filename += '_' + plot_id_hex + ".bin";

@@ -8,10 +8,10 @@
 
 int main(int argc, char *argv[])
 {
-    std::cout << "Verify: given a k-size, hex proof, 32 byte hex challenge, and proof_fragment_scan_filter_bits, verify the proof." << std::endl;
-    if (argc != 6)
+    std::cout << "Verify: given a k-size, hex proof, 32 byte hex challenge, plot strength, and proof_fragment_scan_filter_bits, verify the proof." << std::endl;
+    if (argc != 7)
     {
-        std::cerr << "Usage: " << argv[0] << " [k] [hexPlotId] [hexProof] [hexChallenge] [proofFragmentScanFilterBits]\n";
+        std::cerr << "Usage: " << argv[0] << " [k] [hexPlotId] [hexProof] [hexChallenge] [plotStrength] [proofFragmentScanFilterBits]\n";
         return 1;
     }
     int k = std::stoi(argv[1]);
@@ -34,21 +34,26 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int proof_fragment_scan_filter_bits = 0;
-    if (argc == 6) {
-        proof_fragment_scan_filter_bits = std::stoi(argv[5]);
-        if (proof_fragment_scan_filter_bits < 0 || proof_fragment_scan_filter_bits > 16) {
-            std::cerr << "Error: proofFragmentScanFilterBits must be between 0 and 16." << std::endl;
-            return 1;
-        }
+    int plot_strength = std::stoi(argv[5]);
+    if ((plot_strength < 2) || (plot_strength > 255))
+    {
+        std::cerr << "Error: plot strength must be between 2 and 255." << std::endl;
+        return 1;
     }
 
-    std::cout << "Verifying proof for k=" << k << ", plot ID=" << plot_id_hex << ", challenge=" << challenge_hex << ", proof=" << proof_hex << ", proofFragmentScanFilterBits=" << proof_fragment_scan_filter_bits << std::endl;
+    int proof_fragment_scan_filter_bits = std::stoi(argv[6]);
+    if (proof_fragment_scan_filter_bits < 0 || proof_fragment_scan_filter_bits > 16)
+    {
+        std::cerr << "Error: proofFragmentScanFilterBits must be between 0 and 16." << std::endl;
+        return 1;
+    }
+
+    std::cout << "Verifying proof for k=" << k << ", plot ID=" << plot_id_hex << ", challenge=" << challenge_hex << ", proof=" << proof_hex << ", plot_strength=" << plot_strength << ", proofFragmentScanFilterBits=" << proof_fragment_scan_filter_bits << std::endl;
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
     std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
-    ProofParams params(plot_id.data(), k); 
+    ProofParams params(plot_id.data(), k, plot_strength);
     ProofValidator proof_validator(params);
-    //ProofCore proof_core(params);
+    // ProofCore proof_core(params);
 
     std::vector<uint32_t> proof = Utils::hexToProof(k, proof_hex);
 
@@ -62,6 +67,4 @@ int main(int argc, char *argv[])
         std::cerr << "Proof validation failed." << std::endl;
         return 1;
     }
-
-    
 }
