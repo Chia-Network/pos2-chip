@@ -1002,7 +1002,7 @@ public:
                     if (section_bits != i)
                     {
                         std::cout << "Section bits: " << section_bits << " != " << i << std::endl;
-                        exit(23);
+                        abort();
                     }
                 }
                 std::cout << "Section " << i << ": [" << start_section << ", " << end_section << ")" << std::endl;
