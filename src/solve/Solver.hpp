@@ -17,15 +17,7 @@
 #include <bitset>
 #include <numeric> // for iota
 
-#include <execution>
 
-// Enable std::execution::par only when <execution> exists and we're NOT on libc++/Apple platforms.
-// libc++ on macOS provides <execution> but does not implement parallel backends.
-#if defined(__cpp_lib_execution) && !defined(_LIBCPP_VERSION) && !defined(__APPLE__) && !defined(__MACH__)
-#define USE_STD_EXECUTION_PAR
-#endif
-
-#ifndef USE_STD_EXECUTION_PAR
 template <typename It, typename Fn>
 void parallel_for_range(It first, It last, Fn fn)
 {
@@ -68,7 +60,7 @@ void parallel_for_range(It first, It last, Fn fn)
     for (auto &th : workers)
         th.join();
 }
-#endif
+
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 #include <xmmintrin.h>
@@ -729,13 +721,9 @@ public:
             L_short_list.reserve(L_list.size() * 2);
             std::mutex list_mutex;
 
-// parallel loop over each L element
-#ifdef USE_STD_EXECUTION_PAR
-            std::for_each(std::execution::par, L_list.begin(), L_list.end(), [&](const T1_Match &lm)
-#else
+            // parallel loop over each L element
             parallel_for_range(L_list.begin(), L_list.end(), [&](const T1_Match &lm)
-#endif
-                          {
+                               {
                     // each thread gets its own ProofCore instance
                     ProofCore thread_core(params_);
 
@@ -1086,14 +1074,10 @@ public:
         timer.start("Matching x1 and x2 sorted lists");
         if (true)
         {
-// this section splits execution into NUM_SECTIONS tasks
-// performs better when small number of cpu's.
-#ifdef USE_STD_EXECUTION_PAR
-            std::for_each(std::execution::par, sections.begin(), sections.end(), [&](int section)
-#else
+            // this section splits execution into NUM_SECTIONS tasks
+            // performs better when small number of cpu's.
             parallel_for_range(sections.begin(), sections.end(), [&](int section)
-#endif
-                          {
+                               {
                     ProofCore proof_core(params_);
 
                     int x1_start = section_boundaries_x1[section];
@@ -1104,8 +1088,6 @@ public:
                     int x2_end = (section + 1 == NUM_SECTIONS)
                                      ? static_cast<int>(x2_match_hashes.size())
                                      : section_boundaries_x2[section + 1];
-
-                    std::cout << "Section " << section << ": x1 [" << x1_start << ", " << x1_end << "), x2 [" << x2_start << ", " << x2_end << ") length: " << (x1_end - x1_start) << ", " << (x2_end - x2_start) << std::endl;
 
                     int i = x1_start, j = x2_start;
                     while (i < x1_end && j < x2_end)
@@ -1213,11 +1195,7 @@ public:
                 std::vector<int> task_ids(total_tasks);
                 std::iota(task_ids.begin(), task_ids.end(), 0);
 
-#ifdef USE_STD_EXECUTION_PAR
-                std::for_each(std::execution::par, task_ids.begin(), task_ids.end(), [&](int task_id)
-#else
                 parallel_for_range(task_ids.begin(), task_ids.end(), [&](int task_id)
-#endif
                               {
                         ProofCore proof_core(params_);
 
@@ -1578,11 +1556,7 @@ public:
         if (!use_prefetching_)
         {
             timer.start("Chacha multi-threaded bitmask test");
-#ifdef USE_STD_EXECUTION_PAR
-            std::for_each(std::execution::par, thread_ids.begin(), thread_ids.end(), [&](int t)
-#else
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-#endif
                           {
                     int thread_matches = 0;
                     ProofCore proof_core(params_);
@@ -1616,12 +1590,8 @@ public:
         else
         {
             timer.start("Chacha multi-threaded bitmask test with prefetching");
-            #ifdef USE_STD_EXECUTION_PAR
-            std::for_each(std::execution::par, thread_ids.begin(), thread_ids.end(), [&](int t)
-#else
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-#endif
-                {
+                          {
                     int thread_matches = 0;
                     ProofCore proof_core(params_);
                     uint64_t start = uint64_t(t) * chunk_size;
@@ -1692,8 +1662,7 @@ public:
                         }
                     }
 
-                    matches_per_thread[t] = thread_matches;
-                });
+                    matches_per_thread[t] = thread_matches; });
             timings_.chachafilterx2sbybitmask += timer.stop();
         }
 
@@ -1771,11 +1740,7 @@ public:
         if (!use_prefetching_)
         {
             timer.start("Chacha multi-threaded bitmask test (no prefetching)");
-#ifdef USE_STD_EXECUTION_PAR
-            std::for_each(std::execution::par, thread_ids.begin(), thread_ids.end(), [&](int t)
-#else
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-#endif
                           {
                     int thread_matches = 0;
                     int num_checks = 0;
@@ -1831,11 +1796,7 @@ public:
         else
         {
             timer.start("Chacha multi-threaded bitmask test with prefetching");
-#ifdef USE_STD_EXECUTION_PAR
-            std::for_each(std::execution::par, thread_ids.begin(), thread_ids.end(), [&](int t)
-#else
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-#endif
                           {
                     int thread_matches = 0;
                     ProofCore proof_core(params_);
@@ -1990,14 +1951,7 @@ public:
         std::vector<int> indices(NUM_X1S);
         std::iota(indices.begin(), indices.end(), 0);
 
-// Use classic std::thread-based parallel loop (splits indices among threads).
-#ifdef USE_STD_EXECUTION_PAR
-        std::cout << "Using std::execution::par for parallelism" << std::endl;
-        exit(23);
-        std::for_each(std::execution::par, indices.begin(), indices.end(), [&](int x1_index)
-#else
         parallel_for_range(indices.begin(), indices.end(), [&](int x1_index)
-#endif
                       {
                 // each thread in the pool runs this lambda
                 ProofCore proof_core(params_);
@@ -2088,12 +2042,8 @@ public:
         std::iota(indices.begin(), indices.end(), 0);
 
         // Parallel loop
-        #ifdef USE_STD_EXECUTION_PAR
-        std::for_each(std::execution::par, indices.begin(), indices.end(), [&](int x1_index)
-        #else
         parallel_for_range(indices.begin(), indices.end(), [&](int x1_index)
-        #endif
-            {
+                      {
                 ProofCore proof_core(params_);
                 uint32_t x_chachas[16];
 
@@ -2148,8 +2098,7 @@ public:
                         local_x1s.push_back(x);
                         local_hashs.push_back(new_hash);
                     }
-                }
-            });
+                } });
 
         // Now flatten all the per-thread buffers into the shared vectors
         size_t total = 0;
