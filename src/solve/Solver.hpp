@@ -16,47 +16,7 @@
 #include <iomanip>
 #include <bitset>
 #include <numeric> // for iota
-
-
-template <typename It, typename Fn>
-void parallel_for_range(It first, It last, Fn fn)
-{
-    using diff_t = typename std::iterator_traits<It>::difference_type;
-    diff_t total = std::distance(first, last);
-    if (total <= 0)
-    {
-        return;
-    }
-
-    unsigned hw = std::thread::hardware_concurrency();
-    unsigned num_threads = hw == 0 ? 4u : hw;
-    // don't spawn more threads than work items
-    num_threads = static_cast<unsigned>(std::min<diff_t>(num_threads, total));
-
-    if (num_threads <= 1)
-    {
-        for (It it = first; it != last; ++it)
-            fn(*it);
-        return;
-    }
-
-    std::vector<std::jthread> workers;
-    workers.reserve(num_threads);
-
-    auto chunk_begin = first;
-    for (unsigned t = 0; t < num_threads; ++t)
-    {
-        diff_t start = (total * t) / num_threads;
-        diff_t end = (total * (t + 1)) / num_threads;
-        It b = std::next(first, start);
-        It e = std::next(first, end);
-
-        workers.emplace_back([b, e, &fn]()
-                             {
-            for (It it = b; it != e; ++it)
-                fn(*it); });
-    }
-}
+#include "common/ParallelForRange.hpp"
 
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
