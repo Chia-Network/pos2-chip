@@ -191,6 +191,8 @@ public:
             }
             std::cout << std::endl;
         }
+#else
+        (void)x_solution;
 #endif
         const int num_k_bits_ = params_.get_k();
         num_x_pairs_ = x_bits_list.size();
@@ -396,8 +398,6 @@ public:
         std::cout << "T2 match groups: " << t2_matches.size() << std::endl;
 #endif
 
-        const int t2_matches_size = t2_matches.size();
-
         // Phase 11: T3, T4, T5 Matching – Further pair T2 matches.
         std::vector<std::vector<T3_match>> t3_matches(t2_matches.size() / 2);
         std::vector<std::vector<T4_match>> t4_matches(t2_matches.size() / 4);
@@ -429,7 +429,7 @@ public:
     }
 
     // Phase 11 helper: T3, T4, T5 matching – further pair and validate matches.
-    void matchT3T4T5Candidates(int num_k_bits,
+    void matchT3T4T5Candidates(int /*num_k_bits*/,
                                const std::vector<std::vector<T2_match>> &t2_matches,
                                std::vector<std::vector<T3_match>> &t3_matches,
                                std::vector<std::vector<T4_match>> &t4_matches,
@@ -442,9 +442,9 @@ public:
         // T3 matching.
         {
             ProofValidator validator(params_);
-            for (int i = 0; i < t2_matches.size(); i += 2)
+            for (size_t i = 0; i < t2_matches.size(); i += 2)
             {
-                int t3_group = i / 2;
+                size_t t3_group = i / 2;
                 const std::vector<T2_match> &groupA = t2_matches[i];
                 const std::vector<T2_match> &groupB = t2_matches[i + 1];
                 for (size_t j = 0; j < groupA.size(); j++)
@@ -478,9 +478,9 @@ public:
         // T4 matching.
         {
             ProofValidator validator(params_);
-            for (int i = 0; i < t3_matches.size(); i += 2)
+            for (size_t i = 0; i < t3_matches.size(); i += 2)
             {
-                int t4_group = i / 2;
+                size_t t4_group = i / 2;
                 const std::vector<T3_match> &groupA = t3_matches[i];
                 const std::vector<T3_match> &groupB = t3_matches[i + 1];
                 for (size_t j = 0; j < groupA.size(); j++)
@@ -499,7 +499,7 @@ public:
                         if (t4_pairings.size() > 0)
                         {
                             // std::cout << t4_pairings.size() << " T4 pairings found." << std::endl;
-                            for (const auto &pairing : t4_pairings)
+                            for (size_t idx = 0; idx < t4_pairings.size(); ++idx)
                             {
                                 T4_match t4;
                                 t4.x_values = {groupA[j].x_values[0], groupA[j].x_values[1],
@@ -523,9 +523,9 @@ public:
         // T5 matching.
         {
             ProofValidator validator(params_);
-            for (int i = 0; i < t4_matches.size(); i += 2)
+            for (size_t i = 0; i < t4_matches.size(); i += 2)
             {
-                int t5_group = i / 2;
+                size_t t5_group = i / 2;
                 const std::vector<T4_match> &groupA = t4_matches[i];
                 const std::vector<T4_match> &groupB = t4_matches[i + 1];
                 for (size_t j = 0; j < groupA.size(); j++)
@@ -588,11 +588,11 @@ public:
         std::vector<std::vector<uint32_t>> all_proofs;
 
         std::vector<uint32_t> full_proof;
-        for (int g = 0; g < t5_matches.size(); g++)
+        for (size_t g = 0; g < t5_matches.size(); g++)
         {
             for (const auto &match : t5_matches[g])
             {
-                for (int x_pos = 0; x_pos < 32; x_pos++)
+                for (size_t x_pos = 0; x_pos < 32; x_pos++)
                 {
                     full_proof.push_back(match.x_values[x_pos]);
                 }
@@ -947,15 +947,15 @@ public:
         {
             // show section boundaries
             std::cout << "Section boundaries x1: ";
-            for (int i = 0; i < section_boundaries_x1.size(); i++)
+            for (auto b : section_boundaries_x1)
             {
-                std::cout << section_boundaries_x1[i] << ", ";
+                std::cout << b << ", ";
             }
             std::cout << std::endl;
             std::cout << "Section boundaries x2: ";
-            for (int i = 0; i < section_boundaries_x2.size(); i++)
+            for (auto b : section_boundaries_x2)
             {
-                std::cout << section_boundaries_x2[i] << ", ";
+                std::cout << b << ", ";
             }
             std::cout << std::endl;
             std::cout << "x1_hashes size: " << x1_hashes.size() << std::endl;
@@ -964,7 +964,7 @@ public:
             int k = params_.get_k();
             int num_section_bits = params_.get_num_section_bits();
             // verify section boundaries have section bits as part of hash range for section
-            for (int i = 0; i < section_boundaries_x1.size(); i++)
+            for (size_t i = 0; i < section_boundaries_x1.size(); i++)
             {
                 int start_section = section_boundaries_x1[i];
                 int end_section = (i + 1 == section_boundaries_x1.size())
@@ -989,7 +989,7 @@ public:
                 }
                 std::cout << "Section " << i << ": [" << start_section << ", " << end_section << ")" << std::endl;
             }
-            for (int i = 0; i < section_boundaries_x2.size(); i++)
+            for (size_t i = 0; i < section_boundaries_x2.size(); i++)
             {
                 int start_section = section_boundaries_x2[i];
                 int end_section = (i + 1 == section_boundaries_x2.size())
@@ -1150,7 +1150,7 @@ public:
                 /*if (false)
                 {
                     // verify task boundaries
-                    for (int i = 0; i < task_boundaries_x1.size(); i++)
+                    for (size_t i = 0; i < task_boundaries_x1.size(); i++)
                     {
                         std::cout << "Task boundaries x1[" << i << "]: " << task_boundaries_x1[i] << std::endl;
                         std::cout << "Task boundaries x2[" << i << "]: " << task_boundaries_x2[i] << std::endl;
@@ -1251,7 +1251,7 @@ public:
         std::fill(section_boundaries.begin(), section_boundaries.end(), -1);
 
         // scan x1 hashes, get section and set boundary for it's index
-        for (int i = 0; i < hashes.size(); i++)
+        for (size_t i = 0; i < hashes.size(); i++)
         {
             uint32_t hash = hashes[i];
             uint32_t section = hash >> (num_k_bits - num_section_bits);
@@ -1686,7 +1686,7 @@ public:
     {
         int num_k_bits = params_.get_k();
         const int num_section_bits = params_.get_num_section_bits();
-        const int last_section_l = params_.get_num_sections() / 2 - 1;
+        const size_t last_section_l = params_.get_num_sections() / 2 - 1;
         const uint64_t NUM_XS = (1ULL << num_k_bits);
 
         // Determine “num_threads” much like TBB did
@@ -1894,9 +1894,9 @@ public:
             total += m;
         timings_.misc += timer.stop();
 
-        int total_checks = 0;
-        for (int m : num_checks_per_thread)
-            total_checks += m;
+        //int total_checks = 0;
+        //for (int m : num_checks_per_thread)
+        //    total_checks += m;
 
         timer.start("Compacting x2 potential matches");
         int write_pos = matches_per_thread[0];
@@ -1931,8 +1931,6 @@ void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
         const int num_section_bits = params_.get_num_section_bits();
         const int num_match_key_bits = params_.get_num_match_key_bits(1);
         const int NUM_X1S = static_cast<int>(x_bits_list.size());
-        const uint32_t MATCH_BUCKET_TARGET_BITS =
-            params_.get_num_match_target_bits(1);
 
         // Pre-size output arrays:
         std::size_t total_outputs =
@@ -2022,8 +2020,7 @@ void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
         const int num_section_bits = params_.get_num_section_bits();
         const int num_match_key_bits = params_.get_num_match_key_bits(1);
         const int NUM_X1S = static_cast<int>(x_bits_list.size());
-        const int num_sections = params_.get_num_sections();
-        const int last_section_l = params_.get_num_sections() / 2 - 1;
+        const uint32_t last_section_l = params_.get_num_sections() / 2 - 1;
 
         Timer timer;
         timer.start(
@@ -2083,7 +2080,7 @@ void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
                         uint32_t section =
                             (x_chacha >> (num_k_bits - num_section_bits)) & ((1u << num_section_bits) - 1);
 
-                        if (section > (uint32_t)last_section_l)
+                        if (section > last_section_l)
                         {
                             continue;
                         }
@@ -2149,7 +2146,7 @@ void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
 
         // TODO: could be multi-threaded
         timer.start("Setting bitmask hash");
-        for (int i = 0; i < x1_hashes.size(); i++)
+        for (size_t i = 0; i < x1_hashes.size(); i++)
         {
             uint32_t hash = x1_hashes[i] >> bitmask_shift_;
             int slot = hash >> 5;

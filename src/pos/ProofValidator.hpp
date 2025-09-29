@@ -223,9 +223,9 @@ public:
         // infrequent, but possible to have multiple valid table 4 pairs
         // so we need to check all combinations
         // and only if all fail is it invalid.
-        for (int l_index = 0; l_index < result_l.size(); l_index++)
+        for (size_t l_index = 0; l_index < result_l.size(); l_index++)
         {
-            for (int r_index = 0; r_index < result_r.size(); r_index++)
+            for (size_t r_index = 0; r_index < result_r.size(); r_index++)
             {
                 if (sub_proof_core_.validate_match_info_pairing(
                         5, result_l[l_index].meta, result_l[l_index].match_info, result_r[r_index].match_info))
@@ -364,7 +364,7 @@ public:
 
     // checks whether a challenge is valid for a given link in the quality chain.
     // Returns the next challenge if valid, or std::nullopt if invalid.
-    std::optional<BlakeHash::Result256> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t partition_A, uint32_t partition_B, int chain_index)
+    std::optional<BlakeHash::Result256> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t /*partition_A*/, uint32_t /*partition_B*/, int chain_index)
     {
         FragmentsPattern pattern = proof_core_.requiredPatternFromChallenge(challenge);
 

@@ -147,8 +147,6 @@ private:
     ProofParams params_;
     ProofCore proof_core_;
     BlakeHash::Result256 challenge_;
-    double proof_fragment_scan_filter_; // 1 / expected number of fragments to pass scan filter
-    //BlakeHash blake_hash_;
     uint32_t filter_32bit_hash_threshold_;
 
     // 1) Gather all fragments in the scan range

@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) try
     }
     if (false)
     {
-        for (int partition_id = 0; partition_id < plot.t4_to_t3_back_pointers.size(); ++partition_id)
+        for (size_t partition_id = 0; partition_id < plot.t4_to_t3_back_pointers.size(); ++partition_id)
         {
             std::cout << "  Partition " << partition_id << ": " << std::endl
                       << "     T4 entries: " << plot.t4_to_t3_back_pointers[partition_id].size() << std::endl

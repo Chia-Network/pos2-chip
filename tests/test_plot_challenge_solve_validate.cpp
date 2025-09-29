@@ -82,7 +82,7 @@ TEST_CASE("plot-k18-strength2-4-5")
             return;
         }
         // 16 is 128.
-        for (int nChain = 0; nChain < quality_chains.size(); nChain++)
+        for (size_t nChain = 0; nChain < quality_chains.size(); nChain++)
         {
             
 

@@ -84,7 +84,7 @@ public:
     }
 
     // Extracts the section (msb) from match_info by shifting right by (k - num_section_bits).
-    inline uint64_t extract_section_from_match_info(size_t table_id, uint64_t match_info) const
+    inline uint64_t extract_section_from_match_info(size_t /*table_id*/, uint64_t match_info) const
     {
         return match_info >> (k_ - get_num_section_bits());
     }
@@ -150,7 +150,7 @@ public:
     }
 
     // Returns the number of match key bits for table 3
-    const uint8_t get_match_key_bits() const
+    uint8_t get_match_key_bits() const
     {
         return strength_;
     }
