@@ -9,11 +9,10 @@
 
 int exhaustive_test(PlotFile::PlotFileContents &plot)
 {
+    // This function not currently used but can be useful for debugging / exhaustive testing with RETAIN_X_VALUES_TO_T3
     ProofFragmentCodec fragment_codec(plot.params);
 
 #ifdef RETAIN_X_VALUES_TO_T3
-    // This function is not implemented in the original code.
-    // It seems to be a placeholder for future testing or debugging.
     for (int partition = 0; partition < plot.data.t5_to_t4_back_pointers.size(); partition++)
         // int partition = 0;
         for (int test_slot = 0; test_slot < plot.data.t5_to_t4_back_pointers[partition].size(); test_slot++)
@@ -162,149 +161,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
     return 0;
 }
 
-int chain_test(PlotFile::PlotFileContents &plot)
-{
-    ProofFragmentCodec fragment_codec(plot.params);
-
-    //T5 indices: 7126,11699,19124,23993,25291,21053,17607,6303,21934,10168,25165,16573,18375,18911,20855,3427,
-//T5 partitions: 10,29,29,29,10,29,29,29,29,29,10,29,10,29,29,10,
-    uint32_t t5_indices[16] = {14093,3008,12267,11083,6608,13914,8476,10771,13391,24153,10114,14980,9355,19421,18049,19421};
-    uint32_t t5_partitions[16] = {2,18,18,18,2,18,2,2,2,2,2,2,2,2,2,2};
-
-    int num_chains = NUM_CHAIN_LINKS;
-    std::cout << "Number of chains: " << num_chains << std::endl;
-
-    int failed_count = 0;
-    for (int partition = 0; partition < 1; partition++)
-    // for (int partition = 0; partition < plot.data.t5_to_t4_back_pointers.size(); partition++)
-    {
-        std::cout << "************* Partition: " << partition << " *************" << std::endl;
-
-        std::vector<uint32_t> x_bits_list;
-        std::vector<uint32_t> xs_solution;
-        std::vector<uint32_t> xs_full_solution;
-        for (int chain = 0; chain < num_chains; chain++)
-        {
-            partition = t5_partitions[chain];
-            int t5_index = t5_indices[chain];
-            T5Pairing t5_pairing = plot.data.t5_to_t4_back_pointers[partition][t5_index]; // now get t4 L and R pairings
-            T4BackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_l];
-            T4BackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_r];
-            uint64_t fragment_LL = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_l];
-            uint64_t fragment_LR = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_r];
-            uint64_t fragment_RL = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_l];
-            uint64_t fragment_RR = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_r];
-
-            uint64_t decrypted_xs_LL = fragment_codec.decode(fragment_LL);
-            uint64_t decrypted_xs_LR = fragment_codec.decode(fragment_LR);
-            uint64_t decrypted_xs_RL = fragment_codec.decode(fragment_RL);
-            uint64_t decrypted_xs_RR = fragment_codec.decode(fragment_RR);
-
-            std::array<uint32_t, 4>  x_bits_ll = fragment_codec.get_x_bits_from_proof_fragment(fragment_LL);
-            std::array<uint32_t, 4>  x_bits_lr = fragment_codec.get_x_bits_from_proof_fragment(fragment_LR);
-            std::array<uint32_t, 4>  x_bits_rl = fragment_codec.get_x_bits_from_proof_fragment(fragment_RL);
-            std::array<uint32_t, 4>  x_bits_rr = fragment_codec.get_x_bits_from_proof_fragment(fragment_RR);
-
-            std::cout << "Quality Link: " << std::endl
-            << " Partition: " << partition << std::endl
-            << " T5 Index: " << t5_index << std::endl
-            << " T4 Index L: " << t5_pairing.t4_index_l << std::endl
-            << " T4 Index R: " << t5_pairing.t4_index_r << std::endl
-            << " T3 Index LL: " << t4_to_t3_L.fragment_index_l << std::endl
-            << " T3 Index LR: " << t4_to_t3_L.fragment_index_r << std::endl
-            << " T3 Index RL: " << t4_to_t3_R.fragment_index_l << std::endl
-            << " T3 Index RR: " << t4_to_t3_R.fragment_index_r << std::endl
-            << " Fragment LL: " << std::hex << fragment_LL << std::endl
-            << "   LL xbits: " << std::dec
-            << " [" << x_bits_ll[0] << ", " << x_bits_ll[1] << ", " << x_bits_ll[2] << ", " << x_bits_ll[3] << "]" << std::endl
-            << " Fragment LR: " << std::hex << fragment_LR << std::endl
-            << "   LR xbits: " << std::dec
-            << " [" << x_bits_lr[0] << ", " << x_bits_lr[1] << ", " << x_bits_lr[2] << ", " << x_bits_lr[3] << "]" << std::endl
-            << " Fragment RL: " << std::hex << fragment_RL << std::endl
-            << "   RL xbits: " << std::dec
-            << " [" << x_bits_rl[0] << ", " << x_bits_rl[1] << ", " << x_bits_rl[2] << ", " << x_bits_rl[3] << "]" << std::endl
-            << " Fragment RR: " << std::hex << fragment_RR << std::endl
-            << "   RR xbits: " << std::dec
-            << " [" << x_bits_rr[0] << ", " << x_bits_rr[1] << ", " << x_bits_rr[2] << ", " << x_bits_rr[3] << "]" << std::endl
-            << std::endl << std::dec;
-            int half_k = plot.params.get_k() / 2;
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_LL >> (half_k * 3)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_LL >> (half_k * 2)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_LL >> (half_k * 1)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>(decrypted_xs_LL & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_LR >> (half_k * 3)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_LR >> (half_k * 2)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_LR >> (half_k * 1)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>(decrypted_xs_LR & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_RL >> (half_k * 3)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_RL >> (half_k * 2)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_RL >> (half_k * 1)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>(decrypted_xs_RL & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_RR >> (half_k * 3)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_RR >> (half_k * 2)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>((decrypted_xs_RR >> (half_k * 1)) & ((uint64_t(1) << half_k) - 1)));
-            x_bits_list.push_back(static_cast<uint32_t>(decrypted_xs_RR & ((uint64_t(1) << half_k) - 1)));
-
-#ifdef RETAIN_X_VALUES_TO_T3
-            for (int i = 0; i < 8; i++)
-            {
-                xs_full_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i]);
-            }
-            for (int i = 0; i < 8; i++)
-            {
-                xs_full_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i]);
-            }
-            for (int i = 0; i < 8; i++)
-            {
-                xs_full_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i]);
-            }
-            for (int i = 0; i < 8; i++)
-            {
-                xs_full_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i]);
-            }
-#endif
-        }
-
-        std::cout << "Xs solution: ";
-        for (size_t i = 0; i < xs_full_solution.size(); i++)
-        {
-            std::cout << xs_full_solution[i] << " ";
-        }
-        std::cout << std::endl;
-        std::cout << "X-bits list (" << x_bits_list.size() << ") ";
-        for (size_t i = 0; i < x_bits_list.size(); i++)
-        {
-            std::cout << x_bits_list[i] << ",";
-        }
-        std::cout << std::endl;
-
-        Solver solver(plot.params);
-        solver.setBitmaskShift(0);
-        solver.setUsePrefetching(true);
-
-        std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list, xs_full_solution);
-
-        std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
-        for (size_t i = 0; i < all_proofs.size(); i++)
-        {
-            std::cout << "Proof " << i << ": ";
-            for (size_t j = 0; j < all_proofs[i].size(); j++)
-            {
-                std::cout << all_proofs[i][j] << " ";
-            }
-            std::cout << std::endl;
-        }
-        if (all_proofs.size() == 0)
-        {
-            failed_count++;
-        }
-        std::cout << "Partition " << partition << " complete." << std::endl;
-    }
-    std::cout << "Failed count: " << failed_count << std::endl;
-    return 0;
-}
-
-int benchmark(int k)
+int benchmark(int k, int plot_strength)
 {
     const std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
     // hex to bytes
@@ -323,7 +180,7 @@ int benchmark(int k)
     std::cout << "BIPARTITE" << std::endl;
 #endif
 
-    ProofParams params(plot_id.data(), k);
+    ProofParams params(plot_id.data(), k, plot_strength);
     params.show();
 
     Solver solver(params);
@@ -360,7 +217,7 @@ int benchmark(int k)
     return 0;
 }
 
-int prove(const std::string& plot_file) {
+int do_exhaustive_test(const std::string& plot_file) {
     // read plot file
     PlotFile::PlotFileContents plot = PlotFile::readData(plot_file);
     if (plot.data == PlotData()) {
@@ -370,10 +227,7 @@ int prove(const std::string& plot_file) {
 
     std::cout << "Plot file read successfully: " << plot_file << std::endl;
     plot.params.debugPrint();
-
-    // perform the proof/chain test
-    chain_test(plot);
-
+    
     // for exhaustive testing, requires plot and compilation with RETAIN_X_VALUES_TO_T3
 #ifdef RETAIN_X_VALUES_TO_T3
     exhaustive_test(plot);
@@ -382,11 +236,11 @@ int prove(const std::string& plot_file) {
     return 0;
 }
 
-int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_list, int k) {
+int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_list, int k, int strength) {
     // convert plot_id_hex to bytes
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
     
-    ProofParams params(plot_id.data(), k);
+    ProofParams params(plot_id.data(), k, strength);
     const uint8_t *plot_id_bytes = params.get_plot_id_bytes();
 
     params.show();
@@ -407,12 +261,12 @@ int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_li
     std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
     for (size_t i = 0; i < all_proofs.size(); i++)
     {
-        /*std::cout << "Proof " << i << ": ";
+        std::cout << "Proof " << i << " x-values (" << all_proofs[i].size() << "): ";
         for (size_t j = 0; j < all_proofs[i].size(); j++)
         {
-            std::cout << all_proofs[i][j] << " ";
+            std::cout << all_proofs[i][j] << ", ";
         }
-        std::cout << std::endl;*/
+        std::cout << std::endl;
         std::cout << "Proof hex: " << Utils::proofToHex(params.get_k(), all_proofs[i]) << std::endl;
     }
 
@@ -423,7 +277,7 @@ int main(int argc, char* argv[]) try {
     if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <mode> <arg>\n"
                   << "Modes:\n"
-                  << "  benchmark <k-size>    Run benchmark with the given k-size integer.\n"
+                  << "  benchmark <k-size> [strength (default 2)]   Run benchmark with the given k-size integer and optional plot strength\n"
                   << "  prove     <plot file>  Run proof on the given plot file.\n";
         return 1;
     }
@@ -431,11 +285,12 @@ int main(int argc, char* argv[]) try {
     std::string mode = argv[1];
     if (mode == "benchmark") {
         int k = 0;
+        int plot_strength = argv[3] ? std::stoi(argv[3]) : 2; // default strength is 2
         try {
             k = std::stoi(argv[2]);
-            // k must be 28,30, or 32
-            if (!(k == 28 || k == 30 | k == 32)) {
-                std::cerr << "Error: k-size must be 28, 30, or 32." << std::endl;
+            // k must be 18...32 even
+            if (k < 18 || k > 32 || (k % 2) != 0) {
+                std::cerr << "Error: k-size must be an even integer between 18 and 32." << std::endl;
                 return 1;
             }
         } catch (const std::invalid_argument& e) {
@@ -446,15 +301,19 @@ int main(int argc, char* argv[]) try {
             return 1;
         }
 
-        std::cout << "Running benchmark with k-size = " << k << std::endl;
-        return benchmark(k);
-
-    } else if (mode == "prove") {
-        std::string plot_file = argv[2];
-        std::cout << "Running proof on plot file: " << plot_file << std::endl;
-        return prove(plot_file);
+        std::cout << "Running benchmark with k-size = " << k << " and plot strength = " << plot_strength << std::endl;
+        return benchmark(k, plot_strength);
 
     } else if (mode == "xbits") {
+        // must have 5 args: xbits <k-size> <plot_id_hex> <xbits_hex> <strength>
+        if (argc != 6) {
+            std::cerr << "Usage: " << argv[0] << " xbits <k-size> <plot_id_hex> <xbits_hex> [strength]\n"
+                      << "  k-size: integer (18-32 even)\n"
+                      << "  plot_id_hex: 64-hex-character string\n"
+                      << "  xbits_hex: 1024-hex-character string (256 uint32_t values)\n"
+                      << "  strength: optional integer (default 2)\n";
+            return 1;
+        }
         int k = 0;
         try {
             k = std::stoi(argv[2]);
@@ -484,7 +343,9 @@ int main(int argc, char* argv[]) try {
             std::cerr << "Error: xbits must be a 1024-hex-character string. (" << xbits_hex.length() << " found)" << std::endl;
             return 1;
         }
-        std::cout << "Running xbits with k-size = " << k << " plot id: " << plot_id_hex << " and xbits = " << xbits_hex << std::endl;
+
+        int plot_strength = argv[5] ? std::stoi(argv[5]) : 2; // default strength is 2
+        std::cout << "Running xbits with k-size = " << k << " plot id: " << plot_id_hex << " xbits = " << xbits_hex << " plot strength = " << plot_strength << std::endl;
         // convert xbits_hex to uint32_t array
         std::vector<uint32_t> x_bits_list;
         for (size_t i = 0; i < 256; i++) {
@@ -492,12 +353,12 @@ int main(int argc, char* argv[]) try {
             x_bits_list.push_back(Utils::fromHex(hexStr));
             //std::cout << i << ": " << x_bits_list.back() << std::endl;
         }
-        return xbits(plot_id_hex, x_bits_list, k);
+        return xbits(plot_id_hex, x_bits_list, k, plot_strength);
 
 
     } else {
         std::cerr << "Unknown mode: " << mode << "\n"
-                  << "Use 'benchmark' or 'prove'." << std::endl;
+                  << "Use 'benchmark' or 'xbits'" << std::endl;
         return 1;
     }
 }

@@ -49,7 +49,7 @@ constexpr double CHAINING_FACTORS[NUM_CHAIN_LINKS - 1] = {
 constexpr double CHAINING_FACTOR = 1.1;
 #endif
 
-//constexpr double PROOF_FRAGMENT_SCAN_FILTER = 2.0; // 1 / expected number of fragments to pass scan filter.
+// constexpr double PROOF_FRAGMENT_SCAN_FILTER = 2.0; // 1 / expected number of fragments to pass scan filter.
 
 enum class FragmentsPattern : uint8_t
 {
@@ -221,20 +221,21 @@ public:
     std::optional<T1Pairing> pairing_t1(uint32_t x_l, uint32_t x_r)
     {
         // fast test for matching to speed up solver.
-        if (params_.get_num_match_key_bits(1) == 4)
+        /*if (params_.get_num_match_key_bits(1) == 4)
         {
             if (!match_filter_16(x_l & 0xFFFFU, x_r & 0xFFFFU))
                 return std::nullopt;
         }
-        else if (params_.get_num_match_key_bits(1) == 2)
+        else */
+        if (params_.get_num_match_key_bits(1) == 2)
         {
             if (!match_filter_4(x_l & 0xFFFFU, x_r & 0xFFFFU))
                 return std::nullopt;
         }
         else
         {
-            std::cerr << "pairing_t1: match_filter_4 not supported for this table." << std::endl;
-            exit(1);
+            std::cerr << "pairing_t1: match_filter not supported for this table." << std::endl;
+            abort();
         }
 
         PairingResult pair = hashing.pairing(1, x_l, x_r,
@@ -254,6 +255,7 @@ public:
     // Returns: a T2Pairing with match_info (k bits), meta (2k bits), and x_bits (k bits).
     std::optional<T2Pairing> pairing_t2(uint64_t meta_l, uint64_t meta_r)
     {
+        assert(params_.get_num_match_key_bits(2) == 2);
         if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
                             static_cast<uint32_t>(meta_r & 0xFFFFU)))
             return std::nullopt;
@@ -278,8 +280,23 @@ public:
     // meta, order bits, and the full proof fragments.
     std::optional<T3Pairing> pairing_t3(uint64_t meta_l, uint64_t meta_r, uint32_t x_bits_l, uint32_t x_bits_r)
     {
-        if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
-                            static_cast<uint32_t>(meta_r & 0xFFFFU)))
+        int num_test_bits = params_.get_num_match_key_bits(3); // synonymous with get_strength()
+        /*
+        // commented out is an alternative explicit filter that would slow down plotting but not necessarily improve attack resistance significantly.
+        if (!hashing.t3_pairing_filter(meta_l, meta_r,
+                                    static_cast<int>(params_.get_num_pairing_meta_bits()),
+                                    params_.get_num_match_key_bits(3)))
+            return std::nullopt;
+        */
+
+        PairingResult lower_partition_pair = hashing.pairing(3, meta_l, meta_r,
+                                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
+                                                             static_cast<int>(params_.get_sub_k()) - 1,
+                                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
+                                                             num_test_bits);
+
+        // pairing filter test
+        if (lower_partition_pair.test_result != 0)
             return std::nullopt;
 
         uint64_t all_x_bits = (static_cast<uint64_t>(x_bits_l) << params_.get_k()) | x_bits_r;
@@ -298,11 +315,6 @@ public:
             lower_partition = fragment_codec.extract_t3_r_partition_bits(proof_fragment);
             upper_partition = fragment_codec.extract_t3_l_partition_bits(proof_fragment) + params_.get_num_partitions();
         }
-
-        PairingResult lower_partition_pair = hashing.pairing(3, meta_l, meta_r,
-                                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                                             static_cast<int>(params_.get_sub_k()) - 1,
-                                                             static_cast<int>(params_.get_num_pairing_meta_bits()));
 
         PairingResult upper_partition_pair = hashing.pairing(~3, meta_l, meta_r,
                                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
@@ -326,9 +338,10 @@ public:
     }
 
     // pairing_t4:
-    // Input: meta_l, meta_r (each 2k bits), order_bits_l, order_bits_r (each 2 bits).
+    // Input: meta_l, meta_r (each 2k bits), order_bits_l (2 bits).
     // Returns: a T4Pairing with match_info (sub_k bits) and meta (2k bits).
-    std::optional<T4Pairing> pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l, uint32_t order_bits_r)
+    std::optional<T4Pairing>
+    pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l)
     {
 #if defined(T3_FACTOR_T4_T5_EVEN)
         int num_test_bits = 32;
@@ -563,7 +576,7 @@ public:
         return static_cast<uint32_t>(raw + 0.5L);
     }
 
-    // hashes challenge with plot id, 
+    // hashes challenge with plot id,
     // returns hash if passes plot id filter,
     // otherwise returns null
     std::optional<BlakeHash::Result256> check_plot_id_filter(const uint32_t plot_id_filter, const std::array<uint8_t, 32> &challenge)

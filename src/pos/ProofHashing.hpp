@@ -48,6 +48,9 @@ public:
                           int in_meta_bits, int num_match_info_bits,
                           int out_num_meta_bits = 0, int num_test_bits = 0);
 
+    // A specialized filter for T3 pairings to rule out non-matching pairs, used when plot strength > 2. Under consideration (not currently used).
+    // bool t3_pairing_filter(uint64_t meta_l, uint64_t meta_r, int in_meta_bits, int num_test_bits);
+
     // Prepares Blake hash data for pairing.
     void set_data_for_pairing(uint32_t salt, uint64_t meta_l, uint64_t meta_r, int num_meta_bits);
 
@@ -170,6 +173,14 @@ inline void ProofHashing::set_data_for_pairing(uint32_t salt, uint64_t meta_l, u
         blake_.set_data(i, 0);
     }
 }
+
+/*inline bool ProofHashing::t3_pairing_filter(uint64_t meta_l, uint64_t meta_r, int in_meta_bits, int num_test_bits) {
+
+    set_data_for_pairing(3, meta_l, meta_r, in_meta_bits);
+    BlakeHash::Result128 res = blake_.generate_hash();
+    uint32_t test_result = res.r[3] & ((1ULL << num_test_bits) - 1);
+    return test_result == 0;
+}*/
 
 inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64_t meta_r,
                                            int in_meta_bits, int num_match_info_bits,

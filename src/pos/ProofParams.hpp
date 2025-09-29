@@ -17,9 +17,13 @@ public:
     //   match_key_bits: the number of match key bits for table 3
     ProofParams(const uint8_t * const plot_id_bytes,
                 const size_t k,
-                const uint8_t strength = 2)
+                const uint8_t strength)
         : k_(k), num_pairing_meta_bits_(2 * k), strength_(strength)
     {
+        // strength must be >= 2
+        if (strength_ < 2) {
+            throw std::invalid_argument("ProofParams: strength must be at least 2.");
+        }
         // Copy the 32-byte plot ID.
         for (int i = 0; i < 32; ++i)
             plot_id_bytes_[i] = plot_id_bytes[i];
@@ -167,7 +171,7 @@ public:
         std::cout << "num_partitions: " << get_num_partitions() << std::endl;
         std::cout << "sub_k: " << get_sub_k() << std::endl;
         std::cout << "num sections: " << get_num_sections() << std::endl;
-        std::cout << "strength: " << strength_ << std::endl;;
+        std::cout << "strength: " << (int) strength_ << std::endl;
     }
 
     bool operator==(ProofParams const &other) const = default;

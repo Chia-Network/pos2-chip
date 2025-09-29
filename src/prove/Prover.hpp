@@ -61,6 +61,27 @@ public:
     }
     ~Prover() = default;
 
+    void readPlotFileIfNeeded()
+    {
+        if (!plot_.has_value())
+        {
+            #ifdef DEBUG_PROOF_VALIDATOR
+            std::cout << "Reading plot file: " << plot_file_name_ << std::endl;
+            #endif
+            plot_ = PlotFile::readData(plot_file_name_);
+            #ifdef DEBUG_PROOF_VALIDATOR
+            std::cout << "Plot file read successfully: " << plot_file_name_ << std::endl;
+            plot_.value().params.debugPrint();
+            #endif
+        }
+        else
+        {
+            #ifdef DEBUG_PROOF_VALIDATOR
+            std::cout << "Plot file already read." << std::endl;
+            #endif
+        }
+    }
+
     std::vector<QualityChain> prove(int proof_fragment_scan_filter_bits)
     {
         // Proving works as follows:
@@ -70,17 +91,7 @@ public:
         // 4) For each Quality Chain, grow and expand the number of chains link by link until we reach the chain length limit (NUM_CHAIN_LINKS).
 
         // 1) Read plot file
-        if (!plot_.has_value())
-        {
-            std::cout << "Reading plot file: " << plot_file_name_ << std::endl;
-            plot_ = PlotFile::readData(plot_file_name_);
-            std::cout << "Plot file read successfully: " << plot_file_name_ << std::endl;
-            plot_.value().params.debugPrint();
-        }
-        else
-        {
-            std::cout << "Plot file already read." << std::endl;
-        }
+        readPlotFileIfNeeded();
 
         PlotFile::PlotFileContents plot = plot_.value();
 
