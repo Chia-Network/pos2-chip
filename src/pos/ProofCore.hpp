@@ -235,7 +235,7 @@ public:
         else
         {
             std::cerr << "pairing_t1: match_filter not supported for this table." << std::endl;
-            exit(1);
+            abort();
         }
 
         PairingResult pair = hashing.pairing(1, x_l, x_r,
