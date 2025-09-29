@@ -40,7 +40,7 @@ void parallel_for_range(It first, It last, Fn fn)
         return;
     }
 
-    std::vector<std::thread> workers;
+    std::vector<std::jthread> workers;
     workers.reserve(num_threads);
 
     auto chunk_begin = first;
