@@ -56,9 +56,6 @@ void parallel_for_range(It first, It last, Fn fn)
             for (It it = b; it != e; ++it)
                 fn(*it); });
     }
-
-    for (auto &th : workers)
-        th.join();
 }
 
 
