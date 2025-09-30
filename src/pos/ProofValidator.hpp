@@ -11,7 +11,7 @@
 #include "ProofCore.hpp"
 #include "pos/ProofFragmentScanFilter.hpp"
 
-#define DEBUG_PROOF_VALIDATOR true
+// #define DEBUG_PROOF_VALIDATOR true
 
 class ProofValidator
 {

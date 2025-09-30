@@ -193,7 +193,9 @@ try
         {
             std::cout << "Chain: " << nChain << std::endl;
             std::string hex = chainLinksToHex(prover.getProofParams().get_k(), chains[nChain].chain_links);
-            std::cout << "QualityChain: [" << hex << "]" << std::endl;
+            std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
+            std::cout << "QualityChain: " << hex << std::endl;
+            
 
             std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chains[nChain]);
             // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
@@ -217,16 +219,17 @@ try
                 // std::cout << std::endl;
             }
             std::string xbits_hex_compressed = Utils::kValuesToCompressedHex(params.get_k() / 2, xbits_list);
-            // std::cout << "xbits hex compressed (" << xbits_hex_compressed.size() << "): " << xbits_hex_compressed << std::endl;
+            std::cout << "Partial Proof: " << xbits_hex_compressed << std::endl;
+            std::cout << "Plot Strength: " << (int)params.get_strength() << std::endl;
 
             std::array<uint8_t, 32> plot_id_arr;
             std::memcpy(plot_id_arr.data(), params.get_plot_id_bytes(), 32);
             std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
 
             // std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << " " << (int)params.get_strength() << std::endl;
-            std::cout << "solver xbits " << plot_id_hex << " " << xbits_hex_compressed << " " << (int)params.get_strength() << std::endl;
+            std::cout << "To find proof run: " << std::endl << " solver xbits " << plot_id_hex << " " << xbits_hex_compressed << " " << (int)params.get_strength() << std::endl;
 
-            std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
+            
         }
     }
 
