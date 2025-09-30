@@ -16,14 +16,14 @@
 #include <iomanip>
 #include <bitset>
 #include <numeric> // for iota
+#include "common/ParallelForRange.hpp"
 
-#include <execution>
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
-    #include <xmmintrin.h>
+#include <xmmintrin.h>
 #endif
 
-//#define DEBUG_VERIFY true
+// #define DEBUG_VERIFY true
 
 // Needed for macOS
 typedef unsigned int uint;
@@ -40,25 +40,25 @@ struct T2_match
 {
     std::array<uint32_t, 4> x_values;
     // variables below could be passed along for optimization
-    //uint32_t match_info;
-    //uint64_t meta;
+    // uint32_t match_info;
+    // uint64_t meta;
 };
 
 struct T3_match
 {
     std::array<uint32_t, 8> x_values;
     // variables below could be passed along for optimization
-    //uint32_t match_info;
-    //uint64_t meta;
-    //uint32_t partition;
+    // uint32_t match_info;
+    // uint64_t meta;
+    // uint32_t partition;
 };
 
 struct T4_match
 {
     std::array<uint32_t, 16> x_values;
     // variables below could be passed along for optimization
-    //uint32_t match_info;
-    //uint64_t meta;
+    // uint32_t match_info;
+    // uint64_t meta;
 };
 
 struct T5_match
@@ -462,12 +462,12 @@ public:
                             // but probably negligible speedup than this simpler way.
                             T3_match t3;
                             t3.x_values = {groupA[j].x_values[0], groupA[j].x_values[1],
-                                                 groupA[j].x_values[2], groupA[j].x_values[3],
-                                                 groupB[k].x_values[0], groupB[k].x_values[1],
-                                                 groupB[k].x_values[2], groupB[k].x_values[3]};
-                            //t3.match_info = result.value().match_info_lower_partition;
-                            //t3.meta = result.value().meta_lower_partition;
-                            //t3.partition = result.value().lower_partition;
+                                           groupA[j].x_values[2], groupA[j].x_values[3],
+                                           groupB[k].x_values[0], groupB[k].x_values[1],
+                                           groupB[k].x_values[2], groupB[k].x_values[3]};
+                            // t3.match_info = result.value().match_info_lower_partition;
+                            // t3.meta = result.value().meta_lower_partition;
+                            // t3.partition = result.value().lower_partition;
                             t3_matches[t3_group].push_back(t3);
                         }
                     }
@@ -510,8 +510,8 @@ public:
                                                groupB[k].x_values[2], groupB[k].x_values[3],
                                                groupB[k].x_values[4], groupB[k].x_values[5],
                                                groupB[k].x_values[6], groupB[k].x_values[7]};
-                                //t4.match_info = pairing.match_info;
-                                //t4.meta = pairing.meta;
+                                // t4.match_info = pairing.match_info;
+                                // t4.meta = pairing.meta;
                                 t4_matches[t4_group].push_back(t4);
                             }
                         }
@@ -650,9 +650,9 @@ public:
 #ifdef __cpp_lib_execution
                 std::execution::par_unseq,
 #endif
-                      R_sorted.begin(), R_sorted.end(),
-                      [](auto &a, auto &b)
-                      { return a.pair_hash < b.pair_hash; });
+                R_sorted.begin(), R_sorted.end(),
+                [](auto &a, auto &b)
+                { return a.pair_hash < b.pair_hash; });
             /*std::sort(R_sorted.begin(), R_sorted.end(),
                       [](auto &a, auto &b){ return a.pair_hash < b.pair_hash; });*/
 
@@ -679,13 +679,8 @@ public:
             std::mutex list_mutex;
 
             // parallel loop over each L element
-            std::for_each(
-#ifdef __cpp_lib_execution
-                std::execution::par,
-#endif
-                L_list.begin(), L_list.end(),
-                [&](const T1_Match &lm)
-                {
+            parallel_for_range(L_list.begin(), L_list.end(), [&](const T1_Match &lm)
+                               {
                     // each thread gets its own ProofCore instance
                     ProofCore thread_core(params_);
 
@@ -698,7 +693,7 @@ public:
                         uint64_t meta = (uint64_t(lm.x1) << num_k_bits) | lm.x2;
                         uint32_t L_hash = thread_core.matching_target(2, meta, match_key);
                         uint32_t sec_bits = lm.pair_hash >> (num_k_bits - num_section_bits);
-                        #ifdef NON_BIPARTITE_BEFORE_T3
+#ifdef NON_BIPARTITE_BEFORE_T3
                         uint32_t R_sec = thread_core.matching_section(sec_bits);
                         uint32_t final_hash =
                             (R_sec << (num_k_bits - num_section_bits)) | (match_key << num_T2_match_target_bits) | L_hash;
@@ -708,7 +703,7 @@ public:
                         {
                             local_matches.push_back({lm.x1, lm.x2, final_hash});
                         }
-                        #else
+#else
                         uint32_t section1 = thread_core.matching_section(sec_bits);
                         uint32_t section2 = thread_core.inverse_matching_section(sec_bits);
                        
@@ -731,7 +726,7 @@ public:
                         {
                             local_matches.push_back({lm.x1, lm.x2, final_hash});
                         }
-                        #endif
+#endif
                     }
 
                     // merge thread-local results into shared vector
@@ -742,8 +737,7 @@ public:
                             L_short_list.end(),
                             local_matches.begin(),
                             local_matches.end());
-                    }
-                });
+                    } });
 
             timings_.t2_gen_L_list += sub_timer.stop();
 
@@ -754,9 +748,9 @@ public:
 #ifdef __cpp_lib_execution
                 std::execution::par_unseq,
 #endif
-                      L_short_list.begin(), L_short_list.end(),
-                      [](auto &a, auto &b)
-                      { return a.pair_hash < b.pair_hash; });
+                L_short_list.begin(), L_short_list.end(),
+                [](auto &a, auto &b)
+                { return a.pair_hash < b.pair_hash; });
             /*std::sort(L_short_list.begin(), L_short_list.end(),
                       [](auto &a, auto &b){ return a.pair_hash < b.pair_hash; });*/
             timings_.t2_sort_short_list += sub_timer.stop();
@@ -804,8 +798,8 @@ public:
                             {
                                 T2_match t2;
                                 t2.x_values = {x_values[0], x_values[1], x_values[2], x_values[3]};
-                                //t2.match_info = pairing->match_info;
-                                //t2.meta = pairing->meta;
+                                // t2.match_info = pairing->match_info;
+                                // t2.meta = pairing->meta;
                                 out.push_back(t2);
                             }
                         }
@@ -911,13 +905,13 @@ public:
         Timer timer;
         timer.start("Computing section boundaries");
 
-        #ifdef NON_BIPARTITE_BEFORE_T3
+#ifdef NON_BIPARTITE_BEFORE_T3
         auto section_boundaries_x1 = computeSectionBoundaries(x1_hashes);
         auto section_boundaries_x2 = computeSectionBoundaries(x2_match_hashes);
-        #else
+#else
         auto section_boundaries_x1 = computeSectionBoundariesBiPartite(x1_hashes);
         auto section_boundaries_x2 = computeSectionBoundariesBiPartite(x2_match_hashes);
-        #endif
+#endif
         /*if (test_section_boundaries_x1 != section_boundaries_x1)
         {
             std::cout << "test_section_boundaries_x1 != section_boundaries_x1" << std::endl;
@@ -960,7 +954,7 @@ public:
             std::cout << std::endl;
             std::cout << "x1_hashes size: " << x1_hashes.size() << std::endl;
             std::cout << "x2_match_hashes size: " << x2_match_hashes.size() << std::endl;
-            
+
             int k = params_.get_k();
             int num_section_bits = params_.get_num_section_bits();
             // verify section boundaries have section bits as part of hash range for section
@@ -1009,7 +1003,6 @@ public:
             }
         }
 
-
         const int NUM_SECTIONS = params_.get_num_sections();
 
         // 2) determine max matches & allocate
@@ -1026,7 +1019,7 @@ public:
             max_matches = 8400000 * 2;
             break;
         }
-        
+
         std::vector<T1_Match> t1_matches(max_matches);
         std::atomic<int> t1_num_matches{0};
 
@@ -1036,16 +1029,12 @@ public:
 
         // 4) parallel match over each section
         timer.start("Matching x1 and x2 sorted lists");
-        if (false)
+        if (true)
         {
             // this section splits execution into NUM_SECTIONS tasks
-            std::for_each(
-#ifdef __cpp_lib_execution
-                std::execution::par,
-#endif
-                sections.begin(), sections.end(),
-                [&](int section)
-                {
+            // performs better when small number of cpu's.
+            parallel_for_range(sections.begin(), sections.end(), [&](int section)
+                               {
                     ProofCore proof_core(params_);
 
                     int x1_start = section_boundaries_x1[section];
@@ -1056,8 +1045,6 @@ public:
                     int x2_end = (section + 1 == NUM_SECTIONS)
                                      ? static_cast<int>(x2_match_hashes.size())
                                      : section_boundaries_x2[section + 1];
-
-                    std::cout << "Section " << section << ": x1 [" << x1_start << ", " << x1_end << "), x2 [" << x2_start << ", " << x2_end << ") length: " << (x1_end - x1_start) << ", " << (x2_end - x2_start) << std::endl;
 
                     int i = x1_start, j = x2_start;
                     while (i < x1_end && j < x2_end)
@@ -1101,8 +1088,7 @@ public:
                         {
                             ++j;
                         }
-                    }
-                });
+                    } });
         }
         else
         {
@@ -1127,7 +1113,7 @@ public:
                     x1_start, x1_end,
                     x1_hashes,
                     num_task_bit_splits);
-                if (task_boundaries_x1 != test_task_boundaries_x1) 
+                if (task_boundaries_x1 != test_task_boundaries_x1)
                 {
                     std::cout << "ERROR: task_boundaries_x1 != test_task_boundaries_x1" << std::endl;
                     exit(23);
@@ -1140,13 +1126,13 @@ public:
                     x2_start, x2_end,
                     x2_match_hashes,
                     num_task_bit_splits);
-                if (task_boundaries_x2 != test_task_boundaries_x2) 
+                if (task_boundaries_x2 != test_task_boundaries_x2)
                 {
                     std::cout << "ERROR: task_boundaries_x2 != test_task_boundaries_x2" << std::endl;
                     exit(23);
                 }
                 */
-                
+
                 /*if (false)
                 {
                     // verify task boundaries
@@ -1166,13 +1152,8 @@ public:
                 std::vector<int> task_ids(total_tasks);
                 std::iota(task_ids.begin(), task_ids.end(), 0);
 
-                std::for_each(
-#ifdef __cpp_lib_execution
-                    std::execution::par,
-#endif
-                    task_ids.begin(), task_ids.end(),
-                    [&](int task_id)
-                    {
+                parallel_for_range(task_ids.begin(), task_ids.end(), [&](int task_id)
+                              {
                         ProofCore proof_core(params_);
 
                         int x1_start = task_boundaries_x1[task_id];
@@ -1224,10 +1205,8 @@ public:
                             {
                                 ++j;
                             }
-                        }
-                    });
+                        } });
             }
-            // exit(23);
         }
         timings_.match_x1_x2_sorted_lists += timer.stop();
 
@@ -1426,18 +1405,19 @@ public:
         const int shift = num_k_bits - num_section_bits;
 
         int N = (int)hashes.size();
-        int chunk = N / (NUM_SECTIONS/2); // ideal block size
+        int chunk = N / (NUM_SECTIONS / 2); // ideal block size
 
         std::vector<int> bounds(NUM_SECTIONS);
 
         // first half of sections shouldn't have any values.
-        for (int s = 0; s < NUM_SECTIONS / 2; ++s) {
+        for (int s = 0; s < NUM_SECTIONS / 2; ++s)
+        {
             bounds[s] = -1;
         }
-        for (int s = NUM_SECTIONS/2; s < NUM_SECTIONS; ++s)
+        for (int s = NUM_SECTIONS / 2; s < NUM_SECTIONS; ++s)
         {
             // 1) jump to the “ideal” index
-            int idx = std::min((s - NUM_SECTIONS/2) * chunk, N - 1);
+            int idx = std::min((s - NUM_SECTIONS / 2) * chunk, N - 1);
             uint32_t sec = hashes[idx] >> shift;
 
             // 2) if we’re too early, scan *forward* until we hit section s
@@ -1533,13 +1513,8 @@ public:
         if (!use_prefetching_)
         {
             timer.start("Chacha multi-threaded bitmask test");
-            std::for_each(
-#ifdef __cpp_lib_execution
-                std::execution::par,
-#endif
-                thread_ids.begin(), thread_ids.end(),
-                [&](int t)
-                {
+            parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
+                          {
                     int thread_matches = 0;
                     ProofCore proof_core(params_);
                     uint64_t start = uint64_t(t) * chunk_size;
@@ -1566,20 +1541,14 @@ public:
                             }
                         }
                     }
-                    matches_per_thread[t] = thread_matches;
-                });
+                    matches_per_thread[t] = thread_matches; });
             timings_.chachafilterx2sbybitmask += timer.stop();
         }
         else
         {
             timer.start("Chacha multi-threaded bitmask test with prefetching");
-            std::for_each(
-#ifdef __cpp_lib_execution
-                std::execution::par,
-#endif
-                thread_ids.begin(), thread_ids.end(),
-                [&](int t)
-                {
+            parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
+                          {
                     int thread_matches = 0;
                     ProofCore proof_core(params_);
                     uint64_t start = uint64_t(t) * chunk_size;
@@ -1650,8 +1619,7 @@ public:
                         }
                     }
 
-                    matches_per_thread[t] = thread_matches;
-                });
+                    matches_per_thread[t] = thread_matches; });
             timings_.chachafilterx2sbybitmask += timer.stop();
         }
 
@@ -1675,7 +1643,7 @@ public:
         }
         x2_potential_match_xs.resize(total);
         x2_potential_match_hashes.resize(total);
-        //std::cout << "x2_potential_match_xs size: " << x2_potential_match_xs.size() << std::endl;
+        // std::cout << "x2_potential_match_xs size: " << x2_potential_match_xs.size() << std::endl;
         timings_.misc += timer.stop();
     }
 
@@ -1729,13 +1697,8 @@ public:
         if (!use_prefetching_)
         {
             timer.start("Chacha multi-threaded bitmask test (no prefetching)");
-            std::for_each(
-#ifdef __cpp_lib_execution
-                std::execution::par,
-#endif
-                thread_ids.begin(), thread_ids.end(),
-                [&](int t)
-                {
+            parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
+                          {
                     int thread_matches = 0;
                     int num_checks = 0;
                     ProofCore proof_core(params_);
@@ -1784,20 +1747,14 @@ public:
                         }
                     }
                     matches_per_thread[t] = thread_matches;
-                    num_checks_per_thread[t] = num_checks;
-                });
+                    num_checks_per_thread[t] = num_checks; });
             timings_.chachafilterx2sbybitmask += timer.stop();
         }
         else
         {
             timer.start("Chacha multi-threaded bitmask test with prefetching");
-            std::for_each(
-#ifdef __cpp_lib_execution
-                std::execution::par,
-#endif
-                thread_ids.begin(), thread_ids.end(),
-                [&](int t)
-                {
+            parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
+                          {
                     int thread_matches = 0;
                     ProofCore proof_core(params_);
                     uint64_t start = uint64_t(t) * chunk_size;
@@ -1882,8 +1839,7 @@ public:
                         }
                     }
 
-                    matches_per_thread[t] = thread_matches;
-                });
+                    matches_per_thread[t] = thread_matches; });
             timings_.chachafilterx2sbybitmask += timer.stop();
         }
 
@@ -1912,15 +1868,14 @@ public:
         x2_potential_match_xs.resize(total);
         x2_potential_match_hashes.resize(total);
 
-        //std::cout << "x2 potential matches: " << total << std::endl;
-        //std::cout << "x2 total checks: " << total_checks << std::endl;
-        //std::cout << "Pass rate: " << (double)total / (double)total_checks << std::endl;
+        // std::cout << "x2 potential matches: " << total << std::endl;
+        // std::cout << "x2 total checks: " << total_checks << std::endl;
+        // std::cout << "Pass rate: " << (double)total / (double)total_checks << std::endl;
 
         timings_.misc += timer.stop();
     }
 
-
-void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
+    void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
                           int x1_bits,
                           int x1_range_size,
                           std::vector<uint32_t> &x1s,
@@ -1951,14 +1906,8 @@ void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
         std::vector<int> indices(NUM_X1S);
         std::iota(indices.begin(), indices.end(), 0);
 
-        // Parallel for each index
-        std::for_each(
-#ifdef __cpp_lib_execution
-            std::execution::par,
-#endif
-            indices.begin(), indices.end(),
-            [&](int x1_index)
-            {
+        parallel_for_range(indices.begin(), indices.end(), [&](int x1_index)
+                      {
                 // each thread in the pool runs this lambda
                 ProofCore proof_core(params_);
                 uint32_t x_chachas[16];
@@ -1999,8 +1948,7 @@ void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
                         x1s[write_idx] = x;
                         x1_hashes[write_idx] = hash;
                     }
-                }
-            });
+                } });
 
         timings_.hashing_x1s += timer.stop();
     }
@@ -2048,13 +1996,8 @@ void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
         std::iota(indices.begin(), indices.end(), 0);
 
         // Parallel loop
-        std::for_each(
-#ifdef __cpp_lib_execution
-            std::execution::par,
-#endif
-            indices.begin(), indices.end(),
-            [&](int x1_index)
-            {
+        parallel_for_range(indices.begin(), indices.end(), [&](int x1_index)
+                      {
                 ProofCore proof_core(params_);
                 uint32_t x_chachas[16];
 
@@ -2109,8 +2052,7 @@ void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
                         local_x1s.push_back(x);
                         local_hashs.push_back(new_hash);
                     }
-                }
-            });
+                } });
 
         // Now flatten all the per-thread buffers into the shared vectors
         size_t total = 0;
