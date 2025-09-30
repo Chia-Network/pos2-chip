@@ -11,7 +11,7 @@
 #include "ProofCore.hpp"
 #include "pos/ProofFragmentScanFilter.hpp"
 
-//#define DEBUG_PROOF_VALIDATOR true
+#define DEBUG_PROOF_VALIDATOR true
 
 class ProofValidator
 {
@@ -238,25 +238,18 @@ public:
         return false;
     }
 
-    // validates a full proof consisting of 32 x-values of k-bits (in 32 bit element array)
-    bool validate_full_proof(const std::vector<uint32_t> &full_proof, const std::array<uint8_t, 32> &challenge, int proof_fragment_scan_filter_bits)
+    // validates a full proof consisting of 512 x-values of k-bits (in 32 bit element array)
+    // Note that harvester/farmer/node are responsible for checking plot id filter
+    // returns QualityChainLinks if valid, else std::nullopt
+    std::optional<QualityChainLinks> validate_full_proof(const std::vector<uint32_t> &full_proof, const std::array<uint8_t, 32> &challenge, int proof_fragment_scan_filter_bits)
     {
         if (full_proof.size() != 32 * NUM_CHAIN_LINKS)
         {
             std::cerr << "Invalid number of x-values for full proof validation: " << full_proof.size() << std::endl;
-            return false;
+            return std::nullopt;
         }
-
-        // First test if passes plot id filter. We hash the plot id with the challenge, and
-        // use this 256-bit result for the next challenge.
-        uint32_t plot_id_filter = 0; // TODO: set appropriately.
-        auto plot_id_challenge_result = proof_core_.check_plot_id_filter(plot_id_filter, challenge);
-        if (!plot_id_challenge_result.has_value())
-        {
-            // failed to pass plot id filter
-            return false;
-        }
-        BlakeHash::Result256 next_challenge = plot_id_challenge_result.value();
+        // initial challenge is hash of plot id and challenge
+        BlakeHash::Result256 next_challenge = proof_core_.hashing.challengeWithPlotIdHash(challenge.data());
 
         // next we check all the single proofs. We verify if all the x-pairs pair,
         // and construct all the proof fragments needed to build and verify the Quality String.
@@ -274,8 +267,10 @@ public:
             // validate the x-values
             if (!validate_table_5_pairs(x_values))
             {
+                #ifdef DEBUG_PROOF_VALIDATOR
                 std::cerr << "Validation failed for sub-proof " << i << std::endl;
-                return 1;
+                #endif
+                return std::nullopt;
             }
 
             // Each set of 32 x-values from a sub-proof will produce 4 proof fragments from 8 x-values each
@@ -311,7 +306,7 @@ public:
         // Fragment chosen from pattern must be in the scan range defined by the challenge
         if (!range.isInRange(fragment_passing_scan_filter))
         {
-            return false;
+            return std::nullopt;
         }
 
         // Fragment is in scan range, and must also pass the scan filter hash threshold.
@@ -319,8 +314,10 @@ public:
             {{fragment_passing_scan_filter, static_cast<uint64_t>(fragment_position)}});
         if (filtered_fragments.empty())
         {
+            #ifdef DEBUG_PROOF_VALIDATOR
             std::cerr << "No fragments passed the scan filter." << std::endl;
-            return false;
+            #endif
+            return std::nullopt;
         }
         #ifdef DEBUG_PROOF_VALIDATOR
         std::cout << "Filtered fragments after scan filter: " << filtered_fragments.size() << std::endl;
@@ -337,13 +334,18 @@ public:
                   << ", R partition: " << r_partition << std::endl;
         #endif
 
+        // build the Quality Chain by checking each link in sequence.
+        QualityChainLinks chain_links;
+
         for (int quality_chain_index = 0; quality_chain_index < NUM_CHAIN_LINKS; quality_chain_index++)
         {
             auto result = checkLink(full_proof_fragments, next_challenge, l_partition, r_partition, quality_chain_index);
             if (!result.has_value())
             {
+                #ifdef DEBUG_PROOF_VALIDATOR
                 std::cerr << "Invalid link at chain index " << quality_chain_index << std::endl;
-                return false; // invalid link, return false
+                #endif
+                return std::nullopt; // invalid link, return false
             }
             else
             {
@@ -351,7 +353,10 @@ public:
                 std::cout << "Valid link found at chain index " << quality_chain_index << std::endl;
                 #endif
                 // update the challenge for the next iteration
-                next_challenge = result.value();
+                next_challenge = result.value().next_challenge;
+
+                // update the chain links
+                chain_links[quality_chain_index] = result.value().quality_link;
             }
             
         }
@@ -359,12 +364,17 @@ public:
         #ifdef DEBUG_PROOF_VALIDATOR
         std::cout << "Chain verified successfully with quality string: " << next_challenge.toString() << std::endl;
         #endif
-        return true;
+        return chain_links;
     }
 
     // checks whether a challenge is valid for a given link in the quality chain.
     // Returns the next challenge if valid, or std::nullopt if invalid.
-    std::optional<BlakeHash::Result256> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t /*partition_A*/, uint32_t /*partition_B*/, int chain_index)
+    struct CheckLinkResult
+    {
+        BlakeHash::Result256 next_challenge;
+        QualityLink quality_link;
+    };
+    std::optional<CheckLinkResult> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t partition_A, uint32_t partition_B, int chain_index)
     {
         FragmentsPattern pattern = proof_core_.requiredPatternFromChallenge(challenge);
 
@@ -382,6 +392,42 @@ public:
             quality_link.fragments[1] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::RL)];
             quality_link.fragments[2] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::RR)];
             quality_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;
+            // check our data aligns with expected partitions
+            uint32_t lateral_partition_ll = proof_core_.fragment_codec.get_lateral_to_t4_partition(quality_link.fragments[0]);
+            uint32_t lateral_partition_rl = proof_core_.fragment_codec.get_lateral_to_t4_partition(quality_link.fragments[1]);
+            uint32_t lateral_partition_rr = proof_core_.fragment_codec.get_lateral_to_t4_partition(quality_link.fragments[2]);
+            uint32_t cross_partition_rr = proof_core_.fragment_codec.get_r_t4_partition(quality_link.fragments[2]);
+            // RR lateral and cross must both be in partition A and B, but either order.
+            if (!((lateral_partition_rr == partition_A && cross_partition_rr == partition_B) ||
+                  (lateral_partition_rr == partition_B && cross_partition_rr == partition_A)))
+            {
+                #ifdef DEBUG_PROOF_VALIDATOR
+                std::cerr << "RR fragment partitions do not match expected partitions." << std::endl;
+                #endif
+                return std::nullopt;
+            }
+            // lateral ll and lateral rl must be same as cross rr
+            if (lateral_partition_ll != cross_partition_rr ||
+                lateral_partition_rl != cross_partition_rr)
+            {
+                #ifdef DEBUG_PROOF_VALIDATOR
+                std::cerr << "Lateral partitions of LL and RL do not match Cross partition of RR." << std::endl;
+                #endif
+                return std::nullopt;
+            }
+
+            #ifdef DEBUG_PROOF_VALIDATOR
+            uint32_t cross_partition_ll = proof_core_.fragment_codec.get_r_t4_partition(quality_link.fragments[0]);
+            uint32_t cross_partition_rl = proof_core_.fragment_codec.get_r_t4_partition(quality_link.fragments[1]);
+            std::cout << "Pattern: " << FragmentsPatternToString(quality_link.pattern) << std::endl;
+            std::cout << "partition A: " << partition_A
+                      << ", partition B: " << partition_B << std::endl;
+            std::cout << "Partitions for LL: (" << lateral_partition_ll << ", " << cross_partition_ll << ")\n"
+                      << "Partitions for RL: (" << lateral_partition_rl << ", " << cross_partition_rl << ")\n"
+                      << "Partitions for RR: (" << lateral_partition_rr << ", " << cross_partition_rr << ")\n";
+            std::cout << "cross_rr: " << cross_partition_rr << " should be same as lateral_ll: " << lateral_partition_ll
+                      << " and lateral_rl: " << lateral_partition_rl << std::endl;
+            #endif
         }
         else
         {
@@ -389,11 +435,48 @@ public:
             quality_link.fragments[1] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::LR)];
             quality_link.fragments[2] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::RL)];
             quality_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;
+            // check our data aligns with expected partitions
+            uint32_t lateral_partition_ll = proof_core_.fragment_codec.get_lateral_to_t4_partition(quality_link.fragments[0]);
+            uint32_t lateral_partition_lr = proof_core_.fragment_codec.get_lateral_to_t4_partition(quality_link.fragments[1]);
+            uint32_t cross_partition_lr = proof_core_.fragment_codec.get_r_t4_partition(quality_link.fragments[1]);
+            uint32_t lateral_partition_rl = proof_core_.fragment_codec.get_lateral_to_t4_partition(quality_link.fragments[2]);
+            
+            // lr lateral and cross must both be in partition A and B, but either order.
+            if (!((lateral_partition_lr == partition_A && cross_partition_lr == partition_B) ||
+                  (lateral_partition_lr == partition_B && cross_partition_lr == partition_A)))
+            {   
+                #ifdef DEBUG_PROOF_VALIDATOR
+                std::cerr << "LR fragment partitions do not match expected partitions." << std::endl;
+                #endif
+                return std::nullopt;
+            }
+            // lateral ll and lateral rl must be same as cross lr
+            if (lateral_partition_ll != cross_partition_lr ||
+                lateral_partition_rl != cross_partition_lr)
+            {
+                #ifdef DEBUG_PROOF_VALIDATOR
+                std::cerr << "LL/RL fragment partitions do not match expected partitions." << std::endl;
+                #endif
+                return std::nullopt;
+            }
+            #ifdef DEBUG_PROOF_VALIDATOR
+            uint32_t cross_partition_ll = proof_core_.fragment_codec.get_r_t4_partition(quality_link.fragments[0]);
+            uint32_t cross_partition_rl = proof_core_.fragment_codec.get_r_t4_partition(quality_link.fragments[2]);
+            std::cout << "Pattern: " << FragmentsPatternToString(quality_link.pattern) << std::endl;
+            std::cout << "partition A: " << partition_A
+                      << ", partition B: " << partition_B << std::endl;
+            std::cout << "Partitions for LL: (" << lateral_partition_ll << ", " << cross_partition_ll << ")\n"
+                      << "Partitions for LR: (" << lateral_partition_lr << ", " << cross_partition_lr << ")\n"
+                      << "Partitions for RL: (" << lateral_partition_rl << ", " << cross_partition_rl << ")\n";
+            std::cout << "cross_lr: " << cross_partition_lr << " should be same as lateral_ll: " << lateral_partition_ll
+                      << " and lateral_rl: " << lateral_partition_rl << std::endl;
+            #endif
         }
         BlakeHash::Result256 next_challenge = proof_core_.hashing.chainHash(challenge, quality_link.fragments);
 
         if (chain_index == 0) {
-            return next_challenge;
+            // for the first link, we don't check the threshold, just return the next challenge
+            return CheckLinkResult{.next_challenge = next_challenge, .quality_link = quality_link};
         }
         uint32_t qc_pass_threshold = proof_core_.quality_chain_pass_threshold(chain_index);
 
@@ -404,13 +487,17 @@ public:
             std::cout << "Valid link found at chain index " << chain_index << std::endl 
                         << "Next challenge: " << next_challenge.toString() << std::endl;
             #endif
-            return next_challenge; // return the next challenge as the new hash
+            // return the next challenge as the new hash
+            return CheckLinkResult{.next_challenge = next_challenge, .quality_link = quality_link};
+
         }
         else
         {
+            #ifdef DEBUG_PROOF_VALIDATOR
             std::cout << "Invalid link at chain index " << chain_index << std::endl
                         << "Next challenge: " << next_challenge.toString() << std::endl
                         << "Pass threshold: " << qc_pass_threshold << std::endl;
+            #endif
             return std::nullopt; // invalid link, return nullopt
         }
 
