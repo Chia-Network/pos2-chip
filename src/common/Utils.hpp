@@ -38,7 +38,7 @@ class Utils
         return static_cast<uint32_t>(std::strtoul(hex.c_str(), nullptr, 16));
     }
 
-    static std::string proofToHex(const int k, const std::vector<uint32_t>& proof) {
+    static std::string kValuesToCompressedHex(const int k, const std::vector<uint32_t>& proof) {
         // pack k-bit values into a bitstream
         size_t total_bits = proof.size() * static_cast<size_t>(k);
         std::vector<bool> bits;
@@ -61,7 +61,7 @@ class Utils
         return hex;
     }
 
-    static std::vector<uint32_t> hexToProof(const int k, const std::string& hex) {
+    static std::vector<uint32_t> compressedHexToKValues(const int k, const std::string& hex) {
         // convert hex back to bitstream
         size_t total_bits = hex.size() * 4;
         if (total_bits < static_cast<size_t>(k) || (total_bits % k) != 0) {
