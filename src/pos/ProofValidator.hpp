@@ -386,6 +386,7 @@ public:
 
         // depending on pattern, our Quality Link composes 3 fragments that follow the order LL,LR,RL,RR
         QualityLink quality_link;
+        quality_link.outside_t3_index = 0; // unused, prevents compiler warnings.
         if (pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
         {
             quality_link.fragments[0] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::LL)];
