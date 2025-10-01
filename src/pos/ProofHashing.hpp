@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <stdexcept>
+#include <span>
 
 #include "ProofParams.hpp"
 #include "ChachaHash.hpp"
@@ -80,7 +81,7 @@ public:
         return BlakeHash::hash_block_256(block_words);
     }
 
-    BlakeHash::Result256 chainHash(BlakeHash::Result256 prev_chain_hash, const uint64_t *link_fragments)
+    BlakeHash::Result256 chainHash(BlakeHash::Result256 prev_chain_hash, std::span<uint64_t const, 3> const link_fragments)
     {
         uint32_t block_words[16];
         for (int i = 0; i < 8; i++) {

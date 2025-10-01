@@ -115,8 +115,8 @@ public:
         std::vector<int> mapping; // our group mappings
     };
 
-    XBitGroupMappings compress_with_lookup(const std::vector<uint32_t> &x_bits_list,
-                                           int x1_bits)
+    XBitGroupMappings compress_with_lookup(std::span<uint32_t const> const x_bits_list,
+                                           int const x1_bits)
     {
         int total_ranges = 1 << x1_bits;
         // lookup[v] == -1  → we haven't seen v yet
@@ -153,10 +153,10 @@ public:
     }
 
     // Main solver function.
-    // Input: an array of 512 x1 candidates.
+    // Input: an array of 256 x1 candidates.
     //        x_solution is an dev-mode test array that the solver should solve to and test against (debug and verify).
     // Returns: a vector of complete proofs (each proof is an array of 512 uint32_t x-values).
-    std::vector<std::vector<uint32_t>> solve(const std::vector<uint32_t> &x_bits_list, const std::vector<uint32_t> &x_solution = {})
+    std::vector<std::array<uint32_t, 512>> solve(std::span<uint32_t const, 256> const x_bits_list, const std::vector<uint32_t> &x_solution = {})
     {
         XBitGroupMappings x_bits_group = compress_with_lookup(x_bits_list, params_.get_k() / 2);
 #ifdef DEBUG_VERIFY
@@ -579,26 +579,28 @@ public:
 
     // Phase 12 helper: Construct final proofs from T5 matches.
     // full proof is all t5 x-value collections, should be in same sequence order as quality chain
-    std::vector<std::vector<uint32_t>> constructProofs(const std::vector<std::vector<T5_match>> &t5_matches)
+    std::vector<std::array<uint32_t, 512>> constructProofs(const std::vector<std::vector<T5_match>> &t5_matches)
     {
         if (t5_matches.empty())
         {
             return {}; // return empty if no matches
         }
-        std::vector<std::vector<uint32_t>> all_proofs;
+        std::vector<std::array<uint32_t, 512>> all_proofs;
 
-        std::vector<uint32_t> full_proof;
+        std::array<uint32_t, 512> full_proof;
+        size_t idx = 0;
         for (size_t g = 0; g < t5_matches.size(); g++)
         {
             for (const auto &match : t5_matches[g])
             {
                 for (size_t x_pos = 0; x_pos < 32; x_pos++)
                 {
-                    full_proof.push_back(match.x_values[x_pos]);
+                    full_proof[idx] = match.x_values[x_pos];
+                    ++idx;
                 }
             }
         }
-        if (full_proof.empty())
+        if (idx != 512)
         {
             return {}; // return empty if no matches
         }

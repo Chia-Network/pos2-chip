@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <array>
+#include <span>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -20,7 +21,7 @@ class Utils
         return bytes;
     }
 
-    static std::string bytesToHex(const std::array<uint8_t, 32>& bytes) {
+    static std::string bytesToHex(std::span<uint8_t const> const bytes) {
         std::ostringstream oss;
         for (const auto& byte : bytes) {
             oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
@@ -38,9 +39,9 @@ class Utils
         return static_cast<uint32_t>(std::strtoul(hex.c_str(), nullptr, 16));
     }
 
-    static std::string kValuesToCompressedHex(const int k, const std::vector<uint32_t>& proof) {
+    static std::string kValuesToCompressedHex(const int k, std::span<uint32_t const> const proof) {
         // pack k-bit values into a bitstream
-        size_t total_bits = proof.size() * static_cast<size_t>(k);
+        size_t const total_bits = proof.size() * static_cast<size_t>(k);
         std::vector<bool> bits;
         bits.reserve(total_bits);
         for (auto v : proof) {

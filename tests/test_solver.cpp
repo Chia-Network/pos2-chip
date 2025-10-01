@@ -46,7 +46,8 @@ TEST_CASE("solve-partial")
     solver.setUsePrefetching(true);
 
     const std::vector<uint32_t> x_solution;
-    std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list, k18_xs_in_proof);
+    assert(x_bits_list.size() == 256);
+    std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t, 256>(x_bits_list), k18_xs_in_proof);
 
     ENSURE(!all_proofs.empty());
     /*if (all_proofs.size() == 0)

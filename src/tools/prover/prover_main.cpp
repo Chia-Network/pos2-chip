@@ -143,8 +143,13 @@ try
         // ProofCore proof_core(params);
 
         std::vector<uint32_t> proof = Utils::compressedHexToKValues(k, proof_hex);
+        if (proof.size() != 512)
+        {
+            std::cerr << "invalid proof" << std::endl;
+            return 1;
+        }
 
-        std::optional<QualityChainLinks> chain = proof_validator.validate_full_proof(proof, challenge, proof_fragment_scan_filter_bits);
+        std::optional<QualityChainLinks> chain = proof_validator.validate_full_proof(std::span<uint32_t, 512>(proof), challenge, proof_fragment_scan_filter_bits);
 
         // get all sub-proofs, which are collections of 32 x-values
         if (chain.has_value())

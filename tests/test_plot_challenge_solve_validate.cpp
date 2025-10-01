@@ -133,7 +133,7 @@ TEST_CASE("plot-k18-strength2-4-5")
 
             // now solve using the x bits list
             Solver solver(prover.getProofParams());
-            std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list);
+            std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t const, 256>(x_bits_list));
 
             ENSURE(!all_proofs.empty());
             ENSURE(all_proofs.size() == 1); // not sure how to handle multiple proofs for now, should be extremely rare.
@@ -162,7 +162,7 @@ TEST_CASE("plot-k18-strength2-4-5")
             // at this point should have exactly one proof.
 
             std::cout << "nChain: " << nChain << " found " << all_proofs.size() << " proofs." << std::endl;
-            std::vector<uint32_t> &proof = all_proofs[0];
+            std::array<uint32_t, 512> const& proof = all_proofs[0];
             std::cout << "Proof size: " << proof.size() << std::endl;
 
             ENSURE(proof.size() == NUM_CHAIN_LINKS * 32); // should always have 32 x values per link
@@ -186,15 +186,15 @@ TEST_CASE("plot-k18-strength2-4-5")
             std::optional<QualityChainLinks> res = proof_validator.validate_full_proof(proof, challenge, proof_fragment_filter_bits);
             ENSURE(res.has_value());
 
-            QualityChainLinks quality_links = res.value();
+            QualityChainLinks const& quality_links = res.value();
             bool links_match = true;
             // run through quality links and ensure they match the original quality chain's links
             for (int i = 0; i < NUM_CHAIN_LINKS; i++)
             {
-                auto &check_fragments = quality_links[i].fragments;
-                auto &original_fragments = quality_chains[nChain].chain_links[i].fragments;
+                auto const& check_fragments = quality_links[i].fragments;
+                auto const& original_fragments = quality_chains[nChain].chain_links[i].fragments;
                 // ensure fragments match
-                if (!std::equal(std::begin(check_fragments), std::end(check_fragments), std::begin(original_fragments), std::end(original_fragments)))
+                if (!(check_fragments == original_fragments))
                 {
                     links_match = false;
                     std::cerr << "Error: quality link " << i << " fragments does not match original." << std::endl;
