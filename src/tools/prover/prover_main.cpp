@@ -17,13 +17,14 @@ std::string chainLinksToHex(int k, QualityChainLinks &chain_links)
 {
     // first put all into vector of uint32_t, then compress to k bits
     std::vector<uint32_t> fragment_values;
+    uint64_t mask = (1ULL << k) - 1;
     for (const auto &link : chain_links)
     {
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[0] & ((1 << k) - 1)));
+        fragment_values.push_back(static_cast<uint32_t>(link.fragments[0] & mask));
         fragment_values.push_back(static_cast<uint32_t>(link.fragments[0] >> k));
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[1] & ((1 << k) - 1)));
+        fragment_values.push_back(static_cast<uint32_t>(link.fragments[1] & mask));
         fragment_values.push_back(static_cast<uint32_t>(link.fragments[1] >> k));
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[2] & ((1 << k) - 1)));
+        fragment_values.push_back(static_cast<uint32_t>(link.fragments[2] & mask));
         fragment_values.push_back(static_cast<uint32_t>(link.fragments[2] >> k));
     }
     return Utils::kValuesToCompressedHex(k, fragment_values);

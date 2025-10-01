@@ -578,23 +578,6 @@ public:
         return static_cast<uint32_t>(raw + 0.5L);
     }
 
-    // hashes challenge with plot id,
-    // returns hash if passes plot id filter,
-    // otherwise returns null
-    // THE harvester/farmer/node is responsible for checking plot id filter
-    /*std::optional<BlakeHash::Result256> check_plot_id_filter(const uint32_t plot_id_filter, const std::array<uint8_t, 32> &challenge)
-    {
-        BlakeHash::Result256 challenge_plot_id_hash = hashing.challengeWithPlotIdHash(challenge.data());
-
-        const uint32_t PLOT_ID_MASK = (1 << plot_id_filter) - 1; // mask for the plot_id_filter bits
-        // check lowest bits in challenge_plot_id_hash, if all bits are zero it passes.
-        if ((challenge_plot_id_hash.r[0] & PLOT_ID_MASK) == 0)
-        {
-            return challenge_plot_id_hash;
-        }
-        return std::nullopt;
-    }*/
-
     // Determines the required fragments pattern based on the challenge.
     FragmentsPattern requiredPatternFromChallenge(BlakeHash::Result256 challenge)
     {
