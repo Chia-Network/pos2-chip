@@ -93,9 +93,11 @@ struct QualityLink
     uint64_t outside_t3_index;
 };
 
+using QualityChainLinks = std::array<QualityLink, NUM_CHAIN_LINKS>;
+
 struct QualityChain
 {
-    std::array<QualityLink, NUM_CHAIN_LINKS> chain_links;
+    QualityChainLinks chain_links;
     BlakeHash::Result256 chain_hash;
     uint8_t strength;
 };
@@ -574,22 +576,6 @@ public:
 
         // 5) round to nearest integer and return
         return static_cast<uint32_t>(raw + 0.5L);
-    }
-
-    // hashes challenge with plot id,
-    // returns hash if passes plot id filter,
-    // otherwise returns null
-    std::optional<BlakeHash::Result256> check_plot_id_filter(const uint32_t plot_id_filter, const std::array<uint8_t, 32> &challenge)
-    {
-        BlakeHash::Result256 challenge_plot_id_hash = hashing.challengeWithPlotIdHash(challenge.data());
-
-        const uint32_t PLOT_ID_MASK = (1 << plot_id_filter) - 1; // mask for the plot_id_filter bits
-        // check lowest bits in challenge_plot_id_hash, if all bits are zero it passes.
-        if ((challenge_plot_id_hash.r[0] & PLOT_ID_MASK) == 0)
-        {
-            return challenge_plot_id_hash;
-        }
-        return std::nullopt;
     }
 
     // Determines the required fragments pattern based on the challenge.

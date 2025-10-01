@@ -20,6 +20,5 @@ add_subdirectory(lib/fse)
 add_subdirectory(src/tools/plotter)
 add_subdirectory(src/tools/solver)
 add_subdirectory(src/tools/prover)
-add_subdirectory(src/tools/verify)
 
 add_subdirectory(tests)

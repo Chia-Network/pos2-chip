@@ -151,7 +151,6 @@ public:
 
             std::vector<QualityLink> firstLinks = getFirstQualityLinks(FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION, firstPattern, frag_res.index, r_partition);
 
-            // output first links fragemnts in hex
             #ifdef DEBUG_CHAINING
             std::cout << " # First Quality Links: " << firstLinks.size() << std::endl;
             for (const auto &link : firstLinks)

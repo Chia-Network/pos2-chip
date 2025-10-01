@@ -36,7 +36,6 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             uint64_t decrypted_xs_RL = fragment_codec.decode(fragment_RL);
             uint64_t decrypted_xs_RR = fragment_codec.decode(fragment_RR);
 
-
             if (fragment_codec.validate_proof_fragment(fragment_LL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l].data()))
             {
                 std::cout << "Fragments LL match x-bits." << std::endl;
@@ -166,7 +165,7 @@ int benchmark(int k, int plot_strength)
     const std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
     // hex to bytes
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
-    //const uint8_t *plot_id = Utils::hexToBytes(plot_id_hex);
+    // const uint8_t *plot_id = Utils::hexToBytes(plot_id_hex);
 #ifdef NON_BIPARTITE_BEFORE_T3
     uint32_t x_bits_list[256] = {9739, 13461, 10770, 14445, 7339, 6712, 1506, 1453, 4934, 6847, 4101, 9824, 9196, 12120, 6524, 15576, 4026, 12101, 6865, 9189, 4937, 5899, 4342, 13097, 14130, 14922, 10068, 1542, 11971, 9511, 788, 6083, 4026, 12101, 6865, 9189, 4937, 5899, 4342, 13097, 1469, 8090, 10717, 15242, 1356, 619, 7947, 242, 2674, 8416, 15671, 4803, 15002, 15085, 14034, 5366, 5675, 8698, 2355, 3726, 8241, 413, 6578, 7566, 2674, 8416, 15671, 4803, 1404, 9548, 3429, 8580, 2860, 1151, 10345, 1090, 4246, 4, 11413, 12208, 667, 15859, 5872, 10114, 6856, 15823, 6015, 8627, 5987, 4459, 12826, 4445, 9445, 8679, 1566, 12328, 667, 15859, 5872, 10114, 6856, 15823, 6015, 8627, 8192, 8131, 10476, 2966, 3466, 8135, 11290, 8167, 4835, 15248, 12971, 13523, 7356, 16330, 2508, 3642, 12260, 10009, 13650, 10749, 5676, 3509, 14751, 8352, 16070, 12828, 11246, 3880, 1529, 5667, 6331, 7225, 11704, 192, 13773, 8651, 4920, 7466, 15481, 6182, 16070, 12828, 11246, 3880, 1529, 5667, 6331, 7225, 6641, 11842, 3053, 12148, 13731, 10861, 15945, 1189, 16070, 12828, 11246, 3880, 9592, 336, 14284, 13532, 3435, 2250, 8778, 9343, 13788, 14094, 10633, 13773, 16070, 12828, 11246, 3880, 9592, 336, 14284, 13532, 8272, 10913, 5634, 5626, 2824, 7585, 9693, 1610, 16070, 12828, 11246, 3880, 9592, 336, 14284, 13532, 515, 5459, 8248, 9808, 4104, 6409, 15355, 7086, 13734, 11363, 823, 11502, 535, 328, 3902, 15550, 6622, 11639, 1600, 5864, 4765, 7538, 7133, 7887, 13734, 11363, 823, 11502, 535, 328, 3902, 15550, 14566, 11918, 1863, 11614, 9744, 1781, 13911, 15195, 13734, 11363, 823, 11502, 535, 328, 3902, 15550, 5429, 6783, 9648, 140, 11195, 3294, 10334, 14373};
 #else
@@ -217,17 +216,19 @@ int benchmark(int k, int plot_strength)
     return 0;
 }
 
-int do_exhaustive_test(const std::string& plot_file) {
+int do_exhaustive_test(const std::string &plot_file)
+{
     // read plot file
     PlotFile::PlotFileContents plot = PlotFile::readData(plot_file);
-    if (plot.data == PlotData()) {
+    if (plot.data == PlotData())
+    {
         std::cerr << "Error: plot file is empty or invalid." << std::endl;
         return 1;
     }
 
     std::cout << "Plot file read successfully: " << plot_file << std::endl;
     plot.params.debugPrint();
-    
+
     // for exhaustive testing, requires plot and compilation with RETAIN_X_VALUES_TO_T3
 #ifdef RETAIN_X_VALUES_TO_T3
     exhaustive_test(plot);
@@ -236,7 +237,8 @@ int do_exhaustive_test(const std::string& plot_file) {
     return 0;
 }
 
-int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_list, int k, int strength) {
+int xbits(const std::string &plot_id_hex, const std::vector<uint32_t> &x_bits_list, int k, int strength)
+{
     // convert plot_id_hex to bytes
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
     ProofParams params(plot_id.data(), k, strength);
@@ -265,14 +267,17 @@ int xbits(const std::string& plot_id_hex, const std::vector<uint32_t>& x_bits_li
             std::cout << all_proofs[i][j] << ", ";
         }
         std::cout << std::endl;
-        std::cout << "Proof hex: " << Utils::proofToHex(params.get_k(), all_proofs[i]) << std::endl;
+        std::cout << "Proof hex: " << Utils::kValuesToCompressedHex(params.get_k(), all_proofs[i]) << std::endl;
     }
 
     return 0;
 }
 
-int main(int argc, char* argv[]) try {
-    if (argc < 3) {
+int main(int argc, char *argv[])
+try
+{
+    if (argc < 3)
+    {
         std::cerr << "Usage: " << argv[0] << " <mode> <arg>\n"
                   << "Modes:\n"
                   << "  benchmark <k-size> [strength (default 2)]   Run benchmark with the given k-size integer and optional plot strength\n"
@@ -281,85 +286,108 @@ int main(int argc, char* argv[]) try {
     }
 
     std::string mode = argv[1];
-    if (mode == "benchmark") {
+    if (mode == "benchmark")
+    {
         int k = 0;
         int plot_strength = argv[3] ? std::stoi(argv[3]) : 2; // default strength is 2
-        try {
+        try
+        {
             k = std::stoi(argv[2]);
             // k must be 18...32 even
-            if (k < 18 || k > 32 || (k % 2) != 0) {
+            if (k < 18 || k > 32 || (k % 2) != 0)
+            {
                 std::cerr << "Error: k-size must be an even integer between 18 and 32." << std::endl;
                 return 1;
             }
-        } catch (const std::invalid_argument& e) {
+        }
+        catch (const std::invalid_argument &e)
+        {
             std::cerr << "Error: k-size must be an integer." << std::endl;
             return 1;
-        } catch (const std::out_of_range& e) {
+        }
+        catch (const std::out_of_range &e)
+        {
             std::cerr << "Error: k-size out of range." << std::endl;
             return 1;
         }
 
         std::cout << "Running benchmark with k-size = " << k << " and plot strength = " << plot_strength << std::endl;
         return benchmark(k, plot_strength);
-
-    } else if (mode == "xbits") {
+    }
+    else if (mode == "xbits")
+    {
         // must have 5 args: xbits <k-size> <plot_id_hex> <xbits_hex> <strength>
-        if (argc != 6) {
-            std::cerr << "Usage: " << argv[0] << " xbits <k-size> <plot_id_hex> <xbits_hex> [strength]\n"
-                      << "  k-size: integer (18-32 even)\n"
+        if (argc != 5)
+        {
+            std::cerr << "Usage: " << argv[0] << " xbits <plot_id_hex> <xbits_hex> [strength]\n"
                       << "  plot_id_hex: 64-hex-character string\n"
-                      << "  xbits_hex: 1024-hex-character string (256 uint32_t values)\n"
+                      << "  xbits_hex: string for 256 k/2-bit x-values\n"
                       << "  strength: optional integer (default 2)\n";
             return 1;
         }
-        int k = 0;
-        try {
+        /*int k = 0;
+        try
+        {
             k = std::stoi(argv[2]);
-            // k must be 28,30, or 32
-            //if (!(k == 28 || k == 30 | k == 32)) {
-            //    std::cerr << "Error: k-size must be 28, 30, or 32." << std::endl;
-            //    return 1;
-            //}
-        } catch (const std::invalid_argument& e) {
+            // k must be 18...32 even
+            if (k < 18 || k > 32 || (k % 2) != 0)
+            {
+                std::cerr << "Error: k-size must be an even integer between 18 and 32." << std::endl;
+                return 1;
+            }
+        }
+        catch (const std::invalid_argument &e)
+        {
             std::cerr << "Error: k-size must be an integer." << std::endl;
             return 1;
-        } catch (const std::out_of_range& e) {
+        }
+        catch (const std::out_of_range &e)
+        {
             std::cerr << "Error: k-size out of range." << std::endl;
             return 1;
-        }
+        }*/
 
         // then get plot id hex string
-        std::string plot_id_hex = argv[3];
-        if (plot_id_hex.length() != 64) {
+        std::string plot_id_hex = argv[2];
+        if (plot_id_hex.length() != 64)
+        {
             std::cerr << "Error: plot_id must be a 64-hex-character string." << std::endl;
             return 1;
         }
 
         // then get string of 256 hex characters for xbits
-        std::string xbits_hex = argv[4];
-        if (xbits_hex.length() != 1024) {
-            std::cerr << "Error: xbits must be a 1024-hex-character string. (" << xbits_hex.length() << " found)" << std::endl;
+        std::string xbits_hex = argv[3];
+        int xbits_hex_len = xbits_hex.length();
+        std::vector<uint32_t> x_bits_list;
+        int calculated_k = xbits_hex_len / 32; // each uint32_t is 4 hex characters
+        std::cout << "xbits_hex length: " << xbits_hex_len << ", calculated k: " << calculated_k << std::endl;
+        if (calculated_k < 18 || calculated_k > 32 || (calculated_k % 2) != 0)
+        {
+            std::cerr << "Error: k-size must be an even integer between 18 and 32." << std::endl;
+            return 1;
+        }
+        // decompress each x value from k/2 bits.
+        x_bits_list = Utils::compressedHexToKValues(calculated_k / 2, xbits_hex);
+        if (x_bits_list.size() != 256)
+        {
+            std::cerr << "Error: xbits_hex does not decode to 256 uint32_t values. Has " << x_bits_list.size() << " instead." << std::endl;
             return 1;
         }
 
-        int plot_strength = argv[5] ? std::stoi(argv[5]) : 2; // default strength is 2
-        std::cout << "Running xbits with k-size = " << k << " plot id: " << plot_id_hex << " xbits = " << xbits_hex << " plot strength = " << plot_strength << std::endl;
+        int plot_strength = argv[4] ? std::stoi(argv[4]) : 2; // default strength is 2
+        std::cout << "Running xbits with k-size = " << calculated_k << " plot id: " << plot_id_hex << " xbits = " << xbits_hex << " plot strength = " << plot_strength << std::endl;
         // convert xbits_hex to uint32_t array
-        std::vector<uint32_t> x_bits_list;
-        for (size_t i = 0; i < 256; i++) {
-            std::string hexStr = xbits_hex.substr(i * 4, 4);
-            x_bits_list.push_back(Utils::fromHex(hexStr));
-            //std::cout << i << ": " << x_bits_list.back() << std::endl;
-        }
-        return xbits(plot_id_hex, x_bits_list, k, plot_strength);
 
-
-    } else {
+        return xbits(plot_id_hex, x_bits_list, calculated_k, plot_strength);
+    }
+    else
+    {
         std::cerr << "Unknown mode: " << mode << "\n"
                   << "Use 'benchmark' or 'xbits'" << std::endl;
         return 1;
     }
 }
-catch (const std::exception& e) {
+catch (const std::exception &e)
+{
     std::cerr << "Failed with exception: " << e.what() << std::endl;
 }
