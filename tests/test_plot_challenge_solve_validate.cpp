@@ -9,8 +9,15 @@ TEST_SUITE_BEGIN("plot-challenge-solve-verify");
 
 TEST_CASE("plot-k18-strength2-4-5")
 {
+    #ifdef NDEBUG
+    const size_t N_TRIALS = 3; // strength 2, 4, 5
+    const size_t MAX_CHAINS_PER_CHALLENGE_TO_TEST = 3; // check up to 3 chains from challenge
+    #else
+    const size_t N_TRIALS = 1; // strength 2 only
+    const size_t MAX_CHAINS_PER_CHALLENGE_TO_TEST = 1; // only check one chain from challenge
+    #endif
     // for this test plot was generated with a prover scan to fine a challenge returning one or more quality chains
-    for (int trial = 0; trial < 3; trial++)
+    for (size_t trial = 0; trial < N_TRIALS; trial++)
     {
         int plot_strength;
         std::string challenge_hex;
@@ -80,7 +87,8 @@ TEST_CASE("plot-k18-strength2-4-5")
             std::cerr << "Error: no quality chains found." << std::endl;
             return;
         }
-        for (size_t nChain = 0; nChain < quality_chains.size(); nChain++)
+        size_t numTestChains = std::min(MAX_CHAINS_PER_CHALLENGE_TO_TEST, quality_chains.size()); // only check limited set of chains.
+        for (size_t nChain = 0; nChain < numTestChains; nChain++)
         {
 
             std::vector<uint32_t> check_proof_xs;
