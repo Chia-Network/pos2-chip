@@ -1,6 +1,6 @@
 # PoSpace Reference Implementation (CHIP)
 
-This repository provides a **public reference implementation** of the new Proof of Space (“PoSpace”) format, as defined in CHIP-XXXX. It includes:
+This repository provides a **public reference implementation** of the new Proof of Space (“PoSpace”) format, as defined in [CHIP-48](https://github.com/Chia-Network/chips/pull/160). It includes:
 
 - **`lib/pos/`** — core Proof of Space header‑only library (`<pos/...>`)
 - **`lib/common/`** — header‑only utilities (`<common/...>`)
@@ -14,7 +14,7 @@ This repository provides a **public reference implementation** of the new Proof�
 
 - Header‑only, C++20 PoSpace core (`ProofCore`, hashing, parameters, validator, etc.)
 - Example **plotter** tool demonstrating the plot pipeline and writing a plot (but does not yet compress data)
-- **Solver** tool for benchmarking solve times for k28/30/28 sizes on CPUs.
+- **Solver** tool for benchmarking solve times for k28/30/32 sizes on CPUs.
 
 > [!NOTE]
 > The reference implementations do not optimize for memory usage, and consume much more memory than the upcoming production versions.
@@ -32,69 +32,98 @@ This repository provides a **public reference implementation** of the new Proof�
 
 1. **Clone** the repo:
    ```bash
-   git clone https://github.com/your-org/pos2-chip.git
+   git clone https://github.com/Chia-Network/pos2-chip.git
+   ```
+   ```bash
    cd pos2-chip
    ```
 
-### Shortcut with helper script:
 2. Build
-```bash
+
+   **Option A:** Use the helper script
+   ```bash
    ./build-release.sh
-```
+   ```
 
-### Manually, directly via CMake:
-2. Configure with CMake (Release mode enables optimizations):
-    ```bash
-    cmake -B build -DCMAKE_BUILD_TYPE=Release .
-    ```
-3. Compile:
-    ```bash
-    
-    # Linux
-    cmake --build build -j$(nproc)
+   **Option B:** Use CMake
+   
+   First, build with `Release` mode to enable optimizations:
+   ```bash
+   cmake -B build -DCMAKE_BUILD_TYPE=Release .
+   ```
+   
+   Next, compile:
+   
+   Linux:
+   ```bash
+   cmake --build build -j$(nproc)
+   ```
 
-    # macOS
-    cmake --build build -j$(sysctl -n hw.logicalcpu)
-    ```
+   macOS:
+   ```bash
+   cmake --build build -j$(sysctl -n hw.logicalcpu)
+   ```
+---
 
 ## Running the Plotter
 
 From the root of your build directory, invoke the plotter executable:
 
 ```
-./tools/plotter/plotter <k> [sub_k]
+./build/src/tools/plotter/plotter <k> [sub_k]
 ```
 
 By default it uses the sample plot ID and parameters defined in tools/plotter/src/main.cpp. To customize, edit that file or supply your own main() implementation.
 
-Currently the PoS 2 is expected to use:
-k=28 sub_k=20
-k=30 sub_k=21
-k=32 sub_k=22
+### About k
+
+`k` determines the size of the plot. For testing, valid `k`-sizes are even numbers from 18 to 32. For mainnet, only 28, 30, and 32 will be allowed.
+
+For your reference, the current plot size for k=18 is ~6.5 MB. For k=28, it's ~5 GB. The final optimized sizes are expected to be about 75% smaller than the current sizes.
+
+### About sub_k
+
+Each increment of `sub_k` doubles the number of unique Proof Fragments an attacker must solve for. The goal is to achieve bit drop saturation in order to maximize resistance against compression.
+
+The only k/sub_k combinations expected to be valid on mainnet are:
+* k=28, sub_k=20
+* k=30, sub_k=21
+* k=32, sub_k=22
+
+If running code-based or CI tests, then k=18, sub_k=15 is recommended.
+
+For running on a testnet, k=24, sub_k=18 will likely be recommended. The reason for the larger values on testnet is to lower the variance on plot size and output.
 
 ### Examples
 
+To use k=18 with the default sub_k:
 ```bash
-# Use k=18, default sub_k=20
-./src/tools/plotter/plotter 18
+./build/src/tools/plotter/plotter 18
+```
 
-# Use k=28 and sub_k=16
-./src/tools/plotter/plotter 28 16
+To use k=28 and sub_k=20
+```bash
+./build/src/tools/plotter/plotter 28 20
 ```
 
 ## Running the Solver
 
 Run the solver executable with one of the two modes:
 
+Coming soon.
+
 ### Benchmark Mode
 
-    ./src/tools/solver/solver benchmark <k-size>
+```bash
+./build/src/tools/solver/solver benchmark <k-size>
+```
 
-- `<k-size>`: integer value for the solver’s k parameter (e.g. 28).
+Where `<k-size>` is an integer value for the solver’s k parameter (e.g. 28).
 
 Example:
-
-    ./src/tools/solver/solver benchmark 32
+```bash
+./build/src/tools/solver/solver benchmark 32
+```
 
 Outputs timing and performance metrics for reconstructing proofs.
 
@@ -105,13 +134,17 @@ Reads the plot, prints its parameters, and runs the a chaining test for getting 
 > [!NOTE]
 > Currently the solver does not accept a challenge to choose a proof from the plot. Coming soon (TM).
 
-    ./src/tools/solver/solver prove <plot-file>
+```bash
+./build/src/tools/solver/solver prove <plot-file>
+```
 
-- `<plot-file>`: path to a plot file to test.
+Where `<plot-file>` is the path to a plot file to test.
 
 Example:
 
-    ./src/tools/solver/solver prove /path/to/plot.bin
+```bash
+./build/src/tools/solver/solver prove /path/to/plot.bin
+```
 
 > [!NOTE]
 > Plot files are changing frequently, so use the plotter to generate a new plot to then test it.
