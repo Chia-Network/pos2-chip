@@ -88,7 +88,7 @@ enum class QualityLinkProofFragmentPositions : int
 struct QualityLink
 {
     // there are 2 patterns: either LR or RR is included in the fragment, but never both.
-    ProofFragment fragments[3]; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
+    std::array<ProofFragment, 3> fragments; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
     FragmentsPattern pattern;
     uint64_t outside_t3_index;
 };

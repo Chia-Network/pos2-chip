@@ -241,7 +241,7 @@ public:
     // validates a full proof consisting of 512 x-values of k-bits (in 32 bit element array)
     // Note that harvester/farmer/node are responsible for checking plot id filter
     // returns QualityChainLinks if valid, else std::nullopt
-    std::optional<QualityChainLinks> validate_full_proof(const std::vector<uint32_t> &full_proof, const std::array<uint8_t, 32> &challenge, int proof_fragment_scan_filter_bits)
+    std::optional<QualityChainLinks> validate_full_proof(std::span<uint32_t const, 512> const full_proof, std::span<uint8_t const, 32> const challenge, int proof_fragment_scan_filter_bits)
     {
         if (full_proof.size() != 32 * NUM_CHAIN_LINKS)
         {
