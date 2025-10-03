@@ -57,6 +57,10 @@ jobs:
             mode: Release
             compiler: clang
             toolchain: default
+          - os: ubuntu-24.04
+            mode: Release
+            compiler: clang
+            toolchain: ubsan
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
