@@ -18,7 +18,7 @@ public:
     ProofParams(const uint8_t * const plot_id_bytes,
                 const size_t k,
                 const uint8_t strength)
-        : k_(k), num_pairing_meta_bits_(2 * k), strength_(strength)
+        : k_(k), strength_(strength)
     {
         // strength must be >= 2
         if (strength_ < 2) {
@@ -135,7 +135,7 @@ public:
 
     int get_num_pairing_meta_bits() const
     {
-        return num_pairing_meta_bits_;
+        return 2 * k_;
     }
 
     int get_num_partitions() const
@@ -166,7 +166,7 @@ public:
         std::cout << std::dec << std::endl;
 
         std::cout << "k: " << k_ << std::endl;
-        std::cout << "num_pairing_meta_bits: " << num_pairing_meta_bits_ << std::endl;
+        std::cout << "num_pairing_meta_bits: " << get_num_pairing_meta_bits() << std::endl;
         std::cout << "num_partition_bits: " << get_num_partition_bits() << std::endl;
         std::cout << "num_partitions: " << get_num_partitions() << std::endl;
         std::cout << "sub_k: " << get_sub_k() << std::endl;
@@ -180,6 +180,5 @@ public:
 private:
     uint8_t plot_id_bytes_[32];    // Fixed-size storage for the 32-byte plot ID.
     size_t k_;                     // Half of the block size (i.e., 2*k bits total).
-    size_t num_pairing_meta_bits_; // Equals 2*k.
     uint8_t strength_;             // strength of the plot
 };
