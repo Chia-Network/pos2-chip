@@ -16,13 +16,16 @@ public:
     //   k: number of bits per x, must be even
     //   match_key_bits: the number of match key bits for table 3
     ProofParams(const uint8_t * const plot_id_bytes,
-                const size_t k,
+                const uint8_t k,
                 const uint8_t strength)
         : k_(k), num_pairing_meta_bits_(2 * k), strength_(strength)
     {
         // strength must be >= 2
         if (strength_ < 2) {
             throw std::invalid_argument("ProofParams: strength must be at least 2.");
+        }
+        if (get_sub_k() > k) {
+            throw std::invalid_argument("ProofParams: k must be at least 12");
         }
         // Copy the 32-byte plot ID.
         for (int i = 0; i < 32; ++i)
@@ -34,13 +37,14 @@ public:
     ~ProofParams() {}
 
     // Returns the number of sections, calculated as 2^(num_section_bits).
-    inline size_t get_num_sections() const
+    inline uint32_t get_num_sections() const
     {
-        return 1ULL << get_num_section_bits();
+        assert(get_num_section_bits() < 32);
+        return uint32_t(1) << get_num_section_bits();
     }
 
     // Number of match key bits based on table_id (1-5).
-    inline size_t get_num_match_key_bits(size_t table_id) const
+    inline int get_num_match_key_bits(size_t table_id) const
     {
         assert(table_id >= 1);
         assert(table_id <= 5);
@@ -58,7 +62,7 @@ public:
 
     // Returns the number of section bits.
     // If k is less than 28, returns 2; otherwise returns (k - 26).
-    inline size_t get_num_section_bits() const
+    inline uint32_t get_num_section_bits() const
     {
         return (k_ < 28 ? 2 : (k_ - 26));
     }
@@ -71,38 +75,38 @@ public:
 
     // Returns the number of match target bits.
     // (Double-check this calculation for T3+ and partition variants if necessary.)
-    inline size_t get_num_match_target_bits(size_t table_id) const
+    inline uint32_t get_num_match_target_bits(size_t table_id) const
     {
         return k_ - get_num_section_bits() - get_num_match_key_bits(table_id);
     }
 
     // Returns the number of meta bits.
     // For table_id 1, returns k; otherwise returns 2*k.
-    inline size_t get_num_meta_bits(size_t table_id) const
+    inline uint32_t get_num_meta_bits(size_t table_id) const
     {
         return (table_id == 1 ? k_ : k_ * 2);
     }
 
     // Extracts the section (msb) from match_info by shifting right by (k - num_section_bits).
-    inline uint64_t extract_section_from_match_info(size_t /*table_id*/, uint64_t match_info) const
+    inline uint32_t extract_section_from_match_info(size_t /*table_id*/, uint32_t match_info) const
     {
         return match_info >> (k_ - get_num_section_bits());
     }
 
     // Extracts the match key (middle bits) from match_info.
     // Shifts right by (k - num_section_bits - num_match_key_bits) and masks out the key bits.
-    inline uint64_t extract_match_key_from_match_info(size_t table_id, uint64_t match_info) const
+    inline uint32_t extract_match_key_from_match_info(size_t table_id, uint32_t match_info) const
     {
-        return (match_info >> (k_ - get_num_section_bits() - get_num_match_key_bits(table_id))) & ((1ULL << get_num_match_key_bits(table_id)) - 1);
+        return (match_info >> (k_ - get_num_section_bits() - get_num_match_key_bits(table_id))) & static_cast<uint32_t>((1ULL << get_num_match_key_bits(table_id)) - 1);
     }
 
     // Extracts the match target (lower bits) from match_info by masking the lower bits.
-    inline uint64_t extract_match_target_from_match_info(size_t table_id, uint64_t match_info) const
+    inline uint32_t extract_match_target_from_match_info(size_t table_id, uint32_t match_info) const
     {
-        return match_info & ((1ULL << get_num_match_target_bits(table_id)) - 1);
+        return match_info & static_cast<uint32_t>((1ULL << get_num_match_target_bits(table_id)) - 1);
     }
 
-    // Displays the plot parameters and a hexadecimal representation of the plot ID.
+    // Displays the plot parameters and a hexadecimal representation of the plot ID
     void show() const
     {
         std::cout << "Plot parameters: k=" << k_
@@ -125,17 +129,17 @@ public:
 
     int get_k() const
     {
-        return k_;
+        return static_cast<int>(k_);
     }
 
     int get_num_partition_bits() const
     {
-        return k_ - get_sub_k();
+        return static_cast<int>(k_) - get_sub_k();
     }
 
     int get_num_pairing_meta_bits() const
     {
-        return num_pairing_meta_bits_;
+        return static_cast<int>(num_pairing_meta_bits_);
     }
 
     int get_num_partitions() const
@@ -146,7 +150,7 @@ public:
     int get_sub_k() const
     {
         // k32/k30/k28 use sub_k of 22/21/20
-        return k_ / 2 + 6;
+        return static_cast<int>(k_ / 2 + 6);
     }
 
     // Returns the number of match key bits for table 3
@@ -165,7 +169,7 @@ public:
         }
         std::cout << std::dec << std::endl;
 
-        std::cout << "k: " << k_ << std::endl;
+        std::cout << "k: " << (int) k_ << std::endl;
         std::cout << "num_pairing_meta_bits: " << num_pairing_meta_bits_ << std::endl;
         std::cout << "num_partition_bits: " << get_num_partition_bits() << std::endl;
         std::cout << "num_partitions: " << get_num_partitions() << std::endl;
@@ -179,7 +183,7 @@ public:
 
 private:
     uint8_t plot_id_bytes_[32];    // Fixed-size storage for the 32-byte plot ID.
-    size_t k_;                     // Half of the block size (i.e., 2*k bits total).
-    size_t num_pairing_meta_bits_; // Equals 2*k.
+    uint8_t k_;                     // Half of the block size (i.e., 2*k bits total).
+    uint32_t num_pairing_meta_bits_; // Equals 2*k.
     uint8_t strength_;             // strength of the plot
 };

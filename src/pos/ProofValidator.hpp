@@ -19,7 +19,9 @@ public:
     ProofValidator(const ProofParams &proof_params)
         : params_(proof_params), 
           proof_core_(proof_params),
-          sub_proof_core_(ProofParams(proof_params.get_plot_id_bytes(), proof_params.get_sub_k(), proof_params.get_strength()))
+          sub_proof_core_(ProofParams(proof_params.get_plot_id_bytes(),
+              static_cast<uint8_t>(proof_params.get_sub_k()),
+              proof_params.get_strength()))
     {
         // sub params are used in T4/5
     }

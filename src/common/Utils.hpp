@@ -29,7 +29,7 @@ class Utils
         return oss.str();
     }
 
-    static std::string toHex(uint32_t value, size_t width = 8) {
+    static std::string toHex(uint32_t value, const int width = 8) {
         std::ostringstream oss;
         oss << std::hex << std::setw(width) << std::setfill('0') << value;
         return oss.str();

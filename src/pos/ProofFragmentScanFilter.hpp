@@ -5,7 +5,7 @@
 #include "BlakeHash.hpp"
 #include <vector>
 
-const uint64_t PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS = 13; // 2^13 = 8192
+const int PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS = 13; // 2^13 = 8192
 
 class ProofFragmentScanFilter
 {
@@ -29,7 +29,7 @@ public:
 
         // compute our hashing threshold for the scan filter
         double t3_exp = proof_core_.num_expected_pruned_entries_for_t3();
-        double per_range = t3_exp / numScanRanges();
+        double per_range = t3_exp / static_cast<double>(numScanRanges());
         double filter = 1 / (per_range * (1 << proof_fragment_scan_filter_bits));
         filter_32bit_hash_threshold_ = static_cast<uint32_t>(filter * 0xFFFFFFFF);
     }
@@ -118,7 +118,7 @@ public:
         // To find the range across approximately 2^k entries that span across proof fragment values 0..2^(2k) - 1, then the number of possible scan ranges is 2^k / 8192, or 2^(k - 13)
         //   -> this becomes scan_range_filter_bits = k - 13.
         // and thus the value of that span is 2^(2k) / (2^k / 8192) = 2^k * 8192 = 2^(k + 13).
-        int scan_range_filter_bits = params_.get_k() - PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS;
+        int const scan_range_filter_bits = params_.get_k() - PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS;
 
         // the scan range bits are the 13 bits from the challenge r[3] (the last word of the challenge)
         // after the highest order bit which defines the pattern.

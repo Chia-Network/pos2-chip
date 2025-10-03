@@ -108,6 +108,10 @@ private:
     BlakeHash blake_;
 };
 
+inline uint32_t mask32(const int bits) {
+    return static_cast<uint32_t>((uint64_t(1) << bits) - 1);
+}
+
 //
 // -------------------------
 // Member function definitions
@@ -129,9 +133,7 @@ inline uint32_t ProofHashing::matching_target(int table_id, uint32_t match_key,
                                               uint64_t meta, int num_meta_bits, int num_target_bits) {
     // Use table_id as the salt.
     _set_data_for_matching_target(static_cast<uint32_t>(table_id), match_key, meta, num_meta_bits);
-    uint32_t match_target_bits = blake_.generate_hash_32() & ((1ULL << num_target_bits) - 1);
-
-    return match_target_bits;
+    return blake_.generate_hash_32() & mask32(num_target_bits);
 }
 
 inline void ProofHashing::_set_data_for_matching_target(uint32_t salt, uint32_t match_key,
@@ -179,7 +181,7 @@ inline void ProofHashing::set_data_for_pairing(uint32_t salt, uint64_t meta_l, u
 
     set_data_for_pairing(3, meta_l, meta_r, in_meta_bits);
     BlakeHash::Result128 res = blake_.generate_hash();
-    uint32_t test_result = res.r[3] & ((1ULL << num_test_bits) - 1);
+    uint32_t test_result = res.r[3] & mask32(num_test_bits);
     return test_result == 0;
 }*/
 
@@ -193,14 +195,14 @@ inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64
 
     // Special case: table 5 returns only test bits for match filter.
     if (num_match_info_bits == 0 && out_num_meta_bits == 0 && num_test_bits > 0) {
-        pr.test_result = res.r[0] & ((1ULL << num_test_bits) - 1);
+        pr.test_result = res.r[0] & mask32(num_test_bits);
         return pr;
     }
 
     if (num_match_info_bits == 32)
         pr.match_info_result = res.r[0];
     else if (num_match_info_bits < 32)
-        pr.match_info_result = res.r[0] & ((1ULL << num_match_info_bits) - 1);
+        pr.match_info_result = res.r[0] & mask32(num_match_info_bits);
     else {
         // num_match_info_bits > 32
         //match_info_result = (res.r0 | (static_cast<uint64_t>(res.r1) << 32))
@@ -225,7 +227,7 @@ inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64
         return pr;
     }
 
-    uint32_t test_result = res.r[3] & ((1ULL << num_test_bits) - 1);
+    uint32_t test_result = res.r[3] & mask32(num_test_bits);
     pr.test_result = test_result;
     return pr;
 }
