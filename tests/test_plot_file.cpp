@@ -27,7 +27,7 @@ TEST_CASE("plot-read-write")
     std::string file_name = (std::string("plot_") + "k") + tostr(K) + "_" PLOT_ID_HEX + ".bin";
     
     timer.start("Writing plot file: " + file_name);
-    PlotFile::writeData(file_name, plot, plotter.getProofParams());
+    PlotFile::writeData(file_name, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
     timer.stop();
 
     timer.start("Reading plot file: " + file_name);

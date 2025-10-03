@@ -181,7 +181,7 @@ int main(int argc, char *argv[]) try
         #endif
         filename += '_' + plot_id_hex + ".bin";
         timer.start("Writing plot file: " + filename);
-        PlotFile::writeData(filename, plot, plotter.getProofParams());
+        PlotFile::writeData(filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
         timer.stop();
 
         // test read
