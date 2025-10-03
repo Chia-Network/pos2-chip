@@ -465,7 +465,7 @@ public:
         return links;
     }
 
-    std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain chain)
+    std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain const& chain)
     {
         std::vector<uint64_t> proof_fragments;
         #ifdef DEBUG_CHAINING
