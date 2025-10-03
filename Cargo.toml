@@ -1,0 +1,11 @@
+[workspace]
+members = ["crates/*"]
+
+[profile.release]
+lto = "thin"
+
+[workspace.dependencies]
+chia-bls = "0.29.0"
+blake3 = "1.8.2"
+cc = { version = "1.2.36", features = ["parallel"] }
+rstest = "0.26.1"
