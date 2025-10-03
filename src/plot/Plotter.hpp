@@ -14,11 +14,20 @@
 #include "TablePruner.hpp"
 // #include "TableCompressor.hpp"
 
+namespace {
+    template <typename T, size_t N>
+    std::array<T, N> to_array(std::span<T const, N> input) {
+        std::array<T, N> ret;
+        std::copy(input.begin(), input.end(), ret.begin());
+        return ret;
+    }
+}
+
 class Plotter {
 public:
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
-    Plotter(const std::array<uint8_t, 32> plot_id, int k, int strength = 2)
-      : plot_id_(plot_id), k_(k),
+    Plotter(const std::span<uint8_t const, 32> plot_id, int k, int strength)
+      : plot_id_(to_array(plot_id)), k_(k),
         proof_params_(plot_id_.data(), k_, strength), fragment_codec_(proof_params_), validator_(proof_params_) {}
 
     // Execute the plotting pipeline
