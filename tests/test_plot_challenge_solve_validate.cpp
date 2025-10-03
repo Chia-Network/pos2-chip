@@ -59,7 +59,7 @@ TEST_CASE("plot-k18-strength2-4-5")
         std::string plot_file_name = (std::string("plot_") + "k") + std::to_string(k) + "_" + std::to_string(plot_strength) + "_" + plot_id_hex + ".bin";
 
         timer.start("Writing plot file: " + plot_file_name);
-        PlotFile::writeData(plot_file_name, plot, plotter.getProofParams());
+        PlotFile::writeData(plot_file_name, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
         timer.stop();
 
         // timer.start("Reading plot file: " + plot_file_name);
