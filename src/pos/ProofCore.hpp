@@ -77,7 +77,7 @@ enum class FragmentsParent : uint8_t
     PARENT_NODE_IN_OTHER_PARTITION = 1      // other partition, is the r-side partition of the proof fragment passing the scan filter
 };
 
-enum class QualityLinkProofFragmentPositions : int
+enum QualityLinkProofFragmentPositions : size_t
 {
     LL = 0, // left left
     LR = 1, // left right
@@ -208,7 +208,7 @@ public:
 
     // matching_target:
     // Returns a hash value (as uint64_t) computed from meta and match_key.
-    uint32_t matching_target(int table_id, uint64_t meta, uint32_t match_key)
+    uint32_t matching_target(size_t table_id, uint64_t meta, uint32_t match_key)
     {
         size_t num_match_target_bits = params_.get_num_match_target_bits(table_id);
         size_t num_meta_bits = params_.get_num_meta_bits(table_id);
@@ -403,7 +403,7 @@ public:
 
     // validate_match_info_pairing:
     // Validates that match_info pairing is correct by comparing extracted sections and targets.
-    bool validate_match_info_pairing(const int table_id, const uint64_t meta_l, const uint32_t match_info_l, const uint32_t match_info_r)
+    bool validate_match_info_pairing(const size_t table_id, const uint64_t meta_l, const uint32_t match_info_l, const uint32_t match_info_r)
     {
         const uint32_t section_l = params_.extract_section_from_match_info(table_id, match_info_l);
         const uint32_t section_r = params_.extract_section_from_match_info(table_id, match_info_r);

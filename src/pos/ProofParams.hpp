@@ -137,14 +137,14 @@ public:
         return static_cast<uint32_t>(k_ - get_sub_k());
     }
 
-    int get_num_pairing_meta_bits() const
+    uint32_t get_num_pairing_meta_bits() const
     {
-        return static_cast<int>(num_pairing_meta_bits_);
+        return num_pairing_meta_bits_;
     }
 
-    int get_num_partitions() const
+    uint32_t get_num_partitions() const
     {
-        return 1ULL << get_num_partition_bits();
+        return static_cast<uint32_t>(1ULL << get_num_partition_bits());
     }
 
     int get_sub_k() const

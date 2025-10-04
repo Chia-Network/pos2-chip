@@ -37,7 +37,7 @@ public:
     // table_id: used as salt, match_key, meta: additional parameters.
     // num_meta_bits: number of bits used for meta data.
     // num_target_bits: the number of bits to return from the hash.
-    uint32_t matching_target(int table_id, uint32_t match_key, uint64_t meta,
+    uint32_t matching_target(size_t table_id, uint32_t match_key, uint64_t meta,
                              int num_meta_bits, int num_target_bits);
 
     // Prepares Blake hash data for pairing and computes the pairing result.
@@ -129,7 +129,7 @@ inline void ProofHashing::g_range_16(uint32_t x, uint32_t* out_hashes) {
     chacha_.do_chacha16_range(x, out_hashes);
 }
 
-inline uint32_t ProofHashing::matching_target(int table_id, uint32_t match_key,
+inline uint32_t ProofHashing::matching_target(size_t table_id, uint32_t match_key,
                                               uint64_t meta, int num_meta_bits, int num_target_bits) {
     // Use table_id as the salt.
     _set_data_for_matching_target(static_cast<uint32_t>(table_id), match_key, meta, num_meta_bits);
