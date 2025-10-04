@@ -18,6 +18,10 @@
 #include <numeric> // for iota
 #include "common/ParallelForRange.hpp"
 
+#ifdef __cpp_lib_execution
+#include <execution>
+#endif
+
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 #include <xmmintrin.h>
