@@ -339,7 +339,7 @@ public:
         // build the Quality Chain by checking each link in sequence.
         QualityChainLinks chain_links;
 
-        for (int quality_chain_index = 0; quality_chain_index < NUM_CHAIN_LINKS; quality_chain_index++)
+        for (size_t quality_chain_index = 0; quality_chain_index < NUM_CHAIN_LINKS; quality_chain_index++)
         {
             auto result = checkLink(full_proof_fragments, next_challenge, l_partition, r_partition, quality_chain_index);
             if (!result.has_value())
@@ -376,7 +376,7 @@ public:
         BlakeHash::Result256 next_challenge;
         QualityLink quality_link;
     };
-    std::optional<CheckLinkResult> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t partition_A, uint32_t partition_B, int chain_index)
+    std::optional<CheckLinkResult> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t partition_A, uint32_t partition_B, const size_t chain_index)
     {
         FragmentsPattern pattern = proof_core_.requiredPatternFromChallenge(challenge);
 

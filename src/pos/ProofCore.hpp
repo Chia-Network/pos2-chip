@@ -541,7 +541,7 @@ public:
 
     // link_index 0 is first quality link added by passsing fragment scan filter
     // link_index 1 starts using CHAINING_FACTORS[0] and so on.
-    uint32_t quality_chain_pass_threshold(int link_index)
+    uint32_t quality_chain_pass_threshold(const size_t link_index)
     {
 // 1) compute pass probability
 #ifdef USE_UPFRONT_CHAINING_FACTOR
@@ -643,7 +643,7 @@ public:
         return filtered_links;
     }
 
-    std::vector<NewLinksResult> getNewLinksForChain(BlakeHash::Result256 current_challenge, const std::vector<QualityLink> &link_set, int link_index) // , uint32_t lower_partition, uint32_t upper_partition)
+    std::vector<NewLinksResult> getNewLinksForChain(BlakeHash::Result256 current_challenge, const std::vector<QualityLink> &link_set, const size_t link_index) // , uint32_t lower_partition, uint32_t upper_partition)
     {
         uint32_t qc_pass_threshold = quality_chain_pass_threshold(link_index);
 
