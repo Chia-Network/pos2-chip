@@ -73,18 +73,28 @@ jobs:
           echo "CC=clang" >> $GITHUB_ENV
       - name: Build
         run: |
-          cmake -B build -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -G Ninja --toolchain ${{ matrix.toolchain }}.cmake
+          cmake -B build -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=${{ matrix.mode }} --toolchain ${{ matrix.toolchain }}.cmake
           cmake --build build --config ${{ matrix.mode }}
       - name: Test
         run: |
             cd build
-            ctest --output-on-failure -j 4
+            ctest --output-on-failure -j 4 -C ${{ matrix.mode }}
+      - name: Plotter (Windows)
+        if: ${{ startsWith(matrix.os, 'windows') }}
+        run: |
+          build\src\tools\plotter\${{ matrix.mode }}\plotter.exe test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF 2
+          build\src\tools\prover\${{ matrix.mode }}\prover.exe challenge 5700000000000000000000000000000000000000000000000000000000000000 plot_18_2_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin 1
       - name: Plotter
+        if: ${{ !startsWith(matrix.os, 'windows') }}
         run: |
           build/src/tools/plotter/plotter test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF 2
           build/src/tools/prover/prover challenge 5700000000000000000000000000000000000000000000000000000000000000 plot_18_2_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin 1
+      - name: Benchmark (Windows)
+        if: ${{ matrix.mode == 'Release' && startsWith(matrix.os, 'windows') }}
+        run: |
+          build\src\tools\solver\${{ matrix.mode }}\solver.exe benchmark 28
       - name: Benchmark
-        if: ${{ matrix.mode == 'Release' }}
+        if: ${{ matrix.mode == 'Release' && !startsWith(matrix.os, 'windows') }}
         run: |
           build/src/tools/solver/solver benchmark 28
 

@@ -1,10 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
 project(pos2-chip LANGUAGES C CXX)
-if (MSVC)
-    add_compile_options(/W4)
-else()
-    add_compile_options(-Wall -Wextra -pedantic)
-endif()
 
 enable_testing()
 
@@ -17,6 +12,13 @@ set(CMAKE_CXX_EXTENSIONS        OFF)
 
 # ─── Subprojects ───────────────────────
 add_subdirectory(lib/fse)
+
+if (MSVC)
+    add_compile_options(/W4)
+else()
+    add_compile_options(-Wall -Wextra -pedantic)
+endif()
+
 add_subdirectory(src/tools/plotter)
 add_subdirectory(src/tools/solver)
 add_subdirectory(src/tools/prover)
