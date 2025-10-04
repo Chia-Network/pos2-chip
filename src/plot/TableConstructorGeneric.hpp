@@ -131,10 +131,7 @@ public:
         return pairs;
     }
 
-    virtual PairingCandidate matching_target(const PairingCandidate &/*prev_table_pair*/, uint32_t /*match_key_r*/)
-    {
-        throw std::runtime_error("matching_target not implemented");
-    }
+    virtual PairingCandidate matching_target(const PairingCandidate &/*prev_table_pair*/, uint32_t /*match_key_r*/) = 0;
 
     virtual void handle_pair(const PairingCandidate &/*l_candidate*/,
                              const PairingCandidate &/*r_candidate*/,
@@ -301,7 +298,7 @@ public:
     }
 
     // matching_target => (meta_l, r_match_target)
-    Xs_Candidate matching_target(const Xs_Candidate &prev_table_pair, const uint32_t match_key_r)
+    Xs_Candidate matching_target(const Xs_Candidate &prev_table_pair, const uint32_t match_key_r) override
     {
         // The "prev_table_pair" from Xs is: [ x, match_info ]
         // But for T1 we only need x => call matching_target(1, x, match_key_r).
@@ -352,7 +349,7 @@ public:
     }
 
     // matching_target => (meta_l, r_match_target)
-    T1Pairing matching_target(const T1Pairing &prev_table_pair, const uint32_t match_key_r)
+    T1Pairing matching_target(const T1Pairing &prev_table_pair, const uint32_t match_key_r) override
     {
         uint64_t meta_l = prev_table_pair.meta;
         uint32_t r_match_target = proof_core_.matching_target(2, meta_l, match_key_r);

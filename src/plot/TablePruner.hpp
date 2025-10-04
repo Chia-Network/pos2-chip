@@ -159,7 +159,7 @@ public:
     {
         size_t t3_pruned_index = 0;
         t3_new_mapping.clear();
-        t3_new_mapping.resize(t3_proof_fragments.size(), -1);
+        t3_new_mapping.resize(t3_proof_fragments.size(), std::numeric_limits<uint64_t>::max());
 
         // Prepare lateral partition ranges
         T4ToT3LateralPartitionRanges ranges(params_.get_num_partitions() * 2, {t3_proof_fragments.size(), 0});
