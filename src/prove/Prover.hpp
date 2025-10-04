@@ -519,9 +519,16 @@ public:
     {
         std::cout << "Prover Stats:" << std::endl;
         std::cout << "  Number of scan filter passed: " << stats_.num_scan_filter_passed << std::endl;
-        std::cout << "  Number of fragments passed scan filter: " << stats_.num_fragments_passed_scan_filter << " (" << (stats_.num_fragments_passed_scan_filter * 100.0 / stats_.num_scan_filter_passed) << "%)" << std::endl;
-        std::cout << "  Number of first chain links: " << stats_.num_first_chain_links << " (" << (stats_.num_first_chain_links * 100.0 / stats_.num_fragments_passed_scan_filter) << "%)" << std::endl;
-        std::cout << "  Number of quality chains found: " << stats_.num_quality_chains << " (" << (stats_.num_quality_chains * 100.0 / stats_.num_first_chain_links) << "%)" << std::endl;
+        std::cout << "  Number of fragments passed scan filter: "
+            << static_cast<double>(stats_.num_fragments_passed_scan_filter) << " ("
+            << (static_cast<double>(stats_.num_fragments_passed_scan_filter) * 100.0 / static_cast<double>(stats_.num_scan_filter_passed))
+            << "%)" << std::endl;
+        std::cout << "  Number of first chain links: " << static_cast<double>(stats_.num_first_chain_links) << " ("
+            << (static_cast<double>(stats_.num_first_chain_links) * 100.0 / static_cast<double>(stats_.num_fragments_passed_scan_filter))
+            << "%)" << std::endl;
+        std::cout << "  Number of quality chains found: " << static_cast<double>(stats_.num_quality_chains) << " ("
+            << (static_cast<double>(stats_.num_quality_chains) * 100.0 / static_cast<double>(stats_.num_first_chain_links))
+            << "%)" << std::endl;
     }
 
     ProofParams getProofParams() const
@@ -549,8 +556,8 @@ private:
     struct stats
     {
         int num_scan_filter_passed = 0;
-        int num_fragments_passed_scan_filter = 0;
+        size_t num_fragments_passed_scan_filter = 0;
         int num_first_chain_links = 0;
-        int num_quality_chains = 0;
+        size_t num_quality_chains = 0;
     } stats_;
 };

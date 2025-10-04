@@ -50,9 +50,14 @@ int main(int argc, char *argv[]) try
         return 1;
     }
 
+    if (strength < 2 || strength > 255) {
+        std::cerr << "Error: strength must be at least 2 and less than 256\n";
+        return 1;
+    }
+
     Timer timer;
     timer.start("Plotting");
-    Plotter plotter(Utils::hexToBytes(plot_id_hex), k, strength);
+    Plotter plotter(Utils::hexToBytes(plot_id_hex), static_cast<uint8_t>(k), static_cast<uint8_t>(strength));
     plotter.setValidate(true);
     PlotData plot = plotter.run();
     timer.stop();

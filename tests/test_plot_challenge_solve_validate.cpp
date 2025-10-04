@@ -19,7 +19,7 @@ TEST_CASE("plot-k18-strength2-4-5")
     // for this test plot was generated with a prover scan to fine a challenge returning one or more quality chains
     for (size_t trial = 0; trial < N_TRIALS; trial++)
     {
-        int plot_strength;
+        uint8_t plot_strength;
         std::string challenge_hex;
         // challenges for trials are found by running "prover check" on a plot of the given strength and proof fragment scan filter
         switch (trial)
@@ -43,7 +43,7 @@ TEST_CASE("plot-k18-strength2-4-5")
             return;
         }
         // run the actual test
-        constexpr int k = 18;
+        constexpr uint8_t k = 18;
         std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
 
         printfln("Creating a k%d strength:%d plot: %s", k, (int)plot_strength, plot_id_hex.c_str());

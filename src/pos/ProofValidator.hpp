@@ -19,7 +19,9 @@ public:
     ProofValidator(const ProofParams &proof_params)
         : params_(proof_params), 
           proof_core_(proof_params),
-          sub_proof_core_(ProofParams(proof_params.get_plot_id_bytes(), proof_params.get_sub_k(), proof_params.get_strength()))
+          sub_proof_core_(ProofParams(proof_params.get_plot_id_bytes(),
+              static_cast<uint8_t>(proof_params.get_sub_k()),
+              proof_params.get_strength()))
     {
         // sub params are used in T4/5
     }
@@ -297,9 +299,9 @@ public:
 
         // The first challenge defines the pattern, scan range, and scan filter for the first fragment.
         FragmentsPattern pattern = proof_core_.requiredPatternFromChallenge(next_challenge);
-        int fragment_position = pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR
-                                    ? static_cast<int>(QualityLinkProofFragmentPositions::RR)
-                                    : static_cast<int>(QualityLinkProofFragmentPositions::LR);
+        const size_t fragment_position = pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR
+                                    ? QualityLinkProofFragmentPositions::RR
+                                    : QualityLinkProofFragmentPositions::LR;
         ProofFragment fragment_passing_scan_filter = full_proof_fragments[fragment_position];
         ProofFragmentScanFilter::ScanRange range = scan_filter.getScanRangeForFilter();
 
@@ -389,9 +391,9 @@ public:
         quality_link.outside_t3_index = 0; // unused, prevents compiler warnings.
         if (pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
         {
-            quality_link.fragments[0] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::LL)];
-            quality_link.fragments[1] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::RL)];
-            quality_link.fragments[2] = proof_fragments[chain_index * 4 + static_cast<int>(QualityLinkProofFragmentPositions::RR)];
+            quality_link.fragments[0] = proof_fragments[chain_index * 4 + QualityLinkProofFragmentPositions::LL];
+            quality_link.fragments[1] = proof_fragments[chain_index * 4 + QualityLinkProofFragmentPositions::RL];
+            quality_link.fragments[2] = proof_fragments[chain_index * 4 + QualityLinkProofFragmentPositions::RR];
             quality_link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;
             // check our data aligns with expected partitions
             uint32_t lateral_partition_ll = proof_core_.fragment_codec.get_lateral_to_t4_partition(quality_link.fragments[0]);

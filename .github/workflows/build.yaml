@@ -71,7 +71,7 @@ jobs:
           echo "CC=clang" >> $GITHUB_ENV
       - name: Build
         run: |
-          cmake -B build -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -G Ninja --toolchain ${{ matrix.toolchain }}.cmake
+          cmake -B build -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCMAKE_BUILD_TYPE=${{ matrix.mode }} --toolchain ${{ matrix.toolchain }}.cmake
           cmake --build build --config ${{ matrix.mode }}
       - name: Test
         run: |

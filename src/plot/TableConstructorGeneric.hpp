@@ -177,10 +177,10 @@ public:
             uint64_t l_end = pairing_candidates_offsets[section_l][num_match_keys];
 
             // For each match_key in [0..num_match_keys_-1]
-            for (size_t match_key_r = 0; match_key_r < num_match_keys; match_key_r++)
+            for (uint32_t match_key_r = 0; match_key_r < num_match_keys; match_key_r++)
             {
-                uint64_t r_start = pairing_candidates_offsets[section_r][match_key_r];
-                uint64_t r_end = pairing_candidates_offsets[section_r][match_key_r + 1];
+                const uint64_t r_start = pairing_candidates_offsets[section_r][match_key_r];
+                const uint64_t r_end = pairing_candidates_offsets[section_r][match_key_r + 1];
 
                 // copy out the R slice
                 std::vector<PairingCandidate> r_candidates;
@@ -264,16 +264,16 @@ public:
 
         x_candidates.reserve(num_groups * 16ULL);
 
-        for (uint64_t x_group = 0; x_group < num_groups; x_group++)
+        for (uint32_t x_group = 0; x_group < num_groups; x_group++)
         {
-            uint64_t base_x = x_group * 16ULL;
+            uint32_t base_x = x_group * 16;
             uint32_t out_hashes[16];
 
-            proof_core_.hashing.g_range_16(static_cast<uint32_t>(base_x), out_hashes);
+            proof_core_.hashing.g_range_16(base_x, out_hashes);
             for (int i = 0; i < 16; i++)
             {
-                uint32_t x = base_x + i;
-                uint32_t match_info = out_hashes[i];
+                const uint32_t x = base_x + i;
+                const uint32_t match_info = out_hashes[i];
                 // Store [ x, match_info ]
                 x_candidates.push_back({match_info, x});
             }
@@ -301,12 +301,12 @@ public:
     }
 
     // matching_target => (meta_l, r_match_target)
-    Xs_Candidate matching_target(const Xs_Candidate &prev_table_pair, uint32_t match_key_r)
+    Xs_Candidate matching_target(const Xs_Candidate &prev_table_pair, const uint32_t match_key_r)
     {
         // The "prev_table_pair" from Xs is: [ x, match_info ]
         // But for T1 we only need x => call matching_target(1, x, match_key_r).
         uint32_t x = prev_table_pair.x;
-        uint32_t r_match_target = proof_core_.matching_target(1, x, (uint32_t)match_key_r);
+        uint32_t r_match_target = proof_core_.matching_target(1, x, match_key_r);
         // Return [ meta_l, match_target ]
         // Here meta_l = x
 
@@ -352,7 +352,7 @@ public:
     }
 
     // matching_target => (meta_l, r_match_target)
-    T1Pairing matching_target(const T1Pairing &prev_table_pair, uint32_t match_key_r)
+    T1Pairing matching_target(const T1Pairing &prev_table_pair, const uint32_t match_key_r)
     {
         uint64_t meta_l = prev_table_pair.meta;
         uint32_t r_match_target = proof_core_.matching_target(2, meta_l, match_key_r);
@@ -375,9 +375,9 @@ public:
             auto r = opt_res.value();
 
             // x_bits becomes x1 >> k/2 bits, x3 >> k/2 bits.
-            uint32_t x_bits_l = (meta_l >> params_.get_k()) >> (params_.get_k() / 2);
-            uint32_t x_bits_r = (meta_r >> params_.get_k()) >> (params_.get_k() / 2);
-            uint32_t x_bits = x_bits_l << (params_.get_k() / 2) | x_bits_r;
+            const uint32_t x_bits_l = static_cast<uint32_t>((meta_l >> params_.get_k()) >> (params_.get_k() / 2));
+            const uint32_t x_bits_r = static_cast<uint32_t>((meta_r >> params_.get_k()) >> (params_.get_k() / 2));
+            const uint32_t x_bits = x_bits_l << (params_.get_k() / 2) | x_bits_r;
 
             T2Pairing pairing{
                 .meta = r.meta,
@@ -427,7 +427,7 @@ public:
     {
     }
 
-    T2Pairing matching_target(const T2Pairing &prev_table_pair, uint32_t match_key_r) override
+    T2Pairing matching_target(const T2Pairing &prev_table_pair, const uint32_t match_key_r) override
     {
         uint32_t r_match_target = proof_core_.matching_target(3, prev_table_pair.meta, match_key_r);
         return T2Pairing{
@@ -574,7 +574,7 @@ public:
     {
     }
 
-    T3PartitionedPairing matching_target(const T3PartitionedPairing &prev_table_pair, uint32_t match_key_r) override
+    T3PartitionedPairing matching_target(const T3PartitionedPairing &prev_table_pair, const uint32_t match_key_r) override
     {
         uint32_t r_match_target = proof_core_.matching_target(4, prev_table_pair.meta, match_key_r);
         return T3PartitionedPairing{
@@ -686,7 +686,7 @@ public:
     {
     }
 
-    T4PairingPropagation matching_target(const T4PairingPropagation &prev_table_pair, uint32_t match_key_r) override
+    T4PairingPropagation matching_target(const T4PairingPropagation &prev_table_pair, const uint32_t match_key_r) override
     {
         uint32_t r_match_target = proof_core_.matching_target(5, prev_table_pair.meta, match_key_r);
         return T4PairingPropagation{

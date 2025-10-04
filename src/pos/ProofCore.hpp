@@ -77,7 +77,7 @@ enum class FragmentsParent : uint8_t
     PARENT_NODE_IN_OTHER_PARTITION = 1      // other partition, is the r-side partition of the proof fragment passing the scan filter
 };
 
-enum class QualityLinkProofFragmentPositions : int
+enum QualityLinkProofFragmentPositions : size_t
 {
     LL = 0, // left left
     LR = 1, // left right
@@ -208,7 +208,7 @@ public:
 
     // matching_target:
     // Returns a hash value (as uint64_t) computed from meta and match_key.
-    uint32_t matching_target(int table_id, uint64_t meta, uint32_t match_key)
+    uint32_t matching_target(size_t table_id, uint64_t meta, uint32_t match_key)
     {
         size_t num_match_target_bits = params_.get_num_match_target_bits(table_id);
         size_t num_meta_bits = params_.get_num_meta_bits(table_id);
@@ -255,14 +255,14 @@ public:
     // pairing_t2:
     // Input: meta_l and meta_r (each 2k bits).
     // Returns: a T2Pairing with match_info (k bits), meta (2k bits), and x_bits (k bits).
-    std::optional<T2Pairing> pairing_t2(uint64_t meta_l, uint64_t meta_r)
+    std::optional<T2Pairing> pairing_t2(const uint64_t meta_l, const uint64_t meta_r)
     {
         assert(params_.get_num_match_key_bits(2) == 2);
         if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
                             static_cast<uint32_t>(meta_r & 0xFFFFU)))
             return std::nullopt;
         uint64_t in_meta_bits = params_.get_num_pairing_meta_bits();
-        PairingResult pair = hashing.pairing(2, meta_l, meta_r,
+        const PairingResult pair = hashing.pairing(2, meta_l, meta_r,
                                              static_cast<int>(in_meta_bits),
                                              static_cast<int>(params_.get_k()),
                                              static_cast<int>(in_meta_bits));
@@ -270,8 +270,8 @@ public:
         result.match_info = pair.match_info_result;
         result.meta = pair.meta_result;
         uint32_t half_k = params_.get_k() / 2;
-        uint32_t x_bits_l = ((meta_l >> params_.get_k()) >> half_k);
-        uint32_t x_bits_r = ((meta_r >> params_.get_k()) >> half_k);
+        const uint32_t x_bits_l = static_cast<uint32_t>((meta_l >> params_.get_k()) >> half_k);
+        const uint32_t x_bits_r = static_cast<uint32_t>((meta_r >> params_.get_k()) >> half_k);
         result.x_bits = (x_bits_l << half_k) | x_bits_r;
         return result;
     }
@@ -403,10 +403,10 @@ public:
 
     // validate_match_info_pairing:
     // Validates that match_info pairing is correct by comparing extracted sections and targets.
-    bool validate_match_info_pairing(int table_id, uint64_t meta_l, uint32_t match_info_l, uint32_t match_info_r)
+    bool validate_match_info_pairing(const size_t table_id, const uint64_t meta_l, const uint32_t match_info_l, const uint32_t match_info_r)
     {
-        uint32_t section_l = params_.extract_section_from_match_info(table_id, match_info_l);
-        uint32_t section_r = params_.extract_section_from_match_info(table_id, match_info_r);
+        const uint32_t section_l = params_.extract_section_from_match_info(table_id, match_info_l);
+        const uint32_t section_r = params_.extract_section_from_match_info(table_id, match_info_r);
         // For this version, we ignore bipartite logic.
 #ifdef NON_BIPARTITE_BEFORE_T3
         if (table_id <= 3)
@@ -446,8 +446,8 @@ public:
         }
 #endif
 
-        uint32_t match_key_r = params_.extract_match_key_from_match_info(table_id, match_info_r);
-        uint32_t match_target_r = params_.extract_match_target_from_match_info(table_id, match_info_r);
+        const uint32_t match_key_r = params_.extract_match_key_from_match_info(table_id, match_info_r);
+        const uint32_t match_target_r = params_.extract_match_target_from_match_info(table_id, match_info_r);
         if (match_target_r != matching_target(table_id, meta_l, match_key_r))
         {
             // std::cout << "match_target_r " << match_target_r
