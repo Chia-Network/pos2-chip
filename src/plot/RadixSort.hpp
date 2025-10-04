@@ -56,7 +56,7 @@ public:
             for (size_t t = 0; t < num_threads; ++t) {
                 threads.emplace_back([&, t]() {
                     // Reset counts
-                    for (int r = 0; r < radix; ++r)
+                    for (size_t r = 0; r < radix; ++r)
                         counts_by_thread[t][r] = 0;
                     
                     size_t start = num_elements_per_thread * t;
@@ -79,7 +79,7 @@ public:
             // Merge counts to global counts.
             std::vector<uint32_t> counts(radix, 0);
             for (size_t t = 0; t < num_threads; ++t) {
-                for (int r = 0; r < radix; ++r)
+                for (size_t r = 0; r < radix; ++r)
                     counts[r] += counts_by_thread[t][r];
             }
 

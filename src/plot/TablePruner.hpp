@@ -22,7 +22,7 @@ private:
     std::vector<uint8_t> t3_used_entries_bitmask;
 
     // Mapping for t3: maps original t3 index to new (pruned) index.
-    std::vector<int64_t> t3_new_mapping;
+    std::vector<uint64_t> t3_new_mapping;
 
     ProofParams params_;
 
@@ -157,7 +157,7 @@ public:
     // -------------------------------------------------------------------------
     T4ToT3LateralPartitionRanges finalize_t3_and_prepare_mappings_for_t4()
     {
-        int64_t t3_pruned_index = 0;
+        size_t t3_pruned_index = 0;
         t3_new_mapping.clear();
         t3_new_mapping.resize(t3_proof_fragments.size(), -1);
 

@@ -266,7 +266,7 @@ public:
 
         for (uint32_t x_group = 0; x_group < num_groups; x_group++)
         {
-            uint32_t base_x = x_group * 16;
+            const uint32_t base_x = x_group * 16;
             uint32_t out_hashes[16];
 
             proof_core_.hashing.g_range_16(base_x, out_hashes);
