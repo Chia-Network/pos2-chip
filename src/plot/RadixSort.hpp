@@ -39,7 +39,7 @@ public:
             timer.start();
         }
 
-        std::vector<std::vector<int>> counts_by_thread(num_threads, std::vector<int>(radix, 0));
+        std::vector<std::vector<size_t>> counts_by_thread(num_threads, std::vector<size_t>(radix, 0));
         std::vector<std::thread> threads;
         const int num_elements_per_thread = static_cast<int>(num_elements / num_threads);
 

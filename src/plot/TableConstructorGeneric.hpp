@@ -270,7 +270,7 @@ public:
             uint32_t out_hashes[16];
 
             proof_core_.hashing.g_range_16(base_x, out_hashes);
-            for (int i = 0; i < 16; i++)
+            for (uint32_t i = 0; i < 16; i++)
             {
                 const uint32_t x = base_x + i;
                 const uint32_t match_info = out_hashes[i];
@@ -489,7 +489,7 @@ private:
 
         // 1) extract the proof fragments and split index and data into partitioned t3
         std::vector<ProofFragment> proof_fragments(pairings.size());
-        int num_partitions = params_.get_num_partitions() * 2; // two sets of partitions, upper and lower
+        const size_t num_partitions = static_cast<size_t>(params_.get_num_partitions() * 2); // two sets of partitions, upper and lower
         std::vector<std::vector<T3PartitionedPairing>> partitioned_pairs(num_partitions);
 
 #ifdef RETAIN_X_VALUES_TO_T3
@@ -532,7 +532,7 @@ private:
 
         // get maximum count of all partitioned pairs
         uint64_t max_partitioned_pairs = 0;
-        for (int partition_id = 0; partition_id < num_partitions; partition_id++)
+        for (size_t partition_id = 0; partition_id < num_partitions; partition_id++)
         {
             if (partitioned_pairs[partition_id].size() > max_partitioned_pairs)
                 max_partitioned_pairs = partitioned_pairs[partition_id].size();
@@ -541,7 +541,7 @@ private:
         std::vector<T3PartitionedPairing> temp_buffer(max_partitioned_pairs);
 
         // 3) sort by partitioned pairs by match_info
-        for (int partition_id = 0; partition_id < num_partitions; partition_id++)
+        for (size_t partition_id = 0; partition_id < num_partitions; partition_id++)
         {
             // sort by match_info
             RadixSort<T3PartitionedPairing, uint32_t> radix_sort;
