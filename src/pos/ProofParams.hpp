@@ -44,7 +44,7 @@ public:
     }
 
     // Number of match key bits based on table_id (1-5).
-    inline int get_num_match_key_bits(size_t table_id) const
+    inline uint8_t get_num_match_key_bits(size_t table_id) const
     {
         assert(table_id >= 1);
         assert(table_id <= 5);
@@ -77,7 +77,7 @@ public:
     // (Double-check this calculation for T3+ and partition variants if necessary.)
     inline uint32_t get_num_match_target_bits(size_t table_id) const
     {
-        return k_ - get_num_section_bits() - get_num_match_key_bits(table_id);
+        return static_cast<uint32_t>(k_) - get_num_section_bits() - get_num_match_key_bits(table_id);
     }
 
     // Returns the number of meta bits.
@@ -127,14 +127,14 @@ public:
         return plot_id_bytes_;
     }
 
-    int get_k() const
+    uint32_t get_k() const
     {
-        return static_cast<int>(k_);
+        return static_cast<uint32_t>(k_);
     }
 
-    int get_num_partition_bits() const
+    uint32_t get_num_partition_bits() const
     {
-        return static_cast<int>(k_) - get_sub_k();
+        return static_cast<uint32_t>(k_ - get_sub_k());
     }
 
     int get_num_pairing_meta_bits() const

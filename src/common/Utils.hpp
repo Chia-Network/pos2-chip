@@ -56,7 +56,7 @@ class Utils
         std::string hex;
         hex.reserve(bits.size() / 4);
         for (size_t i = 0; i < bits.size(); i += 4) {
-            uint8_t nibble = (bits[i] << 3) | (bits[i+1] << 2) | (bits[i+2] << 1) | bits[i+3];
+            const uint8_t nibble = static_cast<uint8_t>((bits[i] << 3) | (bits[i+1] << 2) | (bits[i+2] << 1) | bits[i+3]);
             hex.push_back(hex_chars[nibble]);
         }
         return hex;
