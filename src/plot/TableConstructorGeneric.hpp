@@ -72,7 +72,7 @@ public:
         size_t right_index = 0;
         const size_t r_size = r_candidates.size();
 
-        int num_match_target_bits = params_.get_num_match_target_bits(table_id_);
+        size_t num_match_target_bits = params_.get_num_match_target_bits(table_id_);
         uint32_t match_target_mask = (1 << num_match_target_bits) - 1;
 
         // We treat r_candidates like an iterator:
@@ -173,7 +173,7 @@ public:
             uint64_t l_end = pairing_candidates_offsets[section_l][num_match_keys];
 
             // For each match_key in [0..num_match_keys_-1]
-            for (size_t match_key_r = 0; match_key_r < num_match_keys; match_key_r++)
+            for (uint32_t match_key_r = 0; match_key_r < num_match_keys; match_key_r++)
             {
                 uint64_t r_start = pairing_candidates_offsets[section_r][match_key_r];
                 uint64_t r_end = pairing_candidates_offsets[section_r][match_key_r + 1];
@@ -260,13 +260,13 @@ public:
 
         x_candidates.reserve(num_groups * 16ULL);
 
-        for (uint64_t x_group = 0; x_group < num_groups; x_group++)
+        for (uint32_t x_group = 0; x_group < num_groups; x_group++)
         {
-            uint64_t base_x = x_group * 16ULL;
+            uint32_t base_x = x_group * 16;
             uint32_t out_hashes[16];
 
-            proof_core_.hashing.g_range_16(static_cast<uint32_t>(base_x), out_hashes);
-            for (int i = 0; i < 16; i++)
+            proof_core_.hashing.g_range_16(base_x, out_hashes);
+            for (uint32_t i = 0; i < 16; i++)
             {
                 uint32_t x = base_x + i;
                 uint32_t match_info = out_hashes[i];
@@ -302,7 +302,7 @@ public:
         // The "prev_table_pair" from Xs is: [ x, match_info ]
         // But for T1 we only need x => call matching_target(1, x, match_key_r).
         uint32_t x = prev_table_pair.x;
-        uint32_t r_match_target = proof_core_.matching_target(1, x, (uint32_t)match_key_r);
+        uint32_t r_match_target = proof_core_.matching_target(1, x, match_key_r);
         // Return [ meta_l, match_target ]
         // Here meta_l = x
 
@@ -371,8 +371,8 @@ public:
             auto r = opt_res.value();
 
             // x_bits becomes x1 >> k/2 bits, x3 >> k/2 bits.
-            uint32_t x_bits_l = (meta_l >> params_.get_k()) >> (params_.get_k() / 2);
-            uint32_t x_bits_r = (meta_r >> params_.get_k()) >> (params_.get_k() / 2);
+            uint32_t x_bits_l = numeric_cast<uint32_t>((meta_l >> params_.get_k()) >> (params_.get_k() / 2));
+            uint32_t x_bits_r = numeric_cast<uint32_t>((meta_r >> params_.get_k()) >> (params_.get_k() / 2));
             uint32_t x_bits = x_bits_l << (params_.get_k() / 2) | x_bits_r;
 
             T2Pairing pairing{
@@ -485,7 +485,7 @@ private:
 
         // 1) extract the proof fragments and split index and data into partitioned t3
         std::vector<ProofFragment> proof_fragments(pairings.size());
-        int num_partitions = params_.get_num_partitions() * 2; // two sets of partitions, upper and lower
+        size_t num_partitions = numeric_cast<size_t>(params_.get_num_partitions() * 2); // two sets of partitions, upper and lower
         std::vector<std::vector<T3PartitionedPairing>> partitioned_pairs(num_partitions);
 
 #ifdef RETAIN_X_VALUES_TO_T3
@@ -528,7 +528,7 @@ private:
 
         // get maximum count of all partitioned pairs
         uint64_t max_partitioned_pairs = 0;
-        for (int partition_id = 0; partition_id < num_partitions; partition_id++)
+        for (size_t partition_id = 0; partition_id < num_partitions; partition_id++)
         {
             if (partitioned_pairs[partition_id].size() > max_partitioned_pairs)
                 max_partitioned_pairs = partitioned_pairs[partition_id].size();
@@ -537,7 +537,7 @@ private:
         std::vector<T3PartitionedPairing> temp_buffer(max_partitioned_pairs);
 
         // 3) sort by partitioned pairs by match_info
-        for (int partition_id = 0; partition_id < num_partitions; partition_id++)
+        for (size_t partition_id = 0; partition_id < num_partitions; partition_id++)
         {
             // sort by match_info
             RadixSort<T3PartitionedPairing, uint32_t> radix_sort;

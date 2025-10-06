@@ -157,7 +157,7 @@ public:
     // -------------------------------------------------------------------------
     T4ToT3LateralPartitionRanges finalize_t3_and_prepare_mappings_for_t4()
     {
-        int64_t t3_pruned_index = 0;
+        size_t t3_pruned_index = 0;
         t3_new_mapping.clear();
         t3_new_mapping.resize(t3_proof_fragments.size(), -1);
 

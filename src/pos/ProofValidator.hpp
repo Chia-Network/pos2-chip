@@ -19,7 +19,9 @@ public:
     ProofValidator(const ProofParams &proof_params)
         : params_(proof_params), 
           proof_core_(proof_params),
-          sub_proof_core_(ProofParams(proof_params.get_plot_id_bytes(), proof_params.get_sub_k(), proof_params.get_strength()))
+          sub_proof_core_(ProofParams(proof_params.get_plot_id_bytes(),
+              numeric_cast<uint8_t>(proof_params.get_sub_k()),
+              proof_params.get_strength()))
     {
         // sub params are used in T4/5
     }
@@ -337,7 +339,7 @@ public:
         // build the Quality Chain by checking each link in sequence.
         QualityChainLinks chain_links;
 
-        for (int quality_chain_index = 0; quality_chain_index < NUM_CHAIN_LINKS; quality_chain_index++)
+        for (size_t quality_chain_index = 0; quality_chain_index < NUM_CHAIN_LINKS; quality_chain_index++)
         {
             auto result = checkLink(full_proof_fragments, next_challenge, l_partition, r_partition, quality_chain_index);
             if (!result.has_value())
@@ -374,7 +376,7 @@ public:
         BlakeHash::Result256 next_challenge;
         QualityLink quality_link;
     };
-    std::optional<CheckLinkResult> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t partition_A, uint32_t partition_B, int chain_index)
+    std::optional<CheckLinkResult> checkLink(const std::vector<ProofFragment> &proof_fragments, BlakeHash::Result256 &challenge, uint32_t partition_A, uint32_t partition_B, size_t chain_index)
     {
         FragmentsPattern pattern = proof_core_.requiredPatternFromChallenge(challenge);
 

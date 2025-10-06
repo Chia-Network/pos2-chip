@@ -46,8 +46,8 @@ public:
         out.write(reinterpret_cast<const char*>(params.get_plot_id_bytes()), 32);
 
         // Write k and strength
-        const uint8_t k = params.get_k();
-        const uint8_t match_key_bits = params.get_match_key_bits();
+        const uint8_t k = numeric_cast<uint8_t>(params.get_k());
+        const uint8_t match_key_bits = numeric_cast<uint8_t>(params.get_match_key_bits());
         out.write(reinterpret_cast<const char*>(&k), 1);
         out.write(reinterpret_cast<const char*>(&match_key_bits), 1);
 

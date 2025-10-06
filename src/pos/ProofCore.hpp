@@ -209,7 +209,7 @@ public:
 
     // matching_target:
     // Returns a hash value (as uint64_t) computed from meta and match_key.
-    uint32_t matching_target(int table_id, uint64_t meta, uint32_t match_key)
+    uint32_t matching_target(size_t table_id, uint64_t meta, uint32_t match_key)
     {
         size_t num_match_target_bits = params_.get_num_match_target_bits(table_id);
         size_t num_meta_bits = params_.get_num_meta_bits(table_id);
@@ -256,7 +256,7 @@ public:
     // pairing_t2:
     // Input: meta_l and meta_r (each 2k bits).
     // Returns: a T2Pairing with match_info (k bits), meta (2k bits), and x_bits (k bits).
-    std::optional<T2Pairing> pairing_t2(uint64_t meta_l, uint64_t meta_r)
+    std::optional<T2Pairing> pairing_t2(const uint64_t meta_l, uint64_t meta_r)
     {
         assert(params_.get_num_match_key_bits(2) == 2);
         if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
@@ -271,8 +271,8 @@ public:
         result.match_info = pair.match_info_result;
         result.meta = pair.meta_result;
         uint32_t half_k = params_.get_k() / 2;
-        uint32_t x_bits_l = ((meta_l >> params_.get_k()) >> half_k);
-        uint32_t x_bits_r = ((meta_r >> params_.get_k()) >> half_k);
+        uint32_t x_bits_l = numeric_cast<uint32_t>((meta_l >> params_.get_k()) >> half_k);
+        uint32_t x_bits_r = numeric_cast<uint32_t>((meta_r >> params_.get_k()) >> half_k);
         result.x_bits = (x_bits_l << half_k) | x_bits_r;
         return result;
     }
@@ -542,7 +542,7 @@ public:
 
     // link_index 0 is first quality link added by passsing fragment scan filter
     // link_index 1 starts using CHAINING_FACTORS[0] and so on.
-    uint32_t quality_chain_pass_threshold(int link_index)
+    uint32_t quality_chain_pass_threshold(size_t link_index)
     {
 // 1) compute pass probability
 #ifdef USE_UPFRONT_CHAINING_FACTOR
@@ -644,7 +644,7 @@ public:
         return filtered_links;
     }
 
-    std::vector<NewLinksResult> getNewLinksForChain(BlakeHash::Result256 current_challenge, const std::vector<QualityLink> &link_set, int link_index) // , uint32_t lower_partition, uint32_t upper_partition)
+    std::vector<NewLinksResult> getNewLinksForChain(BlakeHash::Result256 current_challenge, const std::vector<QualityLink> &link_set, size_t link_index) // , uint32_t lower_partition, uint32_t upper_partition)
     {
         uint32_t qc_pass_threshold = quality_chain_pass_threshold(link_index);
 

@@ -18,6 +18,10 @@
 #include <numeric> // for iota
 #include "common/ParallelForRange.hpp"
 
+#ifdef __cpp_lib_execution
+#include <execution>
+#endif
+
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 #include <xmmintrin.h>
@@ -116,7 +120,7 @@ public:
     };
 
     XBitGroupMappings compress_with_lookup(std::span<uint32_t const> const x_bits_list,
-                                           int const x1_bits)
+                                           size_t const x1_bits)
     {
         int total_ranges = 1 << x1_bits;
         // lookup[v] == -1  → we haven't seen v yet
@@ -201,9 +205,9 @@ public:
         const int x1_bits = num_k_bits_ / 2;
         const int x1_range_size = 1 << (num_k_bits_ - x1_bits);
 
-        const int num_unique_x_pairs = x_bits_group.unique_x_bits_list.size();
-        const int num_match_keys = params_.get_num_match_keys(1);
-        const int num_match_target_hashes = num_unique_x_pairs * x1_range_size * num_match_keys;
+        const size_t num_unique_x_pairs = x_bits_group.unique_x_bits_list.size();
+        const size_t num_match_keys = params_.get_num_match_keys(1);
+        const size_t num_match_target_hashes = num_unique_x_pairs * x1_range_size * num_match_keys;
 
 #ifdef DEBUG_VERIFY
         std::cout << "x1 bits: " << x1_bits << std::endl;
@@ -263,7 +267,7 @@ public:
         timings_.sorting_filtered_x2s += timer.stop();
 
         // Phase 7: Match x1 and x2 entries within corresponding sections.
-        std::vector<T1_Match> t1_matches = matchT1Candidates(x1_hashes, x1s, x2_potential_match_hashes, x2_potential_match_xs, num_match_target_hashes);
+        std::vector<T1_Match> t1_matches = matchT1Candidates(x1_hashes, x1s, x2_potential_match_hashes, x2_potential_match_xs, numeric_cast<int>(num_match_target_hashes));
 
 #ifdef DEBUG_VERIFY
         std::cout << "T1 matches: " << t1_matches.size() << std::endl;
@@ -618,7 +622,7 @@ public:
         int num_k_bits = params_.get_k();
         int num_section_bits = params_.get_num_section_bits();
         int num_T2_match_key_bits = params_.get_num_match_key_bits(2);
-        int num_T2_match_target_bits = params_.get_num_match_target_bits(2);
+        size_t num_T2_match_target_bits = params_.get_num_match_target_bits(2);
 
 #ifdef DEBUG_VERIFY
         std::cout << "num_k_bits: " << num_k_bits << std::endl;
@@ -628,17 +632,17 @@ public:
 #endif
 
         const int HASHES_BITMASK_SIZE_BITS = num_k_bits - 9;
-        std::vector<uint32_t> hashes_bitmask(1u << HASHES_BITMASK_SIZE_BITS, 0);
+        std::vector<uint32_t> hashes_bitmask(size_t(1) << HASHES_BITMASK_SIZE_BITS, 0);
         std::vector<T1_Match> L_short_list;
 
-        int num_t2_groups = num_x_pairs_ / 2;
+        size_t num_t2_groups = num_x_pairs_ / 2;
         std::vector<std::vector<T2_match>> t2_matches(num_t2_groups);
 
         // Process adjacent groups: group 0 with 1, 2 with 3, etc.
-        for (int t2_group = 0; t2_group < num_t2_groups; ++t2_group)
+        for (size_t t2_group = 0; t2_group < num_t2_groups; ++t2_group)
         {
-            int group_mapping_index_l = t2_group * 2;
-            int group_mapping_index_r = group_mapping_index_l + 1;
+            size_t group_mapping_index_l = t2_group * 2;
+            size_t group_mapping_index_r = group_mapping_index_l + 1;
             int t1_group_l = x_bits_group.mapping[group_mapping_index_l];
             int t1_group_r = x_bits_group.mapping[group_mapping_index_r];
 
@@ -863,18 +867,17 @@ public:
         //  to find which of the 128 groups it belongs to.
         //  Then we push all matches into their own groups defined by x1.
         // A "group" is basically the nth x-pair in the proof.
-        const int NUM_X1S = x_bit_group_mappings.unique_x_bits_list.size();
-        int t1_num_matches = t1_matches.size();
-        int max_matches_per_x_range = t1_num_matches * 2 / NUM_X1S;
+        const size_t NUM_X1S = x_bit_group_mappings.unique_x_bits_list.size();
+        size_t t1_num_matches = t1_matches.size();
+        size_t max_matches_per_x_range = t1_num_matches * 2 / NUM_X1S;
         std::vector<std::vector<T1_Match>> match_lists(NUM_X1S, std::vector<T1_Match>());
         for (auto &list : match_lists)
         {
             list.reserve(max_matches_per_x_range);
         }
 
-        for (int i = 0; i < t1_num_matches; i++)
+        for (T1_Match const& match : t1_matches)
         {
-            T1_Match match = t1_matches[i];
             uint32_t x1_bit_dropped = match.x1 >> (num_k_bits - x1_bits);
             int lookup_index = x_bit_group_mappings.lookup[x1_bit_dropped];
 #ifdef DEBUG_VERIFY
@@ -1459,7 +1462,7 @@ public:
     }
 
     void filterX2Candidates(const std::vector<uint32_t> &x1_bitmask,
-                            int num_x_pairs,
+                            size_t num_x_pairs,
                             std::vector<uint32_t> &x2_potential_match_xs,
                             std::vector<uint32_t> &x2_potential_match_hashes)
     {
@@ -1476,8 +1479,8 @@ public:
 
         const int x1_bits = num_k_bits / 2;
         const int x1_range_size = 1 << (num_k_bits - x1_bits);
-        const int num_match_keys = params_.get_num_match_keys(1);
-        const int num_match_target_hashes =
+        const size_t num_match_keys = params_.get_num_match_keys(1);
+        const size_t num_match_target_hashes =
             num_x_pairs * x1_range_size * num_match_keys;
 
         double hit_probability =
@@ -1650,7 +1653,7 @@ public:
     }
 
     void filterX2CandidatesBiPartite(const std::vector<uint32_t> &x1_bitmask,
-                                     int num_x_pairs,
+                                     size_t num_x_pairs,
                                      std::vector<uint32_t> &x2_potential_match_xs,
                                      std::vector<uint32_t> &x2_potential_match_hashes)
     {
@@ -1669,15 +1672,15 @@ public:
 
         const int x1_bits = num_k_bits / 2;
         const int x1_range_size = 1 << (num_k_bits - x1_bits);
-        const int num_match_keys = params_.get_num_match_keys(1);
-        const int num_match_target_hashes =
+        const size_t num_match_keys = params_.get_num_match_keys(1);
+        const size_t num_match_target_hashes =
             num_x_pairs * x1_range_size * num_match_keys;
 
         double hit_probability =
             double(num_match_target_hashes) /
             double(NUM_XS >> this->bitmask_shift_);
         const uint64_t estimated_matches =
-            uint64_t(hit_probability * NUM_XS);
+            uint64_t(hit_probability * double(NUM_XS));
 
         size_t MAX_RESULTS_PER_THREAD = 2 * estimated_matches / num_threads;
 
@@ -1883,7 +1886,7 @@ public:
                           std::vector<uint32_t> &x1s,
                           std::vector<uint32_t> &x1_hashes)
     {
-        const int num_match_keys = params_.get_num_match_keys(1);
+        const size_t num_match_keys = params_.get_num_match_keys(1);
         const int num_k_bits = params_.get_k();
         const int num_section_bits = params_.get_num_section_bits();
         const int num_match_key_bits = params_.get_num_match_key_bits(1);
@@ -1937,7 +1940,7 @@ public:
                     std::size_t offset = static_cast<std::size_t>(x - x1_range_start);
 
                     // for each match_key compute target and final hash, write into precomputed slot
-                    for (int match_key = 0; match_key < num_match_keys; ++match_key)
+                    for (uint32_t match_key = 0; match_key < numeric_cast<uint32_t>(num_match_keys); ++match_key)
                     {
                         uint32_t matching_target = proof_core.matching_target(1, x, match_key);
                         uint32_t section_bits =
@@ -1946,7 +1949,7 @@ public:
                             proof_core.matching_section(section_bits);
                         uint32_t hash = (matching_section << (num_k_bits - num_section_bits)) | (match_key << (num_k_bits - num_section_bits - num_match_key_bits)) | matching_target;
 
-                        std::size_t write_idx = base + std::size_t(match_key) * x1_range_size + offset;
+                        size_t write_idx = base + match_key * x1_range_size + offset;
                         x1s[write_idx] = x;
                         x1_hashes[write_idx] = hash;
                     }
@@ -1965,11 +1968,11 @@ public:
         std::vector<uint32_t> &x1s,
         std::vector<uint32_t> &x1_hashes)
     {
-        const int num_match_keys = params_.get_num_match_keys(1);
+        const size_t num_match_keys = params_.get_num_match_keys(1);
         const int num_k_bits = params_.get_k();
         const int num_section_bits = params_.get_num_section_bits();
         const int num_match_key_bits = params_.get_num_match_key_bits(1);
-        const int NUM_X1S = static_cast<int>(x_bits_list.size());
+        const size_t NUM_X1S = x_bits_list.size();
         const uint32_t last_section_l = params_.get_num_sections() / 2 - 1;
 
         Timer timer;
@@ -1987,7 +1990,7 @@ public:
         std::vector<std::vector<uint32_t>> tmp_hashes(NUM_X1S);
 
         // Reserve a rough upper bound so we avoid repeated reallocations.
-        for (int i = 0; i < NUM_X1S; ++i)
+        for (size_t i = 0; i < NUM_X1S; ++i)
         {
             tmp_x1s[i].reserve(x1_range_size * num_match_keys);
             tmp_hashes[i].reserve(x1_range_size * num_match_keys);
@@ -2009,7 +2012,7 @@ public:
                 auto &local_x1s = tmp_x1s[x1_index];
                 auto &local_hashs = tmp_hashes[x1_index];
 
-                for (int match_key = 0; match_key < num_match_keys; ++match_key)
+                for (uint32_t match_key = 0; match_key < numeric_cast<uint32_t>(num_match_keys); ++match_key)
                 {
                     for (uint32_t x = x1_range_start;
                          x < x1_range_start + x1_range_size;
@@ -2042,7 +2045,7 @@ public:
                         uint32_t matching_section_shifted =
                             matching_section << (num_k_bits - num_section_bits);
                         uint32_t match_key_shifted =
-                            match_key << (num_k_bits - num_section_bits - num_match_key_bits);
+                            numeric_cast<uint32_t>(match_key << (num_k_bits - num_section_bits - num_match_key_bits));
                         uint32_t new_hash = matching_section_shifted | match_key_shifted | hash;
 
                         local_x1s.push_back(x);
@@ -2065,7 +2068,7 @@ public:
         x1s.reserve(total);
         x1_hashes.reserve(total);
 
-        for (int i = 0; i < NUM_X1S; ++i)
+        for (size_t i = 0; i < NUM_X1S; ++i)
         {
             auto &vx = tmp_x1s[i];
             auto &vh = tmp_hashes[i];
@@ -2128,7 +2131,7 @@ private:
     ProofParams params_;
     ProofSolverTimings timings_;
 
-    int num_x_pairs_ = 0;
+    size_t num_x_pairs_ = 0;
     int bitmask_shift_ = 0;
     bool use_prefetching_ = true;
 };

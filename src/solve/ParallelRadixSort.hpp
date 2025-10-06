@@ -27,7 +27,7 @@ public:
         std::vector<std::vector<int>> counts_by_thread(num_threads, std::vector<int>(radix, 0));
         std::vector<std::thread> threads;
         // get each threads start and end index
-        const int num_elements_per_thread = data.size() / num_threads;
+        const size_t num_elements_per_thread = data.size() / num_threads;
 
         for (int pass = 0; pass < num_passes; ++pass) {
             if (verbose)
@@ -167,7 +167,7 @@ public:
 
         std::vector<std::vector<int>> counts_by_thread(num_threads, std::vector<int>(radix, 0));
         std::vector<std::thread> threads;
-        const int num_elements_per_thread = keys.size() / num_threads;
+        const size_t num_elements_per_thread = keys.size() / num_threads;
 
         for (int pass = 0; pass < num_passes; ++pass) {
             if (verbose) {
