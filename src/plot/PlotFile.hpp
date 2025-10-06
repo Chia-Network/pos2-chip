@@ -33,7 +33,7 @@ public:
     // 48 bytes: farmer public key
     // 32 bytes: local secret key
     // Write PlotData to a binary file.
-    static void writeData(const std::string &filename, PlotData const &data, ProofParams const &params)
+    static void writeData(const std::string &filename, PlotData const &data, ProofParams const &params, std::span<uint8_t const, 32 + 48 + 32> const memo)
     {
         std::ofstream out(filename, std::ios::binary);
         if (!out)
@@ -51,9 +51,7 @@ public:
         out.write(reinterpret_cast<const char*>(&k), 1);
         out.write(reinterpret_cast<const char*>(&match_key_bits), 1);
 
-        // TODO: write memo
-        std::vector<char> memo(32 + 48 + 32, 0);
-        out.write(memo.data(), memo.size());
+        out.write(reinterpret_cast<char const*>(memo.data()), memo.size());
 
         // Write plot data
         writeVector(out, data.t3_proof_fragments);
