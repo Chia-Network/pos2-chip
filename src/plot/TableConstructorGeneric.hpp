@@ -62,8 +62,8 @@ public:
     }
 
     std::vector<T_Pairing> find_pairs(
-        const std::vector<PairingCandidate> &l_targets,
-        const std::vector<PairingCandidate> &r_candidates)
+        const std::span<PairingCandidate const> &l_targets,
+        const std::span<PairingCandidate const> &r_candidates)
     {
         std::vector<T_Pairing> pairs;
         pairs.reserve(std::max(l_targets.size(), r_candidates.size()));
@@ -77,16 +77,12 @@ public:
 
         // We treat r_candidates like an iterator:
         bool have_r_candidate = (r_size > 0);
-        PairingCandidate current_r;
-        if (have_r_candidate)
-        {
-            current_r = r_candidates[0];
-        }
+        size_t current_r_idx = 0;
 
         while (left_index < l_targets.size() && have_r_candidate)
         {
             uint32_t match_target_l = l_targets[left_index].match_info;
-            uint32_t match_target_r = (current_r.match_info & match_target_mask);
+            uint32_t match_target_r = (r_candidates[current_r_idx].match_info & match_target_mask);
 
             if (match_target_l == match_target_r)
             {
@@ -95,14 +91,14 @@ public:
                 while (start_i < l_targets.size() &&
                        (l_targets[start_i].match_info == match_target_r))
                 {
-                    handle_pair(l_targets[start_i], current_r, pairs, start_i, right_index);
+                    handle_pair(l_targets[start_i], r_candidates[current_r_idx], pairs, start_i, right_index);
                     start_i++;
                 }
                 // Advance the right side
                 right_index++;
                 if (right_index < r_size)
                 {
-                    current_r = r_candidates[right_index];
+                    current_r_idx = right_index;
                 }
                 else
                 {
@@ -115,7 +111,7 @@ public:
                 right_index++;
                 if (right_index < r_size)
                 {
-                    current_r = r_candidates[right_index];
+                    current_r_idx = right_index;
                 }
                 else
                 {

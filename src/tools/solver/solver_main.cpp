@@ -300,12 +300,12 @@ try
                 return 1;
             }
         }
-        catch (const std::invalid_argument &e)
+        catch (const std::invalid_argument &)
         {
             std::cerr << "Error: k-size must be an integer." << std::endl;
             return 1;
         }
-        catch (const std::out_of_range &e)
+        catch (const std::out_of_range &)
         {
             std::cerr << "Error: k-size out of range." << std::endl;
             return 1;

@@ -71,9 +71,9 @@ is_debugger_present()
             }
         }
         return false;
+    #else
+        return false;
     #endif
-
-    return false;
 }
 
 // Helper to break on the assertion failure when debugging a test.
