@@ -114,7 +114,7 @@ try
             std::cerr << "Error: derived k from proof length is invalid: " << k << std::endl;
             return 1;
         }
-        std::string challenge_hex = argv[4];
+        challenge_hex = argv[4];
         if (challenge_hex.length() != 64)
         {
             std::cerr << "Error: challenge must be 64 hex characters." << std::endl;
@@ -128,7 +128,7 @@ try
             return 1;
         }
 
-        int proof_fragment_scan_filter_bits = std::stoi(argv[6]);
+        proof_fragment_scan_filter_bits = std::stoi(argv[6]);
         if (proof_fragment_scan_filter_bits < 0 || proof_fragment_scan_filter_bits > 16)
         {
             std::cerr << "Error: proofFragmentScanFilterBits must be between 0 and 16." << std::endl;
