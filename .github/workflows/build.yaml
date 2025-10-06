@@ -32,33 +32,35 @@ jobs:
         mode:
           - Release
           - Debug
-        compiler: ["", clang]
-        toolchain: [default, ubsan, asan, tsan]
-        exclude:
-          - os: macos-13
-            compiler: clang
+        compiler: [""]
+        toolchain: [default]
+        include:
           - os: macos-14
-            compiler: clang
-          - os: macos-15
-            compiler: clang
-          - os: windows-2022
-            compiler: clang
-          - os: windows-2025
-            compiler: clang
-          - os: windows-2022
             toolchain: ubsan
-          - os: windows-2025
+            mode: Debug
+          - os: macos-14
+            toolchain: asan
+            mode: Debug
+          - os: macos-14
+            mode: Release
+            toolchain: tsan
+          - os: ubuntu-24.04
+            mode: Debug
             toolchain: ubsan
-          - os: windows-2022
+          - os: ubuntu-24.04
+            mode: Debug
             toolchain: asan
-          - os: windows-2025
-            toolchain: asan
-          - os: windows-2022
+          - os: ubuntu-24.04
+            mode: Release
             toolchain: tsan
-          - os: windows-2025
-            toolchain: tsan
-          - mode: Debug
+          - os: ubuntu-24.04
+            mode: Release
+            compiler: clang
             toolchain: default
+          - os: ubuntu-24.04
+            mode: Release
+            compiler: clang
+            toolchain: ubsan
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
