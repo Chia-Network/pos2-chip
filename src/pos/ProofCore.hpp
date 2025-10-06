@@ -78,7 +78,7 @@ enum class FragmentsParent : uint8_t
     PARENT_NODE_IN_OTHER_PARTITION = 1      // other partition, is the r-side partition of the proof fragment passing the scan filter
 };
 
-enum class QualityLinkProofFragmentPositions : int
+enum QualityLinkProofFragmentPositions : size_t
 {
     LL = 0, // left left
     LR = 1, // left right
