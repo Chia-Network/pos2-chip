@@ -301,7 +301,7 @@ public:
     }
 
     // matching_target => (meta_l, r_match_target)
-    Xs_Candidate matching_target(const Xs_Candidate &prev_table_pair, uint32_t match_key_r)
+    Xs_Candidate matching_target(const Xs_Candidate &prev_table_pair, uint32_t match_key_r) override
     {
         // The "prev_table_pair" from Xs is: [ x, match_info ]
         // But for T1 we only need x => call matching_target(1, x, match_key_r).
@@ -318,7 +318,7 @@ public:
                      const Xs_Candidate &r_candidate,
                      std::vector<T1Pairing> &pairs,
                      size_t /*left_index*/,
-                     size_t /*right_index*/)
+                     size_t /*right_index*/) override
     {
         uint32_t x_left = l_candidate.x;
         uint32_t x_right = r_candidate.x;
@@ -329,7 +329,7 @@ public:
         }
     }
 
-    std::vector<T1Pairing> post_construct(std::vector<T1Pairing> &pairings) const
+    std::vector<T1Pairing> post_construct(std::vector<T1Pairing> &pairings) const override
     {
         RadixSort<T1Pairing, uint32_t> radix_sort;
         std::vector<T1Pairing> temp_buffer(pairings.size());
@@ -352,7 +352,7 @@ public:
     }
 
     // matching_target => (meta_l, r_match_target)
-    T1Pairing matching_target(const T1Pairing &prev_table_pair, uint32_t match_key_r)
+    T1Pairing matching_target(const T1Pairing &prev_table_pair, uint32_t match_key_r) override
     {
         uint64_t meta_l = prev_table_pair.meta;
         uint32_t r_match_target = proof_core_.matching_target(2, meta_l, match_key_r);
@@ -365,7 +365,7 @@ public:
                      const T1Pairing &r_candidate,
                      std::vector<T2Pairing> &pairs,
                      size_t /*left_index*/,
-                     size_t /*right_index*/)
+                     size_t /*right_index*/) override
     {
         uint64_t meta_l = l_candidate.meta;
         uint64_t meta_r = r_candidate.meta;
@@ -396,7 +396,7 @@ public:
         }
     }
 
-    std::vector<T2Pairing> post_construct(std::vector<T2Pairing> &pairings) const
+    std::vector<T2Pairing> post_construct(std::vector<T2Pairing> &pairings) const override
     {
         RadixSort<T2Pairing, uint32_t> radix_sort;
         std::vector<T2Pairing> temp_buffer(pairings.size());
