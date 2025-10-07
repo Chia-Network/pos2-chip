@@ -39,7 +39,7 @@ public:
             timer.start();
         }
 
-        std::vector<std::vector<size_t>> counts_by_thread(num_threads, std::vector<size_t>(radix, 0));
+        std::vector<std::vector<uint32_t>> counts_by_thread(num_threads, std::vector<uint32_t>(radix, 0));
         std::vector<std::thread> threads;
         const int num_elements_per_thread = static_cast<int>(num_elements / num_threads);
 
@@ -77,19 +77,19 @@ public:
             }
 
             // Merge counts to global counts.
-            std::vector<size_t> counts(radix, 0);
+            std::vector<uint32_t> counts(radix, 0);
             for (size_t t = 0; t < num_threads; ++t) {
                 for (size_t r = 0; r < radix; ++r)
                     counts[r] += counts_by_thread[t][r];
             }
 
             // Global prefix sum.
-            std::vector<size_t> offsets(radix, 0);
+            std::vector<uint32_t> offsets(radix, 0);
             for (size_t i = 1; i < radix; ++i)
                 offsets[i] = offsets[i - 1] + counts[i - 1];
 
             // Compute per-thread offsets.
-            std::vector<std::vector<size_t>> offsets_for_thread(num_threads, std::vector<size_t>(radix, 0));
+            std::vector<std::vector<uint32_t>> offsets_for_thread(num_threads, std::vector<uint32_t>(radix, 0));
             for (size_t r = 0; r < radix; ++r)
                 offsets_for_thread[0][r] = offsets[r];
             for (size_t t = 1; t < num_threads; ++t) {
