@@ -160,7 +160,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
     return 0;
 }
 
-int benchmark(int k, int plot_strength)
+int benchmark(uint8_t k, uint8_t plot_strength)
 {
     const std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
     // hex to bytes
@@ -237,7 +237,7 @@ int do_exhaustive_test(const std::string &plot_file)
     return 0;
 }
 
-int xbits(const std::string &plot_id_hex, const std::vector<uint32_t> &x_bits_list, int k, int strength)
+int xbits(const std::string &plot_id_hex, const std::vector<uint32_t> &x_bits_list, uint8_t k, uint8_t strength)
 {
     // convert plot_id_hex to bytes
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
@@ -312,7 +312,7 @@ try
         }
 
         std::cout << "Running benchmark with k-size = " << k << " and plot strength = " << plot_strength << std::endl;
-        return benchmark(k, plot_strength);
+        return benchmark(numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(plot_strength));
     }
     else if (mode == "xbits")
     {
@@ -357,9 +357,9 @@ try
 
         // then get string of 256 hex characters for xbits
         std::string xbits_hex = argv[3];
-        int xbits_hex_len = xbits_hex.length();
+        size_t xbits_hex_len = xbits_hex.length();
         std::vector<uint32_t> x_bits_list;
-        int calculated_k = xbits_hex_len / 32; // each uint32_t is 4 hex characters
+        size_t calculated_k = xbits_hex_len / 32; // each uint32_t is 4 hex characters
         std::cout << "xbits_hex length: " << xbits_hex_len << ", calculated k: " << calculated_k << std::endl;
         if (calculated_k < 18 || calculated_k > 32 || (calculated_k % 2) != 0)
         {
@@ -367,7 +367,7 @@ try
             return 1;
         }
         // decompress each x value from k/2 bits.
-        x_bits_list = Utils::compressedHexToKValues(calculated_k / 2, xbits_hex);
+        x_bits_list = Utils::compressedHexToKValues(numeric_cast<int>(calculated_k / 2), xbits_hex);
         if (x_bits_list.size() != 256)
         {
             std::cerr << "Error: xbits_hex does not decode to 256 uint32_t values. Has " << x_bits_list.size() << " instead." << std::endl;
@@ -378,7 +378,7 @@ try
         std::cout << "Running xbits with k-size = " << calculated_k << " plot id: " << plot_id_hex << " xbits = " << xbits_hex << " plot strength = " << plot_strength << std::endl;
         // convert xbits_hex to uint32_t array
 
-        return xbits(plot_id_hex, x_bits_list, calculated_k, plot_strength);
+        return xbits(plot_id_hex, x_bits_list, numeric_cast<uint8_t>(calculated_k), numeric_cast<uint8_t>(plot_strength));
     }
     else
     {

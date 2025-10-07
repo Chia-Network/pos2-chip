@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) try
 
     Timer timer;
     timer.start("Plotting");
-    Plotter plotter(Utils::hexToBytes(plot_id_hex), k, strength);
+    Plotter plotter(Utils::hexToBytes(plot_id_hex), numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(strength));
     plotter.setValidate(true);
     PlotData plot = plotter.run();
     timer.stop();

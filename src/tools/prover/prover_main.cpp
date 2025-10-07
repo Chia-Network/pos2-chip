@@ -104,7 +104,7 @@ try
             return 1;
         }
         std::string proof_hex = argv[3];
-        int proof_hex_len = proof_hex.length();
+        int proof_hex_len = numeric_cast<int>(proof_hex.length());
         k = proof_hex_len * 4 / 512; // each uint32_t is 4 hex characters, and each proof fragment has 8 uint32_t = 32 hex characters
         
         std::cout << "proof length: " << proof_hex_len << std::endl;
@@ -138,7 +138,7 @@ try
         std::cout << "Verifying proof for k=" << k << ", plot ID=" << plot_id_hex << ", challenge=" << challenge_hex << ", proof=" << proof_hex << ", plot_strength=" << plot_strength << ", proofFragmentScanFilterBits=" << proof_fragment_scan_filter_bits << std::endl;
         std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
-        ProofParams params(plot_id.data(), k, plot_strength);
+        ProofParams params(plot_id.data(), numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(plot_strength));
         ProofValidator proof_validator(params);
         // ProofCore proof_core(params);
 
@@ -246,16 +246,16 @@ try
         Prover prover(challenge, plotfile);
         // set random seed
         srand(static_cast<unsigned int>(time(nullptr)));
-        int num_chains_found = 0;
+        size_t num_chains_found = 0;
         for (int i = 0; i < total_trials; i++)
         {
             std::cout << "----------- Trial " << i << "/" << total_trials << " ------ " << std::endl;
             // std::cout << std::hex << (int)challenge[0] << std::dec << std::endl;
 
-            challenge[0] = i & 0xFF;
-            challenge[1] = (i >> 8) & 0xFF;
-            challenge[2] = (i >> 16) & 0xFF;
-            challenge[3] = (i >> 24) & 0xFF;
+            challenge[0] = numeric_cast<uint8_t>(i & 0xFF);
+            challenge[1] = numeric_cast<uint8_t>((i >> 8) & 0xFF);
+            challenge[2] = numeric_cast<uint8_t>((i >> 16) & 0xFF);
+            challenge[3] = numeric_cast<uint8_t>((i >> 24) & 0xFF);
 
             // for (int i = 0; i < 32; i++)
             //{
