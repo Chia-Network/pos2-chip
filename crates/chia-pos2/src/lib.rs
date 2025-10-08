@@ -1,3 +1,4 @@
+use std::ffi::CString;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Result};
 use std::path::{Path, PathBuf};
@@ -9,19 +10,29 @@ pub const NUM_CHAIN_LINKS: usize = 16;
 pub const OUTSIDE_FRAGMENT_IS_LR: u8 = 0; // outside t3 index is RL
 pub const OUTSIDE_FRAGMENT_IS_RR: u8 = 1; // outside t3 index is RR
 
+#[derive(Clone)]
 pub struct PartialProof {
     proof_fragments: [u64; NUM_CHAIN_LINKS * 4],
     strength: u8,
 }
 
+impl Default for PartialProof {
+    fn default() -> Self {
+        Self {
+            proof_fragments: [0; 64],
+            strength: 0,
+        }
+    }
+}
+
 #[repr(C)]
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Result256 {
     r: [u32; 8],
 }
 
 #[repr(C)]
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct QualityLink {
     // there are 2 patterns: either LR or RR is included in the fragment, but never both.
     // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
@@ -32,7 +43,7 @@ struct QualityLink {
 }
 
 #[repr(C)]
-#[derive(Default)]
+#[derive(Default, Clone)]
 /// This object contains a quality proof along with metadata required to look
 /// up the remaining proof fragments from the plot, to form a partial proof
 pub struct QualityChain {
@@ -161,8 +172,6 @@ pub fn create_v2_plot(
     plot_id: &Bytes32,
     memo: &[u8; 32 + 48 + 32],
 ) -> Result<()> {
-    use std::ffi::CString;
-
     let Some(filename) = filename.to_str() else {
         return Err(Error::new(ErrorKind::Other, "invalid path"));
     };
@@ -281,8 +290,6 @@ impl Prover {
         challenge: &Bytes32,
         proof_fragment_scan_filter: u8,
     ) -> Result<Vec<QualityChain>> {
-        use std::ffi::CString;
-
         let Some(plot_path) = self.path.to_str() else {
             return Err(Error::new(ErrorKind::Other, "invalid path"));
         };
@@ -304,8 +311,6 @@ impl Prover {
     }
 
     pub fn get_partial_proof(&self, quality: &QualityChain) -> Result<PartialProof> {
-        use std::ffi::CString;
-
         let Some(plot_path) = self.path.to_str() else {
             return Err(Error::new(ErrorKind::Other, "invalid path"));
         };
