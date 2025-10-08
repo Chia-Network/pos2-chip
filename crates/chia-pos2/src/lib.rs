@@ -103,6 +103,10 @@ pub type Bytes32 = [u8; 32];
 
 pub fn solve_proof(partial_proof: &PartialProof, plot_id: &Bytes32, k: u8) -> Vec<u8> {
     let mut proof = [0_u32; 512];
+    // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
+    // proof must point to exactly 64 proof fragments (each a uint64_t)
+    // plot ID must point to exactly 32 bytes
+    // output must point to exactly 512 32-bit integers
     if !unsafe {
         solve_partial_proof(
             partial_proof.proof_fragments.as_ptr(),
@@ -147,6 +151,10 @@ pub fn validate_proof_v2(
         strength,
         ..Default::default()
     };
+    // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
+    // plot_id must point to 32 bytes
+    // challenge must point to 32 bytes
+    // proof must point to 512 uint32_t
     let valid = unsafe {
         validate_proof(
             plot_id.as_ptr(),
@@ -177,6 +185,14 @@ pub fn create_v2_plot(
     };
 
     let filename = CString::new(filename)?;
+    // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
+    // filename is the full path, null terminated
+    // plot_id must point to 32 bytes of plot ID
+    // memo must point to 32 + 48 + 32 bytes, containing the:
+    // * pool contract puzzle hash
+    // * farmer public key
+    // * plot secret key
+    // returns true on success
     let success: bool = unsafe {
         create_plot(
             filename.as_ptr(),
@@ -297,6 +313,11 @@ impl Prover {
         let plot_path = CString::new(plot_path)?;
 
         let mut results = Vec::<QualityChain>::with_capacity(10);
+        // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
+        // find quality proofs for a challenge.
+        // challenge must point to 32 bytes
+        // plot_file must be a null-terminated string
+        // output must point to "num_outputs" objects
         unsafe {
             let num_results = qualities_for_challenge(
                 plot_path.as_ptr(),
@@ -318,6 +339,11 @@ impl Prover {
         let plot_path = CString::new(plot_path)?;
 
         let mut proof_fragments = [0_u64; NUM_CHAIN_LINKS * 4];
+        // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
+        // turn a quality proof into a partial proof, which can then be solved
+        // into a full proof. output must point to exactly 64 uint64 objects.
+        // They will all be initialized as the partial proof returns true on
+        // success, false on failure
         if unsafe { get_partial_proof(plot_path.as_ptr(), quality, proof_fragments.as_mut_ptr()) } {
             Ok(PartialProof {
                 proof_fragments,
