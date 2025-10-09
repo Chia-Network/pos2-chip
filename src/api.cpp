@@ -44,7 +44,7 @@ uint32_t qualities_for_challenge(
     uint8_t const* challenge,
     uint8_t const proof_fragment_scan_filter,
     QualityChain* output,
-    uint32_t const num_outputs)
+    uint32_t const num_outputs) try
 {
     std::array<uint8_t, 32> c;
     memcpy(c.data(), challenge, 32);
@@ -55,6 +55,10 @@ uint32_t qualities_for_challenge(
     std::copy(ret.begin(), ret.begin() + num_results, output);
     return num_results;
 }
+catch (std::exception const& e) {
+    std::cerr << e.what() << std::endl;
+    return 0;
+}
 
 // turn a quality proof into a partial proof, which can then be solved into a full proof.
 // output must point to exactly 64 uint64 objects. They will all be initialized as the partial proof
@@ -62,7 +66,7 @@ uint32_t qualities_for_challenge(
 bool get_partial_proof(
     char const* plot_file,
     QualityChain const* input,
-    uint64_t* output)
+    uint64_t* output) try
 {
     // We don't need the challenge to turn QualityChain into a partial proof, so just pass in a dummy
     std::array<uint8_t, 32> c{{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -75,6 +79,10 @@ bool get_partial_proof(
     assert(ret.size() == 64);
     std::copy(ret.begin(), ret.end(), output);
     return true;
+}
+catch (std::exception const& e) {
+    std::cerr << e.what() << std::endl;
+    return false;
 }
 
 // proof must point to exactly 64 proof fragments (each a uint64_t)

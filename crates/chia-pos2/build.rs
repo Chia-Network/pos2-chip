@@ -1,4 +1,5 @@
 fn main() {
+    println!("cargo:rerun-if-changed=../../src/api.cpp");
     cc::Build::new()
         .cpp(true)
         .std("c++20")
