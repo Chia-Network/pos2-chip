@@ -467,8 +467,10 @@ public:
         return links;
     }
 
-    std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain chain)
+    std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain const& chain)
     {
+        readPlotFileIfNeeded();
+
         std::vector<uint64_t> proof_fragments;
         #ifdef DEBUG_CHAINING
         std::cout << "Getting all proof fragments for chain with " << chain.chain_links.size() << " links." << std::endl;
@@ -521,9 +523,16 @@ public:
     {
         std::cout << "Prover Stats:" << std::endl;
         std::cout << "  Number of scan filter passed: " << stats_.num_scan_filter_passed << std::endl;
-        std::cout << "  Number of fragments passed scan filter: " << stats_.num_fragments_passed_scan_filter << " (" << (stats_.num_fragments_passed_scan_filter * 100.0 / stats_.num_scan_filter_passed) << "%)" << std::endl;
-        std::cout << "  Number of first chain links: " << stats_.num_first_chain_links << " (" << (stats_.num_first_chain_links * 100.0 / stats_.num_fragments_passed_scan_filter) << "%)" << std::endl;
-        std::cout << "  Number of quality chains found: " << stats_.num_quality_chains << " (" << (stats_.num_quality_chains * 100.0 / stats_.num_first_chain_links) << "%)" << std::endl;
+        std::cout << "  Number of fragments passed scan filter: "
+            << numeric_cast<double>(stats_.num_fragments_passed_scan_filter) << " ("
+            << (numeric_cast<double>(stats_.num_fragments_passed_scan_filter) * 100.0 / numeric_cast<double>(stats_.num_scan_filter_passed))
+            << "%)" << std::endl;
+        std::cout << "  Number of first chain links: " << numeric_cast<double>(stats_.num_first_chain_links) << " ("
+            << (numeric_cast<double>(stats_.num_first_chain_links) * 100.0 / numeric_cast<double>(stats_.num_fragments_passed_scan_filter))
+            << "%)" << std::endl;
+        std::cout << "  Number of quality chains found: " << numeric_cast<double>(stats_.num_quality_chains) << " ("
+            << (numeric_cast<double>(stats_.num_quality_chains) * 100.0 / numeric_cast<double>(stats_.num_first_chain_links))
+            << "%)" << std::endl;
     }
 
     ProofParams getProofParams() const
@@ -551,8 +560,8 @@ private:
     struct stats
     {
         int num_scan_filter_passed = 0;
-        int num_fragments_passed_scan_filter = 0;
+        size_t num_fragments_passed_scan_filter = 0;
         int num_first_chain_links = 0;
-        int num_quality_chains = 0;
+        size_t num_quality_chains = 0;
     } stats_;
 };

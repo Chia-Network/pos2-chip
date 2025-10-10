@@ -6,6 +6,7 @@
 #include <iostream>
 #include <optional>
 #include <limits>
+#include <vector>
 
 #include "ProofParams.hpp"
 #include "ProofHashing.hpp"
@@ -68,7 +69,7 @@ enum class FragmentsParent : uint8_t
     PARENT_NODE_IN_OTHER_PARTITION = 1      // other partition, is the r-side partition of the proof fragment passing the scan filter
 };
 
-enum class QualityLinkProofFragmentPositions : int
+enum QualityLinkProofFragmentPositions : size_t
 {
     LL = 0, // left left
     LR = 1, // left right
@@ -79,7 +80,7 @@ enum class QualityLinkProofFragmentPositions : int
 struct QualityLink
 {
     // there are 2 patterns: either LR or RR is included in the fragment, but never both.
-    ProofFragment fragments[3]; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
+    std::array<ProofFragment, 3> fragments; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
     FragmentsPattern pattern;
     uint64_t outside_t3_index;
 };
@@ -199,7 +200,7 @@ public:
 
     // matching_target:
     // Returns a hash value (as uint64_t) computed from meta and match_key.
-    uint32_t matching_target(int table_id, uint64_t meta, uint32_t match_key)
+    uint32_t matching_target(size_t table_id, uint64_t meta, uint32_t match_key)
     {
         size_t num_match_target_bits = params_.get_num_match_target_bits(table_id);
         size_t num_meta_bits = params_.get_num_meta_bits(table_id);
@@ -246,7 +247,7 @@ public:
     // pairing_t2:
     // Input: meta_l and meta_r (each 2k bits).
     // Returns: a T2Pairing with match_info (k bits), meta (2k bits), and x_bits (k bits).
-    std::optional<T2Pairing> pairing_t2(uint64_t meta_l, uint64_t meta_r)
+    std::optional<T2Pairing> pairing_t2(const uint64_t meta_l, uint64_t meta_r)
     {
         assert(params_.get_num_match_key_bits(2) == 2);
         if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
@@ -261,8 +262,8 @@ public:
         result.match_info = pair.match_info_result;
         result.meta = pair.meta_result;
         uint32_t half_k = params_.get_k() / 2;
-        uint32_t x_bits_l = ((meta_l >> params_.get_k()) >> half_k);
-        uint32_t x_bits_r = ((meta_r >> params_.get_k()) >> half_k);
+        uint32_t x_bits_l = numeric_cast<uint32_t>((meta_l >> params_.get_k()) >> half_k);
+        uint32_t x_bits_r = numeric_cast<uint32_t>((meta_r >> params_.get_k()) >> half_k);
         result.x_bits = (x_bits_l << half_k) | x_bits_r;
         return result;
     }
@@ -596,23 +597,6 @@ public:
         return static_cast<uint32_t>(raw + 0.5L);
     }*/
 
-    // hashes challenge with plot id,
-    // returns hash if passes plot id filter,
-    // otherwise returns null
-    // THE harvester/farmer/node is responsible for checking plot id filter
-    /*std::optional<BlakeHash::Result256> check_plot_id_filter(const uint32_t plot_id_filter, const std::array<uint8_t, 32> &challenge)
-    {
-        BlakeHash::Result256 challenge_plot_id_hash = hashing.challengeWithPlotIdHash(challenge.data());
-
-        const uint32_t PLOT_ID_MASK = (1 << plot_id_filter) - 1; // mask for the plot_id_filter bits
-        // check lowest bits in challenge_plot_id_hash, if all bits are zero it passes.
-        if ((challenge_plot_id_hash.r[0] & PLOT_ID_MASK) == 0)
-        {
-            return challenge_plot_id_hash;
-        }
-        return std::nullopt;
-    }*/
-
     // Determines the required fragments pattern based on the challenge.
     FragmentsPattern requiredPatternFromChallenge(BlakeHash::Result256 challenge)
     {
@@ -678,7 +662,7 @@ public:
         return filtered_links;
     }
 
-    std::vector<NewLinksResult> getNewLinksForChain(BlakeHash::Result256 current_challenge, const std::vector<QualityLink> &link_set, int link_index) // , uint32_t lower_partition, uint32_t upper_partition)
+    std::vector<NewLinksResult> getNewLinksForChain(BlakeHash::Result256 current_challenge, const std::vector<QualityLink> &link_set, size_t link_index) // , uint32_t lower_partition, uint32_t upper_partition)
     {
         uint32_t qc_pass_threshold = quality_chain_pass_threshold(link_index);
 

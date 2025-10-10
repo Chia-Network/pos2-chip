@@ -14,11 +14,11 @@ public:
         return std::chrono::steady_clock::now();
     }
 
-    void start(std::string message = "")
+    void start(std::string msg = "")
     {
-        if (debugOut && message != "")
+        if (debugOut && msg != "")
         {
-            this->message = message;
+            this->message = msg;
             std::cout << message << std::endl;
         }
         start_time_point = now();

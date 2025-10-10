@@ -17,13 +17,14 @@ std::string chainLinksToHex(int k, QualityChainLinks &chain_links)
 {
     // first put all into vector of uint32_t, then compress to k bits
     std::vector<uint32_t> fragment_values;
+    uint64_t mask = (1ULL << k) - 1;
     for (const auto &link : chain_links)
     {
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[0] & ((1 << k) - 1)));
+        fragment_values.push_back(static_cast<uint32_t>(link.fragments[0] & mask));
         fragment_values.push_back(static_cast<uint32_t>(link.fragments[0] >> k));
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[1] & ((1 << k) - 1)));
+        fragment_values.push_back(static_cast<uint32_t>(link.fragments[1] & mask));
         fragment_values.push_back(static_cast<uint32_t>(link.fragments[1] >> k));
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[2] & ((1 << k) - 1)));
+        fragment_values.push_back(static_cast<uint32_t>(link.fragments[2] & mask));
         fragment_values.push_back(static_cast<uint32_t>(link.fragments[2] >> k));
     }
     return Utils::kValuesToCompressedHex(k, fragment_values);
@@ -103,7 +104,7 @@ try
             return 1;
         }
         std::string proof_hex = argv[3];
-        int proof_hex_len = proof_hex.length();
+        int proof_hex_len = numeric_cast<int>(proof_hex.length());
         k = proof_hex_len * 4 / 512; // each uint32_t is 4 hex characters, and each proof fragment has 8 uint32_t = 32 hex characters
         
         std::cout << "proof length: " << proof_hex_len << std::endl;
@@ -113,7 +114,7 @@ try
             std::cerr << "Error: derived k from proof length is invalid: " << k << std::endl;
             return 1;
         }
-        std::string challenge_hex = argv[4];
+        challenge_hex = argv[4];
         if (challenge_hex.length() != 64)
         {
             std::cerr << "Error: challenge must be 64 hex characters." << std::endl;
@@ -127,7 +128,7 @@ try
             return 1;
         }
 
-        int proof_fragment_scan_filter_bits = std::stoi(argv[6]);
+        proof_fragment_scan_filter_bits = std::stoi(argv[6]);
         if (proof_fragment_scan_filter_bits < 0 || proof_fragment_scan_filter_bits > 16)
         {
             std::cerr << "Error: proofFragmentScanFilterBits must be between 0 and 16." << std::endl;
@@ -137,13 +138,18 @@ try
         std::cout << "Verifying proof for k=" << k << ", plot ID=" << plot_id_hex << ", challenge=" << challenge_hex << ", proof=" << proof_hex << ", plot_strength=" << plot_strength << ", proofFragmentScanFilterBits=" << proof_fragment_scan_filter_bits << std::endl;
         std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
-        ProofParams params(plot_id.data(), k, plot_strength);
+        ProofParams params(plot_id.data(), numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(plot_strength));
         ProofValidator proof_validator(params);
         // ProofCore proof_core(params);
 
         std::vector<uint32_t> proof = Utils::compressedHexToKValues(k, proof_hex);
+        if (proof.size() != 512)
+        {
+            std::cerr << "invalid proof" << std::endl;
+            return 1;
+        }
 
-        std::optional<QualityChainLinks> chain = proof_validator.validate_full_proof(proof, challenge, proof_fragment_scan_filter_bits);
+        std::optional<QualityChainLinks> chain = proof_validator.validate_full_proof(std::span<uint32_t, 512>(proof), challenge, proof_fragment_scan_filter_bits);
 
         // get all sub-proofs, which are collections of 32 x-values
         if (chain.has_value())
@@ -240,16 +246,16 @@ try
         Prover prover(challenge, plotfile);
         // set random seed
         srand(static_cast<unsigned int>(time(nullptr)));
-        int num_chains_found = 0;
+        size_t num_chains_found = 0;
         for (int i = 0; i < total_trials; i++)
         {
             std::cout << "----------- Trial " << i << "/" << total_trials << " ------ " << std::endl;
             // std::cout << std::hex << (int)challenge[0] << std::dec << std::endl;
 
-            challenge[0] = i & 0xFF;
-            challenge[1] = (i >> 8) & 0xFF;
-            challenge[2] = (i >> 16) & 0xFF;
-            challenge[3] = (i >> 24) & 0xFF;
+            challenge[0] = numeric_cast<uint8_t>(i & 0xFF);
+            challenge[1] = numeric_cast<uint8_t>((i >> 8) & 0xFF);
+            challenge[2] = numeric_cast<uint8_t>((i >> 16) & 0xFF);
+            challenge[3] = numeric_cast<uint8_t>((i >> 24) & 0xFF);
 
             // for (int i = 0; i < 32; i++)
             //{

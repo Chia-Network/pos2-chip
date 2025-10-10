@@ -1,12 +1,31 @@
 #pragma once
 
 #include <cstdint>
+#include <cassert>
 #include <array>
+#include <span>
 #include <string>
 #include <vector>
 #include <sstream>
 #include <iomanip>
 #include <stdexcept>
+
+// This function acts like static_cast but asserts that the value is unchanged
+// it only affects debug builds
+template <typename To, typename From>
+To numeric_cast(From f) {
+    if constexpr (std::is_signed_v<From> && !std::is_signed_v<To>) {
+        assert(f >= 0);
+        assert(f <= std::numeric_limits<From>::max());
+    }
+    const To ret = static_cast<To>(f);
+    if constexpr (!std::is_signed_v<From> && std::is_signed_v<To>) {
+        assert(ret >= 0);
+        assert(ret <= std::numeric_limits<To>::max());
+    }
+    assert(static_cast<From>(ret) == f);
+    return ret;
+}
 
 class Utils
 {
@@ -20,7 +39,7 @@ class Utils
         return bytes;
     }
 
-    static std::string bytesToHex(const std::array<uint8_t, 32>& bytes) {
+    static std::string bytesToHex(std::span<uint8_t const> const bytes) {
         std::ostringstream oss;
         for (const auto& byte : bytes) {
             oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
@@ -28,7 +47,7 @@ class Utils
         return oss.str();
     }
 
-    static std::string toHex(uint32_t value, size_t width = 8) {
+    static std::string toHex(uint32_t value, int width = 8) {
         std::ostringstream oss;
         oss << std::hex << std::setw(width) << std::setfill('0') << value;
         return oss.str();
@@ -38,9 +57,9 @@ class Utils
         return static_cast<uint32_t>(std::strtoul(hex.c_str(), nullptr, 16));
     }
 
-    static std::string kValuesToCompressedHex(const int k, const std::vector<uint32_t>& proof) {
+    static std::string kValuesToCompressedHex(const int k, std::span<uint32_t const> const proof) {
         // pack k-bit values into a bitstream
-        size_t total_bits = proof.size() * static_cast<size_t>(k);
+        size_t const total_bits = proof.size() * static_cast<size_t>(k);
         std::vector<bool> bits;
         bits.reserve(total_bits);
         for (auto v : proof) {
@@ -55,7 +74,7 @@ class Utils
         std::string hex;
         hex.reserve(bits.size() / 4);
         for (size_t i = 0; i < bits.size(); i += 4) {
-            uint8_t nibble = (bits[i] << 3) | (bits[i+1] << 2) | (bits[i+2] << 1) | bits[i+3];
+            uint8_t nibble = numeric_cast<uint8_t>((bits[i] << 3) | (bits[i+1] << 2) | (bits[i+2] << 1) | bits[i+3]);
             hex.push_back(hex_chars[nibble]);
         }
         return hex;
