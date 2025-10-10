@@ -467,6 +467,8 @@ public:
 
     std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain const& chain)
     {
+        readPlotFileIfNeeded();
+
         std::vector<uint64_t> proof_fragments;
         #ifdef DEBUG_CHAINING
         std::cout << "Getting all proof fragments for chain with " << chain.chain_links.size() << " links." << std::endl;
