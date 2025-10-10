@@ -3,6 +3,9 @@ use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Result};
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
+
 mod bits;
 
 pub const NUM_CHAIN_LINKS: usize = 16;
@@ -233,10 +236,12 @@ impl QualityChain {
 }
 
 /// Farmer wide state for prover
+#[derive(Serialize, Deserialize)]
 pub struct Prover {
     path: PathBuf,
     plot_id: Bytes32,
     puzzle_hash: [u8; 32],
+    #[serde(with = "BigArray")]
     farmer_pk: [u8; 48],
     local_sk: [u8; 32],
     strength: u8,
