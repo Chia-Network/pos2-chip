@@ -113,6 +113,7 @@ TEST_CASE("scan-range")
             last_range_value = UINT64_MAX;
         }
         else {
+            last_range_value = 0;
             // should not happen
             REQUIRE(false);
         }
