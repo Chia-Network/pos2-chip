@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <limits>
 #include <utility>
+#include <bit>
 
 class SafeFractionMath
 {
@@ -10,7 +11,11 @@ public:
     // Helper: bit length of uint64_t
     static inline uint32_t bitlen_u64(uint64_t x)
     {
-        return x ? 64u - static_cast<uint32_t>(__builtin_clzll(x)) : 0u;
+        // number of significant bits; 0 → 0
+        if (x == 0)
+            return 0;
+        constexpr int W = std::numeric_limits<uint64_t>::digits; // 64
+        return static_cast<uint32_t>(W - std::countl_zero(x));
     }
 
     // Helper: right shift with round-to-nearest
@@ -104,7 +109,7 @@ public:
         return static_cast<uint32_t>(result);
 #else
         // Fallback if __int128 not available: downscale to fit 64-bit safely
-        uint32_t nbits = 64u - static_cast<uint32_t>(__builtin_clzll(den));
+        uint32_t nbits = 64u - static_cast<uint32_t>(std::countl_zero(den));
         uint32_t shift = (nbits > 32) ? (nbits - 32) : 0;
         num >>= shift;
         den >>= shift;
