@@ -5,6 +5,8 @@
 #include "BlakeHash.hpp"
 #include <vector>
 
+#define DEBUG_PROOF_FRAGMENT_SCAN_FILTER true
+
 const uint64_t PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS = 13; // 2^13 = 8192
 
 class ProofFragmentScanFilter
@@ -27,11 +29,39 @@ public:
           challenge_(challenge)
     {
 
+        // math needed:
+        // - per_range = t3_exp / numScanRanges()
+        // - filter = 1 / (per_range * (1 << proof_fragment_scan_filter_bits))
+        // - filter_32bit_hash_threshold_ = static_cast<uint32_t>(filter * 0xFFFFFFFF)
+        // in one formula:
+        // filter_32bit_hash_threshold_ = static_cast<uint32_t>( (1 << 32) / (t3_exp / numScanRanges() * (1 << proof_fragment_scan_filter_bits)) )
+        // which simplifies to:
+        // filter_32bit_hash_threshold_ = static_cast<uint32_t>( (1 << 32) * numScanRanges() / (t3_exp * (1 << proof_fragment_scan_filter_bits)) )
+        
         // compute our hashing threshold for the scan filter
+        auto t3_expected_entries = proof_core_.nd_expected_pruned_entries_for_t3();
+
+        uint64_t t3_exp_num = t3_expected_entries.first;
+        uint64_t t3_exp_denom = t3_expected_entries.second;
+        
+        uint64_t per_range_numerator = t3_exp_num;
+        uint64_t per_range_denominator = t3_exp_denom * numScanRanges();
+        uint64_t filter_numerator = (per_range_denominator >> 20) * (1ULL << 32);
+        uint64_t filter_denominator = (per_range_numerator >> 20) * (1ULL << proof_fragment_scan_filter_bits);
+        uint32_t test_threshold = static_cast<uint32_t>(filter_numerator / filter_denominator);
+
         double t3_exp = proof_core_.num_expected_pruned_entries_for_t3();
         double per_range = t3_exp / numScanRanges();
         double filter = 1 / (per_range * (1 << proof_fragment_scan_filter_bits));
         filter_32bit_hash_threshold_ = static_cast<uint32_t>(filter * 0xFFFFFFFF);
+
+        std::cout << "test threshold: " << test_threshold << std::endl;
+        std::cout << "computed filter threshold: " << filter_32bit_hash_threshold_ << std::endl;
+        if (test_threshold != filter_32bit_hash_threshold_)
+        {
+            std::cerr << "Warning: Test threshold does not match computed filter threshold!" << std::endl;
+            exit(23);
+        }
     }
 
     ~ProofFragmentScanFilter() = default;
@@ -46,13 +76,15 @@ public:
     // Scan the plot data for fragments that pass the scan filter
     std::vector<ScanResult> scan(const std::vector<ProofFragment> &fragments)
     {
-        if (true) {
-            std::cout << "Scanning " << fragments.size() << " fragments." << std::endl;
-            /*for (const auto &fragment : fragments)
+        /*#ifdef DEBUG_PROOF_FRAGMENT_SCAN_FILTER
+            //std::cout << "Scanning " << fragments.size() << " fragments." << std::endl;
+            /or (const auto &fragment : fragments)
             {
                 std::cout << "  Fragment: " << std::hex << fragment << std::dec << std::endl;
-            }*/
+            }
         }
+        #endif*/
+
         ScanRange range = getScanRangeForFilter();
         auto in_range = collectFragmentsInRange(fragments, range);
 
@@ -131,14 +163,14 @@ public:
         ScanRange range;
         range.start = scan_span * scan_range_id;
         range.end = scan_span * (scan_range_id + 1) - 1;
-        // debug out
-        if (false)
+        #ifdef DEBUG_PROOF_FRAGMENT_SCAN_FILTER
         {
             std::cout << "Scan range id: " << scan_range_id << std::endl;
             std::cout << "Scan range: " << range.start << " - " << range.end << std::endl;
             std::cout << "Scan range filter bits: " << scan_range_filter_bits << std::endl;
             std::cout << "Scan range selection bits: " << PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS << std::endl;
         }
+        #endif
         return range;
     }
 

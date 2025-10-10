@@ -15,6 +15,8 @@
 #include <string>
 #include <bit>
 
+// #define DEBUG_CHAINING true
+
 // serializes the QualityProof into the form that will be hashed together with
 // the challenge to determine the quality of ths proof. The quality is used to
 // check if it passes the current difficulty. The format is:
@@ -168,10 +170,9 @@ public:
             #ifdef DEBUG_CHAINING
             std::cout << " # First Quality Links: " << firstLinks.size() << std::endl;
             std::cout << " # Links: " << links.size() << std::endl;
-            #endif
 
             // analysis code
-            if (false)
+            if (true)
             {
                 std::set<uint64_t> unique_fragments;
                 std::set<uint64_t> unique_x_bits;
@@ -190,6 +191,7 @@ public:
                 std::cout << "Unique fragments found: " << unique_fragments.size() << std::endl;
                 std::cout << "Unique x-bits found: " << unique_x_bits.size() << std::endl;
             }
+            #endif
 
             // 4) For each Quality Chain, grow and expand the number of chains link by link until we reach the chain length limit (NUM_CHAIN_LINKS).
             for (const auto &firstLink : firstLinks)

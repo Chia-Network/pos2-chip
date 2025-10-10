@@ -145,7 +145,17 @@ public:
 
     int get_sub_k() const
     {
-        // k32/k30/k28 use sub_k of 22/21/20
+        // these are still subject to change
+        switch (k_) {
+            case 32: return 22;
+            case 30: return 21;
+            case 28: return 20;
+            case 26: return 18;
+            case 24: return 16;
+            case 22: return 15;
+            case 20: return 14;
+            case 18: return 14;
+        }
         return k_ / 2 + 6;
     }
 
