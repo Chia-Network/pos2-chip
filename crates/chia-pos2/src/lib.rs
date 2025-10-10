@@ -3,6 +3,9 @@ use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Result};
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
+
 mod bits;
 
 pub const NUM_CHAIN_LINKS: usize = 16;
@@ -233,12 +236,14 @@ impl QualityChain {
 }
 
 /// Farmer wide state for prover
+#[derive(Serialize, Deserialize)]
 pub struct Prover {
     path: PathBuf,
     plot_id: Bytes32,
-    pub puzzle_hash: [u8; 32],
-    pub farmer_pk: [u8; 48],
-    pub local_sk: [u8; 32],
+    puzzle_hash: [u8; 32],
+    #[serde(with = "BigArray")]
+    farmer_pk: [u8; 48],
+    local_sk: [u8; 32],
     strength: u8,
     size: u8,
 }
@@ -364,6 +369,16 @@ impl Prover {
 
     pub fn get_strength(&self) -> u8 {
         self.strength
+    }
+
+    pub fn get_filename(&self) -> String {
+        // This conversion should be safe because the path is constructed from a
+        // string
+        self.path.to_string_lossy().into_owned()
+    }
+
+    pub fn get_memo(&self) -> ([u8; 32], [u8; 48], [u8; 32]) {
+        (self.puzzle_hash, self.farmer_pk, self.local_sk)
     }
 }
 

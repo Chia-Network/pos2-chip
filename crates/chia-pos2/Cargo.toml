@@ -16,6 +16,8 @@ repository = "https://github.com/Chia-Network/pos2/crates/chia-pos2"
 bench = false
 
 [dependencies]
+serde = { workspace = true }
+serde-big-array = { workspace = true }
 
 [build-dependencies]
 cc = { workspace = true }
