@@ -7,6 +7,16 @@
 #include "prove/Prover.hpp"
 #include "common/Timer.hpp"
 
+static double expected_number_of_quality_chains_per_passing_fragment()
+    {
+        double expected = CHAINING_FACTORS[0];
+        for (int i = 1; i < NUM_CHAIN_LINKS - 1; ++i)
+        {
+            expected *= CHAINING_FACTORS[i];
+        }
+        return expected;
+    }
+
 TEST_SUITE_BEGIN("quality-chain");
 
 TEST_CASE("quality-chain-distribution")
@@ -31,7 +41,8 @@ TEST_CASE("quality-chain-distribution")
 
     // create random quality links
     std::vector<QualityLink> links;
-    int num_quality_links = (int)proof_core.expected_quality_links_set_size();
+    auto num_quality_links_precise = proof_core.nd_expected_quality_links_set_size();
+    int num_quality_links = (int) (num_quality_links_precise.first / num_quality_links_precise.second);
     std::cout << "Expected number of quality links: " << num_quality_links << std::endl;
 
     links.reserve(num_quality_links);
@@ -58,7 +69,7 @@ TEST_CASE("quality-chain-distribution")
     std::vector<int> histogram(100, 0); // Histogram for counts of quality chains found
     int64_t total_chains_found = 0;
     size_t maximum_chains_per_trial = 0;
-    double expected_avg_chains_per_trial = proof_core.expected_number_of_quality_chains_per_passing_fragment();
+    double expected_avg_chains_per_trial = (double) expected_number_of_quality_chains_per_passing_fragment();
     std::cout << "Expected average chains per trial: " << expected_avg_chains_per_trial << std::endl;
     // Create a QualityChain with the generated links
 

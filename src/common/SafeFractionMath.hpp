@@ -65,13 +65,6 @@ public:
                 den = 1; // avoid zero denominator
         }
 
-        // Multiply safely
-#ifndef NDEBUG
-        if (mul_num && num > std::numeric_limits<uint64_t>::max() / mul_num)
-            __builtin_trap();
-        if (mul_den && den > std::numeric_limits<uint64_t>::max() / mul_den)
-            __builtin_trap();
-#endif
         num *= mul_num;
         den *= mul_den;
 

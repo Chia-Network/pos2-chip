@@ -503,18 +503,10 @@ public:
         return (((r >> 2) + r) & 3U) == 2;
     }
 
-    // todo: remove once proof fragment no longer uses this
-    double num_expected_pruned_entries_for_t3()
-    {
-        double k_entries = (double)(1UL << params_.get_k());
-        double t3_entries = (FINAL_TABLE_FILTER_D * 4) * k_entries;
-        return t3_entries;
-    }
-
     // returns num/denom pair for expected pruned entries for t3
     std::pair<uint64_t, uint64_t> nd_expected_pruned_entries_for_t3()
     {
-        uint64_t k_entries = (1UL << params_.get_k());
+        uint64_t k_entries = 1UL << static_cast<uint64_t>(params_.get_k());
         uint64_t numerator = FINAL_TABLE_FILTER * 4 * k_entries;
         uint64_t denominator = (1UL << 32);
         return std::make_pair(numerator, denominator);
@@ -527,13 +519,6 @@ public:
         uint64_t num_partitions = static_cast<uint64_t>(params_.get_num_partitions());
         frac = SafeFractionMath::mul_fraction_u64(frac, 2, num_partitions * num_partitions);
         return frac;
-
-        /*std::pair<uint64_t, uint64_t> nd_t3 = nd_expected_pruned_entries_for_t3();
-        uint64_t entries_per_partition_numerator = nd_t3.first;
-        uint64_t entries_per_partition_denominator = nd_t3.second * params_.get_num_partitions();
-        uint64_t quality_links_set_size_numerator = 2 * entries_per_partition_numerator;
-        uint64_t quality_links_set_size_denominator = entries_per_partition_denominator * params_.get_num_partitions();
-        return std::make_pair(quality_links_set_size_numerator, quality_links_set_size_denominator);*/
     }
 
     uint32_t quality_chain_pass_threshold(int link_index)
@@ -545,57 +530,6 @@ public:
         auto chance = SafeFractionMath::mul_fraction_u64(frac, 2 * CHAINING_FACTORS[link_index - 1], 1);
         return SafeFractionMath::map_fraction_to_u32(chance);
     }
-
-    double expected_quality_links_set_size()
-    {
-        double entries_per_partition = num_expected_pruned_entries_for_t3() / (double)params_.get_num_partitions();
-        return 2.0 * entries_per_partition / (double)params_.get_num_partitions();
-    }
-
-    static double expected_number_of_quality_chains_per_passing_fragment()
-    {
-        double expected = CHAINING_FACTORS[0];
-        for (int i = 1; i < NUM_CHAIN_LINKS - 1; ++i)
-        {
-            expected *= CHAINING_FACTORS[i];
-        }
-        return expected;
-    }
-
-    // link_index 0 is first quality link added by passsing fragment scan filter
-    // link_index 1 starts using CHAINING_FACTORS[0] and so on.
-    /*uint32_t quality_chain_pass_threshold(int link_index)
-    {
-        // 1) compute pass probability
-        // pattern selection requires 2x multiplier, since there are 2 patterns (LR and RR)
-        double chance = 2.0 * CHAINING_FACTORS[link_index - 1] / expected_quality_links_set_size();
-
-        // 2) use long double for extra precision
-        long double two_power_32 = 4294967296.0;//<long double>(std::numeric_limits<uint32_t>::max());
-
-        // 3) compute raw threshold
-        long double raw = chance * two_power_32;
-
-        // 4) clamp to avoid overflow
-        if (raw >= two_power_32)
-        {
-            raw = two_power_32;
-        }
-
-        if (false)
-        {
-            // debug output
-            std::cout << "Num expected links for t3: " << (int)num_expected_pruned_entries_for_t3() << std::endl;
-            std::cout << "num_partitions: " << params_.get_num_partitions() << std::endl;
-            std::cout << "expected_quality_links_set_size: " << (int)expected_quality_links_set_size() << std::endl;
-            std::cout << "chance: " << chance << std::endl;
-            std::cout << "raw threshold: " << raw << std::endl;
-            std::cout << "clamped threshold: " << raw << std::endl;
-        }
-
-        // 5) round to nearest integer and return
-        return static_cast<uint32_t>(raw + 0.5L);
-    }*/
 
     // Determines the required fragments pattern based on the challenge.
     FragmentsPattern requiredPatternFromChallenge(BlakeHash::Result256 challenge)
