@@ -508,7 +508,7 @@ public:
     {
         uint64_t k_entries = 1ULL << params_.get_k();
         uint64_t numerator = FINAL_TABLE_FILTER * 4 * k_entries;
-        uint64_t denominator = (1UL << 32);
+        uint64_t denominator = (1ULL << 32);
         return std::make_pair(numerator, denominator);
     }
 

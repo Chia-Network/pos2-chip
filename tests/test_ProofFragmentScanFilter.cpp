@@ -106,9 +106,15 @@ TEST_CASE("scan-range")
         REQUIRE(range.end == (base_scan_range * (1ULL << scan_range_filter_bits) - 1));
         
         // should be same as last range set
-        uint64_t last_range_value = (1ULL << (2 * k)) - 1;
-        if (k == 32) {
+        uint64_t last_range_value;
+        if (k < 32) {
+            last_range_value = (1ULL << (2 * k)) - 1;
+        } else if (k == 32) {
             last_range_value = UINT64_MAX;
+        }
+        else {
+            // should not happen
+            REQUIRE(false);
         }
         std::cout << "** last range value                  : " << last_range_value << std::endl;
         std::cout << "** base scan range                   : " << base_scan_range << std::endl;
