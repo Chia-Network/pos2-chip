@@ -521,7 +521,7 @@ public:
         return frac;
     }
 
-    uint32_t quality_chain_pass_threshold(int link_index)
+    uint32_t quality_chain_pass_threshold(size_t link_index)
     {
         // the math works out to:
         // chance = 2 * CHAINING_FACTORS[link_index - 1] / expected_quality_links_set_size();
