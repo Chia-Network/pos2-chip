@@ -42,7 +42,7 @@ TEST_CASE("quality-chain-distribution")
 
     // create random quality links
     std::vector<QualityLink> links;
-    auto num_quality_links_precise = proof_core.nd_expected_quality_links_set_size();
+    auto num_quality_links_precise = proof_core.expected_quality_links_set_size();
     int num_quality_links = (int) (num_quality_links_precise.first / num_quality_links_precise.second);
     std::cout << "Expected number of quality links: " << num_quality_links << std::endl;
 

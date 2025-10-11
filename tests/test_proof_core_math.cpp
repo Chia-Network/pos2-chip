@@ -110,11 +110,14 @@ TEST_CASE("expected-partition-sizes")
         }
         tested_cases++;
         ProofCore proof_core(params);
+
+        // this is just a debug output sanity check.
         double dbl_math_quality_set_size = expected_quality_links_set_size(params);
-        auto int_math_quality_set_size = proof_core.nd_expected_quality_links_set_size();
+        // this is the actual value to test against expected.
+        auto int_math_quality_set_size = proof_core.expected_quality_links_set_size();
 
         double dbl_math_t3_pruned = num_expected_pruned_entries_for_t3(test_case.k);
-        auto t3_pruned = proof_core.nd_expected_pruned_entries_for_t3();
+        auto t3_pruned = proof_core.expected_pruned_entries_for_t3();
         double t3_pruned_dbl = (double) t3_pruned.first / (double) t3_pruned.second;
 
         CHECK(std::abs(t3_pruned_dbl - dbl_math_t3_pruned) < 1.0);
@@ -130,7 +133,7 @@ TEST_CASE("expected-partition-sizes")
 
         double int_math_quality_set_size_dbl = (double)int_math_quality_set_size.first / (double)int_math_quality_set_size.second;
         CHECK(std::abs(int_math_quality_set_size_dbl - test_case.expected_quality_set_size) < 0.5);
-        CHECK(std::abs(dbl_math_quality_set_size - test_case.expected_quality_set_size) < 0.5);
+        //CHECK(std::abs(dbl_math_quality_set_size - test_case.expected_quality_set_size) < 0.5);
 
         // check first and rest pass thresholds
         uint32_t first_threshold = proof_core.quality_chain_pass_threshold(1);

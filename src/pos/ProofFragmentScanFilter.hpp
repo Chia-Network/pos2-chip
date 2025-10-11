@@ -5,8 +5,6 @@
 #include "BlakeHash.hpp"
 #include <vector>
 
-//#define DEBUG_PROOF_FRAGMENT_SCAN_FILTER true
-
 const int PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS = 13; // 2^13 = 8192
 
 class ProofFragmentScanFilter
@@ -39,7 +37,7 @@ public:
         // filter_32bit_hash_threshold_ = static_cast<uint32_t>( (1 << 32) * numScanRanges() / (t3_exp * (1 << proof_fragment_scan_filter_bits)) )
         
         // compute our hashing threshold for the scan filter
-        auto t3_expected_entries = proof_core_.nd_expected_pruned_entries_for_t3();
+        auto t3_expected_entries = proof_core_.expected_pruned_entries_for_t3();
 
          // per range = t3_expected_entries / numScanRanges()
         // filter = 1 / (per_range * (1 << proof_fragment_scan_filter_bits))
@@ -63,15 +61,6 @@ public:
     // Scan the plot data for fragments that pass the scan filter
     std::vector<ScanResult> scan(const std::vector<ProofFragment> &fragments)
     {
-        /*#ifdef DEBUG_PROOF_FRAGMENT_SCAN_FILTER
-            //std::cout << "Scanning " << fragments.size() << " fragments." << std::endl;
-            /or (const auto &fragment : fragments)
-            {
-                std::cout << "  Fragment: " << std::hex << fragment << std::dec << std::endl;
-            }
-        }
-        #endif*/
-
         ScanRange range = getScanRangeForFilter();
         auto in_range = collectFragmentsInRange(fragments, range);
 
@@ -146,18 +135,10 @@ public:
        
         uint64_t scan_span = getScanSpan();
 
-        // TODO: make sure k32 doesn't overflow
         ScanRange range;
         range.start = scan_span * scan_range_id;
         range.end = scan_span * (scan_range_id + 1) - 1;
-        #ifdef DEBUG_PROOF_FRAGMENT_SCAN_FILTER
-        {
-            std::cout << "Scan range id: " << scan_range_id << std::endl;
-            std::cout << "Scan range: " << range.start << " - " << range.end << std::endl;
-            std::cout << "Scan range filter bits: " << scan_range_filter_bits << std::endl;
-            std::cout << "Scan range selection bits: " << PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS << std::endl;
-        }
-        #endif
+        
         return range;
     }
 

@@ -27,6 +27,7 @@
 // - The solver's performance seems slightly better without bipartite
 // - plotting could be optimized to be faster using bipartite
 // - bipartite may mix less well, and needs more analysis for T4 Partition Attack
+// NOTE: when chip goes into review should remove this macro and use the final chosen branched code.
 #define NON_BIPARTITE_BEFORE_T3 true
 
 // use to reduce T4/T5 relative to T3, T4 and T5 will be approx same size.
@@ -504,7 +505,7 @@ public:
     }
 
     // returns num/denom pair for expected pruned entries for t3
-    std::pair<uint64_t, uint64_t> nd_expected_pruned_entries_for_t3()
+    std::pair<uint64_t, uint64_t> expected_pruned_entries_for_t3()
     {
         uint64_t k_entries = 1ULL << params_.get_k();
         uint64_t numerator = FINAL_TABLE_FILTER * 4 * k_entries;
@@ -512,9 +513,9 @@ public:
         return std::make_pair(numerator, denominator);
     }
 
-    std::pair<uint64_t, uint64_t> nd_expected_quality_links_set_size()
+    std::pair<uint64_t, uint64_t> expected_quality_links_set_size()
     {
-        auto frac = nd_expected_pruned_entries_for_t3();
+        auto frac = expected_pruned_entries_for_t3();
         // cast num partitions to uint64_t
         uint64_t num_partitions = static_cast<uint64_t>(params_.get_num_partitions());
         frac = SafeFractionMath::mul_fraction_u64(frac, 2, num_partitions * num_partitions);
@@ -525,7 +526,7 @@ public:
     {
         // the math works out to:
         // chance = 2 * CHAINING_FACTORS[link_index - 1] / expected_quality_links_set_size();
-        auto frac = nd_expected_quality_links_set_size();
+        auto frac = expected_quality_links_set_size();
         frac = SafeFractionMath::invert_fraction_u64(frac);
         auto chance = SafeFractionMath::mul_fraction_u64(frac, 2 * CHAINING_FACTORS[link_index - 1], 1);
         return SafeFractionMath::map_fraction_to_u32(chance);
