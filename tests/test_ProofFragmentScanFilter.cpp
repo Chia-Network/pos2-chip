@@ -9,14 +9,14 @@ TEST_CASE("scan-range")
 {
     // Setup dummy ProofParams and challenge
     // k list to test:
-    for (uint8_t k : {18, 20, 22, 24, 26, 28, 30, 32})
+    for (int k : {18, 20, 22, 24, 26, 28, 30, 32})
     {
         std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
         //std::array<uint8_t, 32> challenge = {0};
         // challenge is blake hash
         BlakeHash::Result256 challenge = {{0, 0, 0, 0, 0, 0, 0, 0}};
         
-        ProofParams params(Utils::hexToBytes(plot_id_hex).data(), k, 2);
+        ProofParams params(Utils::hexToBytes(plot_id_hex).data(), static_cast<uint8_t>(k), 2);
 
         // debug out params
         params.debugPrint();

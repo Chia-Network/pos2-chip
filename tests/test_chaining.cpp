@@ -8,14 +8,15 @@
 #include "common/Timer.hpp"
 
 static double expected_number_of_quality_chains_per_passing_fragment()
+{
+    // avoid narrowing warnings by doing intermediate computation in long double
+    long double expected_ld = static_cast<long double>(CHAINING_FACTORS[0]);
+    for (int i = 1; i < NUM_CHAIN_LINKS - 1; ++i)
     {
-        double expected = CHAINING_FACTORS[0];
-        for (int i = 1; i < NUM_CHAIN_LINKS - 1; ++i)
-        {
-            expected *= CHAINING_FACTORS[i];
-        }
-        return expected;
+        expected_ld *= static_cast<long double>(CHAINING_FACTORS[i]);
     }
+    return static_cast<double>(expected_ld);
+}
 
 TEST_SUITE_BEGIN("quality-chain");
 
@@ -109,7 +110,7 @@ Maximum chains found in a single trial: 122
         challenge[3] = (i >> 24) & 0xFF;
         prover.setChallenge(challenge);
 
-        ProofCore proof_core(params);
+        //ProofCore proof_core(params);
 
         BlakeHash::Result256 next_challenge = proof_core.hashing.challengeWithPlotIdHash(challenge.data());
         QualityLink firstLink = links[0];
