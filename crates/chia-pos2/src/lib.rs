@@ -15,8 +15,8 @@ pub const OUTSIDE_FRAGMENT_IS_RR: u8 = 1; // outside t3 index is RR
 
 #[derive(Clone)]
 pub struct PartialProof {
-    proof_fragments: [u64; NUM_CHAIN_LINKS * 4],
-    strength: u8,
+    pub proof_fragments: [u64; NUM_CHAIN_LINKS * 4],
+    pub strength: u8,
 }
 
 impl Default for PartialProof {

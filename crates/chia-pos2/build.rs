@@ -5,7 +5,7 @@ fn main() {
         .std("c++20")
         .flag_if_supported("/EHsc")
         .warnings_into_errors(true)
-        .include("../../src")
-        .file("../../src/api.cpp")
+        .include("cpp")
+        .file("cpp/api.cpp")
         .compile("chiapos_c");
 }
