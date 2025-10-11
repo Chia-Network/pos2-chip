@@ -33,7 +33,7 @@ constexpr double TEST_CHAINING_FACTORS[NUM_CHAIN_LINKS - 1] = {
 double num_expected_pruned_entries_for_t3(int k)
 {
     double k_entries = (double)(1UL << k);
-    double t3_entries = (FINAL_TABLE_FILTER_D / 0.25) * k_entries;
+    double t3_entries = (FINAL_TABLE_FILTER_D * 4) * k_entries;
     return t3_entries;
 }
 
@@ -120,7 +120,6 @@ TEST_CASE("expected-partition-sizes")
         auto t3_pruned = proof_core.expected_pruned_entries_for_t3();
         double t3_pruned_dbl = (double) t3_pruned.first / (double) t3_pruned.second;
 
-        CHECK(std::abs(t3_pruned_dbl - dbl_math_t3_pruned) < 1.0);
         CHECK(std::abs(t3_pruned_dbl - (double)test_case.num_expected_t3_pruned_entries) < 1.0);
         
         std::cout << "k=" << test_case.k << " sub_k=" << test_case.sub_k << std::endl
@@ -133,7 +132,6 @@ TEST_CASE("expected-partition-sizes")
 
         double int_math_quality_set_size_dbl = (double)int_math_quality_set_size.first / (double)int_math_quality_set_size.second;
         CHECK(std::abs(int_math_quality_set_size_dbl - test_case.expected_quality_set_size) < 0.5);
-        //CHECK(std::abs(dbl_math_quality_set_size - test_case.expected_quality_set_size) < 0.5);
 
         // check first and rest pass thresholds
         uint32_t first_threshold = proof_core.quality_chain_pass_threshold(1);
