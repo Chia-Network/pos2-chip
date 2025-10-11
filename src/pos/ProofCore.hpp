@@ -11,6 +11,7 @@
 #include "ProofParams.hpp"
 #include "ProofHashing.hpp"
 #include "ProofFragment.hpp"
+#include "common/SafeFractionMath.hpp"
 
 //------------------------------------------------------------------------------
 // Structs for pairing results
@@ -26,6 +27,7 @@
 // - The solver's performance seems slightly better without bipartite
 // - plotting could be optimized to be faster using bipartite
 // - bipartite may mix less well, and needs more analysis for T4 Partition Attack
+// NOTE: when chip goes into review should remove this macro and use the final chosen branched code.
 #define NON_BIPARTITE_BEFORE_T3 true
 
 // use to reduce T4/T5 relative to T3, T4 and T5 will be approx same size.
@@ -34,21 +36,11 @@
 const uint32_t FINAL_TABLE_FILTER = 855570511; // out of 2^32
 const double FINAL_TABLE_FILTER_D = 0.19920303275;
 
-// define this if want quality chain to pass more up front, then less in subsequent passes
-// this helps distribution of number of quality chains to be more compact.0.
-#define USE_UPFRONT_CHAINING_FACTOR true
-
 constexpr int NUM_CHAIN_LINKS = 16;
 
-#ifdef USE_UPFRONT_CHAINING_FACTOR
 // first chain link is always passed in from passing fragment scan filter
-constexpr double CHAINING_FACTORS[NUM_CHAIN_LINKS - 1] = {
-    4.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-    // 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1
-};
-#else
-constexpr double CHAINING_FACTOR = 1.1;
-#endif
+constexpr uint64_t CHAINING_FACTORS[NUM_CHAIN_LINKS - 1] = {
+    4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 // constexpr double PROOF_FRAGMENT_SCAN_FILTER = 2.0; // 1 / expected number of fragments to pass scan filter.
 
@@ -512,71 +504,32 @@ public:
         return (((r >> 2) + r) & 3U) == 2;
     }
 
-    double num_expected_pruned_entries_for_t3()
+    // returns num/denom pair for expected pruned entries for t3
+    std::pair<uint64_t, uint64_t> expected_pruned_entries_for_t3()
     {
-        double k_entries = (double)(1UL << params_.get_k());
-        double t3_entries = (FINAL_TABLE_FILTER_D / 0.25) * k_entries;
-        return t3_entries;
+        uint64_t k_entries = 1ULL << params_.get_k();
+        uint64_t numerator = FINAL_TABLE_FILTER * 4 * k_entries;
+        uint64_t denominator = (1ULL << 32);
+        return std::make_pair(numerator, denominator);
     }
 
-    double expected_quality_links_set_size()
+    std::pair<uint64_t, uint64_t> expected_quality_links_set_size()
     {
-        double entries_per_partition = num_expected_pruned_entries_for_t3() / (double)params_.get_num_partitions();
-        return 2.0 * entries_per_partition / (double)params_.get_num_partitions();
+        auto frac = expected_pruned_entries_for_t3();
+        // cast num partitions to uint64_t
+        uint64_t num_partitions = static_cast<uint64_t>(params_.get_num_partitions());
+        frac = SafeFractionMath::mul_fraction_u64(frac, 2, num_partitions * num_partitions);
+        return frac;
     }
 
-    static double expected_number_of_quality_chains_per_passing_fragment()
-    {
-// chaining_factor ^ (num_chain_links-1)
-#ifdef USE_UPFRONT_CHAINING_FACTOR
-        double expected = CHAINING_FACTORS[0];
-        for (int i = 1; i < NUM_CHAIN_LINKS - 1; ++i)
-        {
-            expected *= CHAINING_FACTORS[i];
-        }
-        return expected;
-#else
-        return pow(CHAINING_FACTOR, NUM_CHAIN_LINKS - 1);
-#endif
-    }
-
-    // link_index 0 is first quality link added by passsing fragment scan filter
-    // link_index 1 starts using CHAINING_FACTORS[0] and so on.
     uint32_t quality_chain_pass_threshold(size_t link_index)
     {
-// 1) compute pass probability
-#ifdef USE_UPFRONT_CHAINING_FACTOR
-        // pattern selection requires 2x multiplier, since there are 2 patterns (LR and RR)
-        double chance = 2.0 * CHAINING_FACTORS[link_index - 1] / expected_quality_links_set_size();
-#else
-        double chance = CHAINING_FACTOR / expected_quality_links_set_size();
-#endif
-
-        // 2) use long double for extra precision
-        long double max_uint32 = static_cast<long double>(std::numeric_limits<uint32_t>::max());
-
-        // 3) compute raw threshold
-        long double raw = chance * max_uint32;
-
-        // 4) clamp to avoid overflow
-        if (raw >= max_uint32)
-        {
-            raw = max_uint32;
-        }
-
-        if (false)
-        {
-            // debug output
-            std::cout << "Num expected links for t3: " << (int)num_expected_pruned_entries_for_t3() << std::endl;
-            std::cout << "num_partitions: " << params_.get_num_partitions() << std::endl;
-            std::cout << "expected_quality_links_set_size: " << (int)expected_quality_links_set_size() << std::endl;
-            std::cout << "chance: " << chance << std::endl;
-            std::cout << "raw threshold: " << raw << std::endl;
-            std::cout << "clamped threshold: " << raw << std::endl;
-        }
-
-        // 5) round to nearest integer and return
-        return static_cast<uint32_t>(raw + 0.5L);
+        // the math works out to:
+        // chance = 2 * CHAINING_FACTORS[link_index - 1] / expected_quality_links_set_size();
+        auto frac = expected_quality_links_set_size();
+        frac = SafeFractionMath::invert_fraction_u64(frac);
+        auto chance = SafeFractionMath::mul_fraction_u64(frac, 2 * CHAINING_FACTORS[link_index - 1], 1);
+        return SafeFractionMath::map_fraction_to_u32(chance);
     }
 
     // Determines the required fragments pattern based on the challenge.
@@ -651,7 +604,7 @@ public:
         FragmentsPattern pattern = requiredPatternFromChallenge(current_challenge);
 
         std::vector<NewLinksResult> new_links;
-        for (QualityLink const& link : link_set)
+        for (QualityLink const &link : link_set)
         {
             if (link.pattern != pattern)
             {
