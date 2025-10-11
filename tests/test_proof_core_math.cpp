@@ -105,7 +105,7 @@ TEST_CASE("expected-partition-sizes")
     {
         ProofParams params(Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").data(), test_case.k, 2);
         if (params.get_sub_k() != test_case.sub_k) {
-            std::cerr << "Skipping k=" << test_case.k << " sub_k=" << test_case.sub_k << " since sub_k does not match: " << params.get_sub_k() << std::endl;
+            std::cerr << "Skipping k=" << (int) test_case.k << " sub_k=" << test_case.sub_k << " since sub_k does not match: " << params.get_sub_k() << std::endl;
             continue;
         }
         tested_cases++;
