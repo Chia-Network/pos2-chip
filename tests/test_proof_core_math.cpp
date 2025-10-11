@@ -4,7 +4,7 @@
 
 
 struct QualitySetSizeTestCase {
-    int k;
+    uint8_t k;
     int sub_k;
     double num_expected_t3_pruned_entries;
     double expected_quality_set_size;

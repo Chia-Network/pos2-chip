@@ -9,7 +9,7 @@ TEST_CASE("scan-range")
 {
     // Setup dummy ProofParams and challenge
     // k list to test:
-    for (int k : {18, 20, 22, 24, 26, 28, 30, 32})
+    for (uint8_t k : {18, 20, 22, 24, 26, 28, 30, 32})
     {
         std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
         //std::array<uint8_t, 32> challenge = {0};
