@@ -174,7 +174,7 @@ try
             return 1;
         }
         plotfile = argv[2];
-        size_t numPlots = 11000;
+        size_t numPlots = 11000;//600;//11000;
         if (argc == 4)
         {
             numPlots = std::stoi(argv[3]);
