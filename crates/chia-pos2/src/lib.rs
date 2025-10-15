@@ -1,4 +1,4 @@
-use std::ffi::CString;
+use std::ffi::{CString, c_char};
 use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Result};
 use std::path::{Path, PathBuf};
@@ -69,7 +69,7 @@ unsafe extern "C" {
     ) -> bool;
 
     fn qualities_for_challenge(
-        plot_file: *const i8,
+        plot_file: *const c_char,
         challenge: *const u8,
         proof_fragment_scan_filter: u8,
         output: *mut QualityChain,
@@ -88,13 +88,13 @@ unsafe extern "C" {
     ) -> bool;
 
     fn get_partial_proof(
-        plot_file: *const i8,
+        plot_file: *const c_char,
         input: *const QualityChain,
         output: *mut u64,
     ) -> bool;
 
     fn create_plot(
-        filename: *const i8,
+        filename: *const c_char,
         k: u8,
         strength: u8,
         plot_id: *const u8,
