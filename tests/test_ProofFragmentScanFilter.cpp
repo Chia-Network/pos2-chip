@@ -92,9 +92,8 @@ TEST_CASE("scan-range")
         }
 
         // now try with all bits set in challenge
-        for (int i = 0; i < 4; ++i)
-        {
-            challenge.r[i] = 0xFFFFFFFF;
+        for (auto& r : challenge.r) {
+            r = std::numeric_limits<uint32_t>::max();
         }
         filter = ProofFragmentScanFilter(params, challenge, 5);
         range = filter.getScanRangeForFilter();

@@ -110,8 +110,6 @@ Maximum chains found in a single trial: 122
         challenge[3] = (i >> 24) & 0xFF;
         prover.setChallenge(challenge);
 
-        //ProofCore proof_core(params);
-
         BlakeHash::Result256 next_challenge = proof_core.hashing.challengeWithPlotIdHash(challenge.data());
         QualityLink firstLink = links[0];
         std::vector<QualityChain> qualityChains = prover.createQualityChains(firstLink, links, next_challenge);

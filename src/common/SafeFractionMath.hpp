@@ -88,9 +88,9 @@ namespace SafeFractionMath
         uint64_t den = frac.second;
 
         if (den == 0)
-            return 0xFFFFFFFFu; // treat invalid as 1.0
+            return std::numeric_limits<uint32_t>::max(); // treat invalid as 1.0
         if (num >= den)
-            return 0xFFFFFFFFu; // saturate at 1.0
+            return std::numeric_limits<uint32_t>::max(); // saturate at 1.0
         if (num == 0)
             return 0;
 
@@ -101,7 +101,7 @@ namespace SafeFractionMath
         num >>= shift;
         den >>= shift;
         if (den == 0)
-            return 0xFFFFFFFFu;
+            return std::numeric_limits<uint32_t>::max();
         uint64_t scaled = ((num << 32) + (den >> 1)) / den;
         return static_cast<uint32_t>(scaled);
     }
