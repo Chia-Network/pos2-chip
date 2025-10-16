@@ -95,7 +95,7 @@ namespace SafeFractionMath
             return 0;
 
         // downscale to fit 64-bit safely
-        // note we could use int128 here if available for more precision
+        // note we could use int128 here if available for more performance
         uint32_t nbits = 64u - static_cast<uint32_t>(std::countl_zero(den));
         uint32_t shift = (nbits > 32) ? (nbits - 32) : 0;
         num >>= shift;
