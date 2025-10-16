@@ -88,7 +88,7 @@ namespace SafeFractionMath
         uint64_t den = frac.second;
 
         if (den == 0)
-            return 0xFFFFFFFFu; // treat invalid as 1.0
+            return std::numeric_limits<uint32_t>::max(); // treat invalid as 1.0
         if (num >= den)
             return 0xFFFFFFFFu; // saturate at 1.0
         if (num == 0)
