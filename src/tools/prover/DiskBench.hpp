@@ -97,6 +97,10 @@ public:
         ProofParams params(Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").data(), k_, 2);
         ProofCore proof_core(params);
 
+        size_t plot_bytes = proof_core.expected_plot_bytes();
+        //std::cout << "ProofParams: k=" << (int)k_ << ", sub_k=" << (int)sub_k << ", num_partitions=" << num_partitions << std::endl;
+        exit(23);
+
         std::array<uint8_t, 32> challenge;
         challenge.fill(0); // Initialize challenge with zeros
 
@@ -274,11 +278,11 @@ public:
         switch (k)
         {
         case 28:
-            return 1536831;
+            return 1536831; // sub_k 20
         case 30:
-            return 3282542;
+            return 6565083; // sub_k 22
         case 32:
-            return 13965385;
+            return 13965385; // sub_k 23
         default:
             throw std::invalid_argument("t3_partition_bytes: k must be even integer between 28 and 32.");
         }
@@ -291,11 +295,11 @@ public:
         case 28:
             return 1006920 * 2; // sub k 20
         case 30:
-            return 2118280 * 2; // sub k 21
+            return 4445439 * 2; // sub k 22
         case 32:
             return 9308637 * 2; // for sub k 23
         default:
-            throw std::invalid_argument("t4_partition_bytes: k must be even integer between 28 and 32.");
+            throw std::invalid_argument("t4_partition_bytes: k must be even integer between 28 and 32, sub_k must be 20/22/23.");
         }
     }
 
