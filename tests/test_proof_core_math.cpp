@@ -49,16 +49,6 @@ double expected_quality_links_set_size(const ProofParams &params)
     return 2.0 * num_entries_per_partition / (double)params.get_num_partitions();
 }
 
-/*static double expected_number_of_quality_chains_per_passing_fragment()
-{
-    double expected = TEST_CHAINING_FACTORS[0];
-    for (int i = 1; i < NUM_CHAIN_LINKS - 1; ++i)
-    {
-        expected *= TEST_CHAINING_FACTORS[i];
-    }
-    return expected;
-}*/
-
 // link_index 0 is first quality link added by passsing fragment scan filter
 // link_index 1 starts using CHAINING_FACTORS[0] and so on.
 uint32_t test_quality_chain_pass_threshold(const ProofParams &params, int link_index)
@@ -112,27 +102,17 @@ TEST_CASE("expected-partition-sizes")
         tested_cases++;
         ProofCore proof_core(params);
 
-        // this is just a debug output sanity check.
+        // these are for debug output on checking our math
         double dbl_math_quality_set_size = expected_quality_links_set_size(params);
-        // this is the actual value to test against expected.
-        
-        //auto int_math_quality_set_size = proof_core.expected_quality_links_set_size();
         double dbl_math_t3_pruned = num_expected_pruned_entries_for_t3(test_case.k);
-        //auto t3_pruned = proof_core.expected_pruned_entries_for_t3();
-        //double t3_pruned_dbl = (double) t3_pruned.first / (double) t3_pruned.second;
-
-        //CHECK(std::abs(t3_pruned_dbl - (double)test_case.num_expected_t3_pruned_entries) < 1.0);
         
         std::cout << "k=" << (int) test_case.k << " sub_k=" << test_case.sub_k << std::endl
                   << " num t3 pruned entries per partition: " << test_case.num_expected_t3_pruned_entries
-                  << " computed: " << dbl_math_t3_pruned << std::endl
-                  //<< " t3 numerator: " << t3_pruned.first << " t3 denominator: " << t3_pruned.second << " t3 size: " << t3_pruned_dbl << std::endl
-                  //<< " expected quality set size: " << test_case.expected_quality_set_size
-                  //<< " qs numerator: " << int_math_quality_set_size.first << " qs denominator: " << int_math_quality_set_size.second << " qs size: " << (int_math_quality_set_size.first / int_math_quality_set_size.second) << std::endl
-                  << " computed: " << dbl_math_quality_set_size << std::endl;
-
-        //double int_math_quality_set_size_dbl = (double)int_math_quality_set_size.first / (double)int_math_quality_set_size.second;
-        //CHECK(std::abs(int_math_quality_set_size_dbl - test_case.expected_quality_set_size) < 0.5);
+                  << " computed: " << dbl_math_t3_pruned << std::endl;
+        std::cout << " check dbl quality set size: " << dbl_math_quality_set_size << std::endl;
+        std::cout << " check dbl t3 pruned entries: " << dbl_math_t3_pruned << std::endl;
+        CHECK(std::abs(dbl_math_t3_pruned - test_case.num_expected_t3_pruned_entries) < 1.0);
+        CHECK(std::abs(dbl_math_quality_set_size - test_case.expected_quality_set_size) < 1.0);
 
         double test_dbl_first_threshold = test_quality_chain_pass_threshold(params, 1);
         double test_dbl_rest_threshold = test_quality_chain_pass_threshold(params, 2);
