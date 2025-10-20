@@ -528,16 +528,6 @@ public:
         return (((r >> 2) + r) & 3U) == 2;
     }
 
-    // returns num/denom pair for expected pruned entries for t3
-    std::pair<uint64_t, uint64_t> expected_pruned_entries_for_t3()
-    {
-        uint64_t k_entries = 1ULL << params_.get_k();
-        uint64_t numerator = FINAL_TABLE_FILTER * 4 * k_entries;
-        uint64_t denominator = (1ULL << 32);
-        return std::make_pair(numerator, denominator);
-    }
-
-
     uint32_t quality_chain_pass_threshold(size_t link_index)
     {
         // referencing the constants. The root math works out to:
