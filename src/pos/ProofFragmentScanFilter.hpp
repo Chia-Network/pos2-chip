@@ -26,27 +26,18 @@ public:
           proof_core_(proof_params),
           challenge_(challenge)
     {
-
-        // math needed:
-        // - per_range = t3_exp / numScanRanges()
-        // - filter = 1 / (per_range * (1 << proof_fragment_scan_filter_bits))
-        // - filter_32bit_hash_threshold_ = static_cast<uint32_t>(filter * 0xFFFFFFFF)
-        // in one formula:
-        // filter_32bit_hash_threshold_ = static_cast<uint32_t>( (1 << 32) / (t3_exp / numScanRanges() * (1 << proof_fragment_scan_filter_bits)) )
-        // which simplifies to:
-        // filter_32bit_hash_threshold_ = static_cast<uint32_t>( (1 << 32) * numScanRanges() / (t3_exp * (1 << proof_fragment_scan_filter_bits)) )
-        
         // compute our hashing threshold for the scan filter
-        auto t3_expected_entries = proof_core_.expected_pruned_entries_for_t3();
-
-         // per range = t3_expected_entries / numScanRanges()
+        // t3_expected_entries = proof_core_.expected_pruned_entries_for_t3();
+        // per_range = t3_expected_entries / numScanRanges()
         // filter = 1 / (per_range * (1 << proof_fragment_scan_filter_bits))
         // filter_32bit_hash_threshold_ = static_cast<uint32_t>(filter * 0xFFFFFFFF)
         
-        auto num_per_range = SafeFractionMath::mul_fraction_u64(t3_expected_entries, 1, numScanRanges());
-        auto frac = SafeFractionMath::invert_fraction_u64(num_per_range);
-        frac = SafeFractionMath::mul_fraction_u64(frac, 1, (1ULL << proof_fragment_scan_filter_bits));
-        filter_32bit_hash_threshold_ = SafeFractionMath::map_fraction_to_u32(frac);
+        // above reduces to:
+        uint64_t filter_numerator = 1ULL << (62 - PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS - proof_fragment_scan_filter_bits);
+        uint64_t filter_denominator = FINAL_TABLE_FILTER;
+        filter_32bit_hash_threshold_ = numeric_cast<uint32_t>(
+            (filter_numerator + filter_denominator / 2) / filter_denominator
+        );
     }
 
     ~ProofFragmentScanFilter() = default;
@@ -140,6 +131,12 @@ public:
         range.end = scan_span * (scan_range_id + 1) - 1;
         
         return range;
+    }
+
+    // for tests
+    uint32_t getFilter32BitHashThreshold() const
+    {
+        return filter_32bit_hash_threshold_;
     }
 
 private:

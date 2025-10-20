@@ -11,7 +11,6 @@
 #include "ProofParams.hpp"
 #include "ProofHashing.hpp"
 #include "ProofFragment.hpp"
-#include "common/SafeFractionMath.hpp"
 
 //------------------------------------------------------------------------------
 // Structs for pairing results
@@ -39,8 +38,33 @@ const double FINAL_TABLE_FILTER_D = 0.19920303275;
 constexpr int NUM_CHAIN_LINKS = 16;
 
 // first chain link is always passed in from passing fragment scan filter
+// while not used in ProofCore due to pre-computed constants, this is the chaining factors used in quality chain math
+// and referenced in testing.
 constexpr uint64_t CHAINING_FACTORS[NUM_CHAIN_LINKS - 1] = {
     4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+// for k sizes 18 to 32 even.
+constexpr uint32_t QUALITY_LINK_FIRST_CHAIN_PASS_THRESHOLD[8] = {
+    5263856, // k=18, sub_k=15
+    5263856, // k=20, sub_k=16
+    5263856, // k=22, sub_k=17
+    5263856, // k=24, sub_k=18
+    5263856, // k=26, sub_k=19
+    5263856, // k=28, sub_k=20
+    1315964, // k=30, sub_k=22
+    1315964  // k=32, sub_k=23
+};
+
+constexpr uint32_t QUALITY_LINK_REST_CHAIN_PASS_THRESHOLD[8] = {
+    1315964, // k=18, sub_k=15
+    1315964, // k=20, sub_k=16
+    1315964, // k=22, sub_k=17
+    1315964, // k=24, sub_k=18
+    1315964, // k=26, sub_k=19
+    1315964, // k=28, sub_k=20
+    328991,  // k=30, sub_k=22
+    328991   // k=32, sub_k=23
+};
 
 // constexpr double PROOF_FRAGMENT_SCAN_FILTER = 2.0; // 1 / expected number of fragments to pass scan filter.
 
@@ -513,23 +537,17 @@ public:
         return std::make_pair(numerator, denominator);
     }
 
-    std::pair<uint64_t, uint64_t> expected_quality_links_set_size()
-    {
-        auto frac = expected_pruned_entries_for_t3();
-        // cast num partitions to uint64_t
-        uint64_t num_partitions = static_cast<uint64_t>(params_.get_num_partitions());
-        frac = SafeFractionMath::mul_fraction_u64(frac, 2, num_partitions * num_partitions);
-        return frac;
-    }
 
     uint32_t quality_chain_pass_threshold(size_t link_index)
     {
-        // the math works out to:
+        // referencing the constants. The root math works out to:
         // chance = 2 * CHAINING_FACTORS[link_index - 1] / expected_quality_links_set_size();
-        auto frac = expected_quality_links_set_size();
-        frac = SafeFractionMath::invert_fraction_u64(frac);
-        auto chance = SafeFractionMath::mul_fraction_u64(frac, 2 * CHAINING_FACTORS[link_index - 1], 1);
-        return SafeFractionMath::map_fraction_to_u32(chance);
+        // mapped to 32 bits range.
+        if (link_index == 1) {
+            return QUALITY_LINK_FIRST_CHAIN_PASS_THRESHOLD[(params_.get_k() - 18) / 2];
+        }
+        return QUALITY_LINK_REST_CHAIN_PASS_THRESHOLD[(params_.get_k() - 18) / 2];
+        
     }
 
     // Determines the required fragments pattern based on the challenge.
