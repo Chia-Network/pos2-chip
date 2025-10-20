@@ -92,7 +92,7 @@ TEST_CASE("quality-chain-distribution")
     // create random quality links
     std::vector<QualityLink> links;
     double num_quality_links_dbl = expected_quality_links_set_size(params);
-    int num_quality_links = (numeric_cast<int>(num_quality_links_dbl));
+    int num_quality_links = (static_cast<int>(num_quality_links_dbl)); // let's just truncate for test purposes
     std::cout << "Expected number of quality links: " << num_quality_links << std::endl;
 
     links.reserve(num_quality_links);
