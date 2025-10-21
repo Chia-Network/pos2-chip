@@ -12,10 +12,7 @@ TEST_CASE("scan-range")
     for (int k : {18, 20, 22, 24, 26, 28, 30, 32})
     {
         std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
-        //std::array<uint8_t, 32> challenge = {0};
-        // challenge is blake hash
         BlakeHash::Result256 challenge = {{0, 0, 0, 0, 0, 0, 0, 0}};
-        
         ProofParams params(Utils::hexToBytes(plot_id_hex).data(), static_cast<uint8_t>(k), 2);
 
         // debug out params
@@ -92,9 +89,8 @@ TEST_CASE("scan-range")
         }
 
         // now try with all bits set in challenge
-        for (int i = 0; i < 4; ++i)
-        {
-            challenge.r[i] = 0xFFFFFFFF;
+        for (auto& r : challenge.r) {
+            r = std::numeric_limits<uint32_t>::max();
         }
         filter = ProofFragmentScanFilter(params, challenge, 5);
         range = filter.getScanRangeForFilter();

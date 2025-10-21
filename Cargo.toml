@@ -7,5 +7,7 @@ lto = "thin"
 [workspace.dependencies]
 chia-bls = "0.29.0"
 blake3 = "1.8.2"
-cc = { version = "1.2.36", features = ["parallel"] }
+cc = { version = "1.2.16", features = ["parallel"] }
 rstest = "0.26.1"
+serde = { version = "1.0.219", features = ["derive"] }
+serde-big-array = "0.5.1"

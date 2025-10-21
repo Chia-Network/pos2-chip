@@ -7,6 +7,24 @@
 #include "prove/Prover.hpp"
 #include "common/Timer.hpp"
 
+double num_expected_pruned_entries_for_t3(int k)
+{
+    double k_entries = (double)(1UL << k);
+    double t3_entries = (FINAL_TABLE_FILTER_D * 4) * k_entries;
+    return t3_entries;
+}
+
+double entries_per_partition(const ProofParams &params)
+{
+    return num_expected_pruned_entries_for_t3(params.get_k()) / (double)params.get_num_partitions();
+}
+
+double expected_quality_links_set_size(const ProofParams &params)
+{
+    double num_entries_per_partition = entries_per_partition(params);
+    return 2.0 * num_entries_per_partition / (double)params.get_num_partitions();
+}
+
 static double expected_number_of_quality_chains_per_passing_fragment()
 {
     // avoid narrowing warnings by doing intermediate computation in long double
@@ -19,6 +37,37 @@ static double expected_number_of_quality_chains_per_passing_fragment()
 }
 
 TEST_SUITE_BEGIN("quality-chain");
+
+TEST_CASE("compute-proof-fragment-scan-filter-threshold")
+{
+
+    for (int proof_fragment_scan_filter_bits = 0; proof_fragment_scan_filter_bits <= 10; ++proof_fragment_scan_filter_bits)
+        {
+            std::cout << "Testing proof fragment scan filter bits: " << proof_fragment_scan_filter_bits << std::endl;
+        ProofParams params(Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").data(), 28, 2);
+        ProofCore proof_core(params);
+
+        BlakeHash::Result256 challenge; // don't need to set this, just getting threshold value from pfsf.
+        ProofFragmentScanFilter scan_filter(params, challenge, proof_fragment_scan_filter_bits);
+        uint32_t threshold_32 = scan_filter.getFilter32BitHashThreshold();
+
+        double dbl_t3_expected_entries = num_expected_pruned_entries_for_t3(static_cast<int>(params.get_k()));
+        double dbl_num_per_range = dbl_t3_expected_entries / static_cast<double>(scan_filter.numScanRanges());
+        double dbl_filter = 1.0 / (dbl_num_per_range * static_cast<double>(1ULL << proof_fragment_scan_filter_bits));
+        double dbl_filter_32 = (double)(1ULL << 32) * dbl_filter;
+        //std::cout << "pf_scan_filter bits: " << proof_fragment_scan_filter_bits << std::endl;
+        //std::cout << "dbl_t3_expected_entries: " << dbl_t3_expected_entries << std::endl;
+        //std::cout << "dbl_num_per_range: " << dbl_num_per_range << std::endl;
+        //std::cout << "dbl_filter: " << dbl_filter << std::endl;
+        //std::cout << "dbl_filter_32: " << dbl_filter_32 << std::endl;
+
+        std::cout << "Double Computed proof fragment scan filter threshold: " << dbl_filter_32 << std::endl;
+        std::cout << "One-line computed proof fragment scan filter threshold: " << threshold_32 << std::endl;
+        
+        // check within a small epsilon
+        REQUIRE(std::abs(static_cast<double>(threshold_32) - dbl_filter_32) < 0.6);
+    }
+}
 
 TEST_CASE("quality-chain-distribution")
 {
@@ -42,8 +91,8 @@ TEST_CASE("quality-chain-distribution")
 
     // create random quality links
     std::vector<QualityLink> links;
-    auto num_quality_links_precise = proof_core.expected_quality_links_set_size();
-    int num_quality_links = (int) (num_quality_links_precise.first / num_quality_links_precise.second);
+    double num_quality_links_dbl = expected_quality_links_set_size(params);
+    int num_quality_links = (static_cast<int>(num_quality_links_dbl)); // let's just truncate for test purposes
     std::cout << "Expected number of quality links: " << num_quality_links << std::endl;
 
     links.reserve(num_quality_links);
@@ -109,8 +158,6 @@ Maximum chains found in a single trial: 122
         challenge[2] = (i >> 16) & 0xFF;
         challenge[3] = (i >> 24) & 0xFF;
         prover.setChallenge(challenge);
-
-        //ProofCore proof_core(params);
 
         BlakeHash::Result256 next_challenge = proof_core.hashing.challengeWithPlotIdHash(challenge.data());
         QualityLink firstLink = links[0];
