@@ -7,12 +7,10 @@
 #include <optional>
 #include <limits>
 #include <vector>
-#include <math.h>
 
 #include "ProofParams.hpp"
 #include "ProofHashing.hpp"
 #include "ProofFragment.hpp"
-#include "common/SafeFractionMath.hpp"
 
 //------------------------------------------------------------------------------
 // Structs for pairing results
