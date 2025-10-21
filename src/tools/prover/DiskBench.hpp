@@ -79,16 +79,16 @@ public:
         size_t t4t5_part_bytes = t4t5_partition_bytes();
         num_plots = (20ULL * 1000 * 1000 * 1000 * 1000) / plot_bytes;
         std::cout << "Plot size bytes: " << plot_bytes << ", Num plots per 20TB: " << num_plots << std::endl;
-        //exit(23);
+        // exit(23);
 
         // Simulate disk reads
         double total_time_ms = 0.0;
         size_t total_data_read_bytes = 0;
         size_t total_random_disk_seeks = 0;
 
-        double split_disk_total_time_ms[2] = { 0.0, 0.0 };
-        size_t split_disk_total_data_read_bytes[2] = { 0, 0 };
-        size_t split_disk_total_random_disk_seeks[2] = { 0, 0 };
+        double split_disk_total_time_ms[2] = {0.0, 0.0};
+        size_t split_disk_total_data_read_bytes[2] = {0, 0};
+        size_t split_disk_total_random_disk_seeks[2] = {0, 0};
 
         double total_block_time_ms = 0.0;
         double maximum_block_time_ms = 0.0;
@@ -97,12 +97,12 @@ public:
         double total_time_passing_proof_fragment_scan_ms = 0.0;
         double total_time_fetching_full_proofs_partitions_ms = 0.0;
 
-        double split_disk_total_block_time_ms[2] = { 0.0, 0.0 };
-        double split_disk_maximum_block_time_ms[2] = { 0.0, 0.0 };
-        double split_disk_minimum_block_time_ms[2] = { std::numeric_limits<double>::max(), std::numeric_limits<double>::max() };
-        double split_disk_total_time_passing_plot_id_filter_ms[2] = { 0.0, 0.0 };
-        double split_disk_total_time_passing_proof_fragment_scan_ms[2] = { 0.0, 0.0 };
-        double split_disk_total_time_fetching_full_proofs_partitions_ms[2] = { 0.0, 0.0 };
+        double split_disk_total_block_time_ms[2] = {0.0, 0.0};
+        double split_disk_maximum_block_time_ms[2] = {0.0, 0.0};
+        double split_disk_minimum_block_time_ms[2] = {std::numeric_limits<double>::max(), std::numeric_limits<double>::max()};
+        double split_disk_total_time_passing_plot_id_filter_ms[2] = {0.0, 0.0};
+        double split_disk_total_time_passing_proof_fragment_scan_ms[2] = {0.0, 0.0};
+        double split_disk_total_time_fetching_full_proofs_partitions_ms[2] = {0.0, 0.0};
 
         size_t num_plots_passed_filter = 0;
         size_t num_plots_passed_proof_fragment_scan_filter = 0;
@@ -111,9 +111,9 @@ public:
 
         ProofCore proof_core(proof_params_);
 
-        //size_t plot_bytes = proof_core.expected_plot_bytes();
-        //std::cout << "ProofParams: k=" << (int)k_ << ", sub_k=" << (int)sub_k << ", num_partitions=" << num_partitions << std::endl;
-        //exit(23);
+        // size_t plot_bytes = proof_core.expected_plot_bytes();
+        // std::cout << "ProofParams: k=" << (int)k_ << ", sub_k=" << (int)sub_k << ", num_partitions=" << num_partitions << std::endl;
+        // exit(23);
 
         std::array<uint8_t, 32> challenge;
         challenge.fill(0); // Initialize challenge with zeros
@@ -128,8 +128,8 @@ public:
 
         // create random quality links
         std::vector<QualityLink> links;
-        auto num_quality_links_precise = proof_core.expected_quality_links_set_size();
-        int num_quality_links = (int)(num_quality_links_precise.first / num_quality_links_precise.second);
+        int num_quality_links = static_cast<int>(expected_quality_links_set_size());
+        //int num_quality_links = (int)(num_quality_links_precise.first / num_quality_links_precise.second);
 
 #ifdef DEBUG_DISK_BENCH
         std::cout << "Expected number of quality links: " << num_quality_links << std::endl;
@@ -188,7 +188,6 @@ public:
                 split_disk_total_block_time_ms[0] += passes_plot_id_filter_time_to_scan;
                 split_disk_total_time_ms[0] += passes_plot_id_filter_time_to_scan;
                 split_disk_total_random_disk_seeks[0] += 1;
-
 
                 // now check if passed proof fragment scan filter
                 modulus = (1ULL << proof_fragment_scan_filter_bits_);
@@ -259,7 +258,7 @@ public:
                     total_block_time_ms += time_for_all_chain_fetches_ms;
                     total_time_fetching_full_proofs_partitions_ms += time_for_all_chain_fetches_ms;
                     total_time_ms += time_for_all_chain_fetches_ms;
-                    
+
                     // this only affects split disk 1 since leaf nodes are in t3 partitions
                     split_disk_total_data_read_bytes[0] += qualityChains.size() * NUM_CHAIN_LINKS * 32 * 1024;
                     split_disk_total_random_disk_seeks[0] += NUM_CHAIN_LINKS * qualityChains.size();
@@ -341,7 +340,6 @@ public:
             double load_multiplier = (disk_idx == 0) ? multipler_disk_1_load : multipler_disk_2_load;
             std::cout << "Estimated HDD load for Disk " << disk_idx + 1 << " for 1 challenge every 9.375 seconds: "
                       << (load_multiplier * split_disk_total_time_ms[disk_idx] * 100.0 / (static_cast<double>(num_challenges) * time_per_block_ms)) << "%" << std::endl;
-
         }
 
         std::cout << "----" << std::endl;
@@ -370,8 +368,8 @@ public:
 
         double elements_in_sub_k = FINAL_TABLE_FILTER_D * 4.0 * static_cast<double>(1ULL << (proof_params_.get_sub_k() - 1));
         double partition_bytes_t3 = elements_in_sub_k * (static_cast<double>(proof_params_.get_k()) + 1.43) / 8.0;
-        std::cout << "t3_partition_bytes calculation: elements_in_sub_k=" << elements_in_sub_k << ", partition_bytes_t3=" << (int) partition_bytes_t3 << std::endl;
-        //exit(23);
+        std::cout << "t3_partition_bytes calculation: elements_in_sub_k=" << elements_in_sub_k << ", partition_bytes_t3=" << (int)partition_bytes_t3 << std::endl;
+        // exit(23);
         return static_cast<size_t>(partition_bytes_t3);
         /*switch (k)
         {
@@ -387,13 +385,13 @@ public:
     }
 
     size_t t4t5_partition_bytes() const
-    {   
+    {
         // N log2 N - (1.43 + 2.04)N, where N is elements in sub_k
         double elements_in_sub_k = FINAL_TABLE_FILTER_D * 4.0 * static_cast<double>(1ULL << (proof_params_.get_sub_k() - 1));
         double N_log2_N = elements_in_sub_k * log2(elements_in_sub_k);
         double partition_bits_t4 = N_log2_N - (1.43 - 2.04) * elements_in_sub_k;
         double partition_bytes_t4t5 = partition_bits_t4 * 2 / 8.0;
-        std::cout << "t4t5_partition_bytes calculation: elements_in_sub_k=" << elements_in_sub_k << ", N_log2_N =" << N_log2_N << ", partition_bits_t4=" << partition_bits_t4 << ", partition_bytes_t4t5=" << (int) partition_bytes_t4t5 << std::endl;
+        std::cout << "t4t5_partition_bytes calculation: elements_in_sub_k=" << elements_in_sub_k << ", N_log2_N =" << N_log2_N << ", partition_bits_t4=" << partition_bits_t4 << ", partition_bytes_t4t5=" << (int)partition_bytes_t4t5 << std::endl;
         return static_cast<size_t>(partition_bytes_t4t5);
         /*switch (k)
         {
@@ -406,6 +404,24 @@ public:
         default:
             throw std::invalid_argument("t4_partition_bytes: k must be even integer between 28 and 32, sub_k must be 20/22/23.");
         }*/
+    }
+
+    double num_expected_pruned_entries_for_t3() const
+    {
+        double k_entries = (double)(1UL << proof_params_.get_k());
+        double t3_entries = (FINAL_TABLE_FILTER_D * 4) * k_entries;
+        return t3_entries;
+    }
+
+    double entries_per_partition() const
+    {
+        return num_expected_pruned_entries_for_t3() / (double)proof_params_.get_num_partitions();
+    }
+
+    double expected_quality_links_set_size() const
+    {
+        double num_entries_per_partition = entries_per_partition();
+        return 2.0 * num_entries_per_partition / (double)proof_params_.get_num_partitions();
     }
 
 private:
