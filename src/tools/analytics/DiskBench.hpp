@@ -9,7 +9,7 @@
 #include "pos/ProofCore.hpp"
 #include "prove/Prover.hpp"
 
-// #define DEBUG_DISK_BENCH true
+//#define DEBUG_DISK_BENCH true
 /*
 Completed 9200 of 9216 challenges...
   Current disk % load: 6.24103%
@@ -61,24 +61,18 @@ Estimated HDD load for 1 challenge every 9.375 seconds: 0.679832%
 class DiskBench
 {
 public:
-    DiskBench(const ProofParams &proof_params,
-              size_t proof_fragment_scan_filter_bits = 6,
-              size_t plot_id_filter_bits = 8,
-              double hdd_seek_time_ms = 10.0,
-              double hdd_read_MBs = 70.0)
-        : proof_params_(proof_params), proof_fragment_scan_filter_bits_(proof_fragment_scan_filter_bits),
-          plot_id_filter_bits_(plot_id_filter_bits), hdd_seek_time_ms_(hdd_seek_time_ms),
-          hdd_read_MBs_(hdd_read_MBs) {}
+    DiskBench(const ProofParams &proof_params)
+        : proof_params_(proof_params) {}
 
     // Run a simulation of disk reads for a given number of plots.
     // Outputs: total time in ms and total data read in MB.
-    void simulateChallengeDiskReads(size_t num_plots) const
+    void simulateChallengeDiskReads(size_t plot_id_filter_bits, size_t proof_fragment_scan_filter_bits, size_t diskTB, double diskSeekMs, double diskReadMBs) const
     {
         size_t plot_bytes = plot_size_bytes();
         size_t t3_part_bytes = t3_partition_bytes();
         size_t t4t5_part_bytes = t4t5_partition_bytes();
-        num_plots = (20ULL * 1000 * 1000 * 1000 * 1000) / plot_bytes;
-        std::cout << "Plot size bytes: " << plot_bytes << ", Num plots per 20TB: " << num_plots << std::endl;
+        size_t num_plots = (diskTB * 1000 * 1000 * 1000 * 1000) / plot_bytes;
+        std::cout << "Plot size bytes: " << plot_bytes << ", Num plots per " << diskTB << "TB: " << num_plots << std::endl;
         // exit(23);
 
         // Simulate disk reads
@@ -160,7 +154,7 @@ public:
             for (size_t i = 0; i < num_plots; ++i)
             {
                 // random chance to pass plot id filter
-                uint64_t modulus = (1ULL << plot_id_filter_bits_);
+                uint64_t modulus = (1ULL << plot_id_filter_bits);
 
                 if ((std::rand() % static_cast<int>(modulus)) != 0)
                 {
@@ -172,8 +166,8 @@ public:
                 // Simulate first t3 seek and read of small number of bytes
                 uint64_t bytes_to_read = 32 * 1024; // 32KB
                 total_data_read_bytes += bytes_to_read;
-                double ms_to_read_32KB = 1000.0 * ((double)bytes_to_read / (1024.0 * 1024.0)) / hdd_read_MBs_;
-                double passes_plot_id_filter_time_to_scan = hdd_seek_time_ms_ + ms_to_read_32KB; // read 8192 entries of 4 bytes each = 32KB
+                double ms_to_read_32KB = 1000.0 * ((double)bytes_to_read / (1024.0 * 1024.0)) / diskReadMBs;
+                double passes_plot_id_filter_time_to_scan = diskSeekMs + ms_to_read_32KB; // read 8192 entries of 4 bytes each = 32KB
 #ifdef DEBUG_DISK_BENCH
                 std::cout << "passes_plot_id_filter_time_to_scan: " << passes_plot_id_filter_time_to_scan << " ms" << std::endl;
 #endif
@@ -190,7 +184,7 @@ public:
                 split_disk_total_random_disk_seeks[0] += 1;
 
                 // now check if passed proof fragment scan filter
-                modulus = (1ULL << proof_fragment_scan_filter_bits_);
+                modulus = (1ULL << proof_fragment_scan_filter_bits);
                 if ((std::rand() % static_cast<int>(modulus)) != 0)
                 {
                     continue; // skip this plot
@@ -200,12 +194,12 @@ public:
 
                 // once passed plot filter, we read the full t3 and t4/t5 partitions, twice! Once for A and B partitions.
                 size_t partition_bytes_to_read_after_proof_fragment_scan = (t3_part_bytes + t4t5_part_bytes); // one full partition
-                double ms_to_read_full_partition = 1000.0 * (static_cast<double>(partition_bytes_to_read_after_proof_fragment_scan) / (1000.0 * 1000.0)) / hdd_read_MBs_;
-                double passes_proof_fragment_scan_time_to_read_full_partition = hdd_seek_time_ms_ + ms_to_read_full_partition;
+                double ms_to_read_full_partition = 1000.0 * (static_cast<double>(partition_bytes_to_read_after_proof_fragment_scan) / (1000.0 * 1000.0)) / diskReadMBs;
+                double passes_proof_fragment_scan_time_to_read_full_partition = diskSeekMs + ms_to_read_full_partition;
 #ifdef DEBUG_DISK_BENCH
+                std::cout << "iteration: " << nChallenges << ", plot: " << i << std::endl;
                 std::cout << "ms to read full partition: " << ms_to_read_full_partition << " ms" << std::endl;
                 std::cout << "total_bytes_to_read_after_proof_fragment_scan: " << partition_bytes_to_read_after_proof_fragment_scan << " bytes" << std::endl;
-                std::cout << "passes_proof_fragment_scan_time_to_read_A_B_full_partitions: " << passes_proof_fragment_scan_time_to_read_full_partitions << " ms" << std::endl;
 #endif
                 total_data_read_bytes += 2 * partition_bytes_to_read_after_proof_fragment_scan;
                 total_block_time_ms += 2 * passes_proof_fragment_scan_time_to_read_full_partition;
@@ -216,8 +210,8 @@ public:
                 // t3 partitions are on disk 1, t4/t5 on disk 2
                 split_disk_total_data_read_bytes[0] += 2 * t3_part_bytes;
                 split_disk_total_data_read_bytes[1] += 2 * t4t5_part_bytes;
-                double ms_to_read_t3_partition = hdd_seek_time_ms_ + 1000.0 * (static_cast<double>(t3_part_bytes) / (1000.0 * 1000.0)) / hdd_read_MBs_;
-                double ms_to_read_t4t5_partition = hdd_seek_time_ms_ + 1000.0 * (static_cast<double>(t4t5_part_bytes) / (1000.0 * 1000.0)) / hdd_read_MBs_;
+                double ms_to_read_t3_partition = diskSeekMs + 1000.0 * (static_cast<double>(t3_part_bytes) / (1000.0 * 1000.0)) / diskReadMBs;
+                double ms_to_read_t4t5_partition = diskSeekMs + 1000.0 * (static_cast<double>(t4t5_part_bytes) / (1000.0 * 1000.0)) / diskReadMBs;
                 split_disk_total_block_time_ms[0] += 2 * ms_to_read_t3_partition;
                 split_disk_total_block_time_ms[1] += 2 * ms_to_read_t4t5_partition;
                 split_disk_total_time_passing_proof_fragment_scan_ms[0] += 2 * ms_to_read_t3_partition;
@@ -253,7 +247,7 @@ public:
                     // have to fetch leaf nodes. Simple seek and scan of 32KB.
                     /*total_data_read_bytes += qualityChains.size() * NUM_CHAIN_LINKS * 32 * 1024;
                     total_random_disk_seeks += NUM_CHAIN_LINKS * qualityChains.size();
-                    double time_per_leaf_fetch_ms = hdd_seek_time_ms_ + ms_to_read_32KB;
+                    double time_per_leaf_fetch_ms = diskSeekMs + ms_to_read_32KB;
                     double time_for_all_chain_fetches_ms = (double)qualityChains.size() * NUM_CHAIN_LINKS * time_per_leaf_fetch_ms;
                     total_block_time_ms += time_for_all_chain_fetches_ms;
                     total_time_fetching_full_proofs_partitions_ms += time_for_all_chain_fetches_ms;
@@ -281,7 +275,6 @@ public:
             if (split_disk_total_block_time_ms[1] < split_disk_minimum_block_time_ms[1])
                 split_disk_minimum_block_time_ms[1] = split_disk_total_block_time_ms[1];
 
-#ifndef DEBUG_DISK_BENCH
             if (nChallenges % 100 == 0)
             {
                 std::cout << "Completed " << nChallenges << " of " << num_challenges << " challenges..." << std::endl;
@@ -289,7 +282,6 @@ public:
                 std::cout << "       Max block time: " << maximum_block_time_ms << " ms (% " << (maximum_block_time_ms / 9375.0) * 100.0 << "%)" << std::endl;
                 std::cout << "       Min block time: " << minimum_block_time_ms << " ms (% " << (minimum_block_time_ms / 9375.0) * 100.0 << "%)" << std::endl;
             }
-#endif
         }
 
         double time_per_block_ms = 9375.0;
@@ -298,14 +290,23 @@ public:
         std::cout << "---- completed " << num_challenges << " challenges ----" << std::endl;
         std::cout << "Plots passed filter: " << num_plots_passed_filter << " out of " << num_plots << " for " << num_challenges << " challenges ("
                   << (static_cast<double>(num_plots_passed_filter) * 100.0 / static_cast<double>(num_plots * num_challenges)) << "%)" << std::endl;
-        double expected_plots_passing_filter = static_cast<double>(num_plots * num_challenges) / static_cast<double>(1 << plot_id_filter_bits_);
+        double expected_plots_passing_filter = static_cast<double>(num_plots * num_challenges) / static_cast<double>(1 << plot_id_filter_bits);
         std::cout << "Expected plots passing filter: " << expected_plots_passing_filter << std::endl;
+        
         std::cout << "Plots passed proof fragment scan filter: " << num_plots_passed_proof_fragment_scan_filter << " out of " << num_plots << " for " << num_challenges << " challenges ("
                   << (static_cast<double>(num_plots_passed_proof_fragment_scan_filter) * 100.0 / static_cast<double>(num_plots * num_challenges)) << "%)" << std::endl;
+        double expected_plots_passing_proof_fragment_scan_filter = expected_plots_passing_filter / static_cast<double>(1 << proof_fragment_scan_filter_bits);
+        std::cout << "Expected plots passing proof fragment scan filter: " << expected_plots_passing_proof_fragment_scan_filter << std::endl;
+
         std::cout << "Total time for " << num_plots << " plots: " << total_time_ms << " ms" << std::endl;
         std::cout << "Plots passed chaining: " << num_plots_passed_chaining << " out of " << num_plots << " for " << num_challenges << " challenges ("
                   << (static_cast<double>(num_plots_passed_chaining) * 100.0 / static_cast<double>(num_plots * num_challenges)) << "%)" << std::endl;
+        
+        // on average each plot passing proof fragment scan filter should produce 4 proofs
+        double expected_proofs_found = expected_plots_passing_proof_fragment_scan_filter * 4;
         std::cout << "Total proofs found: " << total_proofs_found << std::endl;
+        std::cout << "Expected proofs found: " << expected_proofs_found << std::endl;
+        
         std::cout << "Average proofs per plot per challenge:" << (static_cast<double>(total_proofs_found) / static_cast<double>(num_plots * num_challenges)) << std::endl;
 
         std::cout << "Average time per plot: " << (total_time_ms / static_cast<double>(num_plots)) << " ms" << std::endl;
@@ -343,17 +344,11 @@ public:
         }
 
         std::cout << "----" << std::endl;
-        std::cout << "Plot ID filter: " << (1 << plot_id_filter_bits_) << std::endl;
-        std::cout << "Proof fragment scan filter: " << (1 << proof_fragment_scan_filter_bits_) << std::endl;
+        std::cout << "Plot ID filter: " << (1 << plot_id_filter_bits) << std::endl;
+        std::cout << "Proof fragment scan filter: " << (1 << proof_fragment_scan_filter_bits) << std::endl;
 
         std::cout << "Estimated HDD load for 1 challenge every 9.375 seconds: " << (hdd_load * 100.0 / (double)num_challenges) << "%" << std::endl;
     }
-
-    // accessors
-    size_t proofFragmentScanFilterBits() const { return proof_fragment_scan_filter_bits_; }
-    size_t plotIdFilterBits() const { return plot_id_filter_bits_; }
-    double hddSeekTimeMs() const { return hdd_seek_time_ms_; }
-    double hddReadMBs() const { return hdd_read_MBs_; }
 
     size_t plot_size_bytes() const
     {
@@ -426,8 +421,4 @@ public:
 
 private:
     ProofParams proof_params_;
-    size_t proof_fragment_scan_filter_bits_;
-    size_t plot_id_filter_bits_;
-    double hdd_seek_time_ms_;
-    double hdd_read_MBs_;
 };
