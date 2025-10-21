@@ -61,12 +61,12 @@ Estimated HDD load for 1 challenge every 9.375 seconds: 0.679832%
 class DiskBench
 {
 public:
-    DiskBench(size_t k = 28,
+    DiskBench(const ProofParams &proof_params,
               size_t proof_fragment_scan_filter_bits = 6,
               size_t plot_id_filter_bits = 8,
               double hdd_seek_time_ms = 10.0,
               double hdd_read_MBs = 70.0)
-        : k_(k), proof_fragment_scan_filter_bits_(proof_fragment_scan_filter_bits),
+        : proof_params_(proof_params), proof_fragment_scan_filter_bits_(proof_fragment_scan_filter_bits),
           plot_id_filter_bits_(plot_id_filter_bits), hdd_seek_time_ms_(hdd_seek_time_ms),
           hdd_read_MBs_(hdd_read_MBs) {}
 
@@ -74,8 +74,12 @@ public:
     // Outputs: total time in ms and total data read in MB.
     void simulateChallengeDiskReads(size_t num_plots) const
     {
-        size_t t3_part_bytes = t3_partition_bytes(static_cast<int>(k_));
-        size_t t4t5_part_bytes = t4t5_partition_bytes(static_cast<int>(k_));
+        size_t plot_bytes = plot_size_bytes();
+        size_t t3_part_bytes = t3_partition_bytes();
+        size_t t4t5_part_bytes = t4t5_partition_bytes();
+        num_plots = (20ULL * 1000 * 1000 * 1000 * 1000) / plot_bytes;
+        std::cout << "Plot size bytes: " << plot_bytes << ", Num plots per 20TB: " << num_plots << std::endl;
+        //exit(23);
 
         // Simulate disk reads
         double total_time_ms = 0.0;
@@ -94,12 +98,11 @@ public:
         size_t num_plots_passed_chaining = 0;
         size_t total_proofs_found = 0;
 
-        ProofParams params(Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").data(), k_, 2);
-        ProofCore proof_core(params);
+        ProofCore proof_core(proof_params_);
 
-        size_t plot_bytes = proof_core.expected_plot_bytes();
+        //size_t plot_bytes = proof_core.expected_plot_bytes();
         //std::cout << "ProofParams: k=" << (int)k_ << ", sub_k=" << (int)sub_k << ", num_partitions=" << num_partitions << std::endl;
-        exit(23);
+        //exit(23);
 
         std::array<uint8_t, 32> challenge;
         challenge.fill(0); // Initialize challenge with zeros
@@ -107,8 +110,8 @@ public:
         // a little "hacky", we setup a bogus file name and then override the plot file contents directly for testing
         // so this won't need to create or read a plot file.
         PlotData empty;
-        PlotFile::PlotFileContents plot{empty, params};
-        plot.params = params;
+        PlotFile::PlotFileContents plot{empty, proof_params_};
+        plot.params = proof_params_;
         Prover prover(challenge, "test_plot_file.dat");
         prover._testing_setPlotFileContents(plot);
 
@@ -266,16 +269,28 @@ public:
     }
 
     // accessors
-    size_t k() const { return k_; }
     size_t proofFragmentScanFilterBits() const { return proof_fragment_scan_filter_bits_; }
     size_t plotIdFilterBits() const { return plot_id_filter_bits_; }
     double hddSeekTimeMs() const { return hdd_seek_time_ms_; }
     double hddReadMBs() const { return hdd_read_MBs_; }
 
-    // static helpers for partition sizes
-    static size_t t3_partition_bytes(int k)
+    size_t plot_size_bytes() const
     {
-        switch (k)
+        size_t t3_bytes = t3_partition_bytes() * proof_params_.get_num_partitions() * 2;
+        size_t t4t5_bytes = t4t5_partition_bytes() * proof_params_.get_num_partitions() * 2;
+        return t3_bytes + t4t5_bytes;
+    }
+
+    // static helpers for partition sizes
+    size_t t3_partition_bytes() const
+    {
+
+        double elements_in_sub_k = FINAL_TABLE_FILTER_D * 4.0 * static_cast<double>(1ULL << (proof_params_.get_sub_k() - 1));
+        double partition_bytes_t3 = elements_in_sub_k * (static_cast<double>(proof_params_.get_k()) + 1.43) / 8.0;
+        std::cout << "t3_partition_bytes calculation: elements_in_sub_k=" << elements_in_sub_k << ", partition_bytes_t3=" << (int) partition_bytes_t3 << std::endl;
+        //exit(23);
+        return static_cast<size_t>(partition_bytes_t3);
+        /*switch (k)
         {
         case 28:
             return 1536831; // sub_k 20
@@ -285,12 +300,19 @@ public:
             return 13965385; // sub_k 23
         default:
             throw std::invalid_argument("t3_partition_bytes: k must be even integer between 28 and 32.");
-        }
+        }*/
     }
 
-    static size_t t4t5_partition_bytes(int k)
-    {
-        switch (k)
+    size_t t4t5_partition_bytes() const
+    {   
+        // N log2 N - (1.43 + 2.04)N, where N is elements in sub_k
+        double elements_in_sub_k = FINAL_TABLE_FILTER_D * 4.0 * static_cast<double>(1ULL << (proof_params_.get_sub_k() - 1));
+        double N_log2_N = elements_in_sub_k * log2(elements_in_sub_k);
+        double partition_bits_t4 = N_log2_N - (1.43 - 2.04) * elements_in_sub_k;
+        double partition_bytes_t4t5 = partition_bits_t4 * 2 / 8.0;
+        std::cout << "t4t5_partition_bytes calculation: elements_in_sub_k=" << elements_in_sub_k << ", N_log2_N =" << N_log2_N << ", partition_bits_t4=" << partition_bits_t4 << ", partition_bytes_t4t5=" << (int) partition_bytes_t4t5 << std::endl;
+        return static_cast<size_t>(partition_bytes_t4t5);
+        /*switch (k)
         {
         case 28:
             return 1006920 * 2; // sub k 20
@@ -300,11 +322,11 @@ public:
             return 9308637 * 2; // for sub k 23
         default:
             throw std::invalid_argument("t4_partition_bytes: k must be even integer between 28 and 32, sub_k must be 20/22/23.");
-        }
+        }*/
     }
 
 private:
-    size_t k_;
+    ProofParams proof_params_;
     size_t proof_fragment_scan_filter_bits_;
     size_t plot_id_filter_bits_;
     double hdd_seek_time_ms_;

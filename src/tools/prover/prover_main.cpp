@@ -174,14 +174,15 @@ try
             return 1;
         }
         plotfile = argv[2];
-        size_t numPlots = 11000;//600;//11000;
+        size_t numPlots = 11000;
         if (argc == 4)
         {
             numPlots = std::stoi(argv[3]);
         }
         std::cout << "Disk benchmark mode: file = " << plotfile << ", numPlots = " << numPlots << std::endl;
 
-        DiskBench diskbench;
+        ProofParams proof_params(Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").data(), 28, 2);
+        DiskBench diskbench(proof_params);
         diskbench.simulateChallengeDiskReads(numPlots);
         
         return 0;
