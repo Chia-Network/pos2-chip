@@ -8,8 +8,11 @@
 #include "common/Utils.hpp"
 #include "pos/ProofCore.hpp"
 #include "prove/Prover.hpp"
+#include <vector>
+#include <cmath>
+#include <algorithm>
+#include <iomanip>
 
-//#define DEBUG_DISK_BENCH true
 /*
 Completed 9200 of 9216 challenges...
   Current disk % load: 6.24103%
@@ -98,6 +101,14 @@ public:
         double split_disk_total_time_passing_proof_fragment_scan_ms[2] = {0.0, 0.0};
         double split_disk_total_time_fetching_full_proofs_partitions_ms[2] = {0.0, 0.0};
 
+        // Collect per-challenge stats for histograms
+        std::vector<double> block_times_ms;
+        std::vector<int> proofs_per_challenge;
+        std::vector<int> proofs_per_chain_fetch;
+        block_times_ms.reserve(10000);
+        proofs_per_challenge.reserve(10000);
+        proofs_per_chain_fetch.reserve(10000);
+
         size_t num_plots_passed_filter = 0;
         size_t num_plots_passed_proof_fragment_scan_filter = 0;
         size_t num_plots_passed_chaining = 0;
@@ -151,6 +162,7 @@ public:
             total_block_time_ms = 0.0;
             split_disk_total_block_time_ms[0] = 0.0;
             split_disk_total_block_time_ms[1] = 0.0;
+            int proofs_this_challenge = 0;
             for (size_t i = 0; i < num_plots; ++i)
             {
                 // random chance to pass plot id filter
@@ -239,6 +251,7 @@ public:
                 {
                     num_plots_passed_chaining++;
                     total_proofs_found += qualityChains.size();
+                    proofs_this_challenge += static_cast<int>(qualityChains.size());
 
                     // when have to fetch full proofs, each quality link in chain needs to fetch 1 additional leaf node from T3.
                     // with 16 elements in the chain, this is 16 additional reads of 32KB each.
@@ -260,7 +273,13 @@ public:
                     split_disk_total_time_fetching_full_proofs_partitions_ms[0] += time_for_all_chain_fetches_ms;
                     split_disk_total_time_ms[0] += time_for_all_chain_fetches_ms;*/
                 }
+                proofs_per_chain_fetch.push_back(static_cast<int>(qualityChains.size()));
             }
+
+            // record per-challenge aggregates for histograms
+            block_times_ms.push_back(total_block_time_ms);
+            proofs_per_challenge.push_back(proofs_this_challenge);
+
             if (total_block_time_ms > maximum_block_time_ms)
                 maximum_block_time_ms = total_block_time_ms;
             if (total_block_time_ms < minimum_block_time_ms)
@@ -348,6 +367,55 @@ public:
         std::cout << "Proof fragment scan filter: " << (1 << proof_fragment_scan_filter_bits) << std::endl;
 
         std::cout << "Estimated HDD load for 1 challenge every 9.375 seconds: " << (hdd_load * 100.0 / (double)num_challenges) << "%" << std::endl;
+
+        // Helper: print a simple ASCII histogram for double data
+        auto print_double_histogram = [&](const std::string &title, const std::vector<double> &data, int bins) {
+            std::cout << title << std::endl;
+            if (data.empty()) { std::cout << "  (no data)\n"; return; }
+            double minv = *std::min_element(data.begin(), data.end());
+            double maxv = *std::max_element(data.begin(), data.end());
+            if (minv == maxv) { std::cout << "  All values: " << minv << "\n"; return; }
+            double range = maxv - minv;
+            std::vector<size_t> counts(bins);
+            for (double v : data) {
+                int idx = static_cast<int>(std::floor((v - minv) / range * bins));
+                if (idx < 0) idx = 0;
+                if (idx >= bins) idx = bins - 1;
+                counts[idx]++;
+            }
+            for (int b = 0; b < bins; ++b) {
+                double lo = minv + (static_cast<double>(b) / bins) * range;
+                double hi = minv + (static_cast<double>(b + 1) / bins) * range;
+                std::cout << "  [" << lo << ", " << hi << "): " << counts[b] << " ";
+                int stars = static_cast<int>(std::round(50.0 * counts[b] / data.size()));
+                for (int s = 0; s < stars; ++s) std::cout << '*';
+                std::cout << std::endl;
+            }
+        };
+
+        // Helper: print histogram for integer data (uses discrete bins)
+        auto print_int_histogram = [&](const std::string &title, const std::vector<int> &data) {
+            std::cout << title << std::endl;
+            if (data.empty()) { std::cout << "  (no data)\n"; return; }
+            int minv = *std::min_element(data.begin(), data.end());
+            int maxv = *std::max_element(data.begin(), data.end());
+            if (minv == maxv) { std::cout << "  All values: " << minv << "\n"; return; }
+            int range = maxv - minv + 1;
+            std::vector<size_t> counts(range);
+            for (int v : data) counts[v - minv]++;
+            for (int i = 0; i < range; ++i) {
+                int val = i + minv;
+                std::cout << "  " << val << ": " << counts[i] << " ";
+                int stars = static_cast<int>(std::round(50.0 * counts[i] / data.size()));
+                for (int s = 0; s < stars; ++s) std::cout << '*';
+                std::cout << std::endl;
+            }
+        };
+
+        std::cout << "---- Histograms ----" << std::endl;
+        print_double_histogram("Time per block (ms) histogram:", block_times_ms, 20);
+        print_int_histogram("# Proofs found per challenge histogram:", proofs_per_challenge);
+        print_int_histogram("# Proofs found per chain fetch histogram:", proofs_per_chain_fetch);
     }
 
     size_t plot_size_bytes() const
