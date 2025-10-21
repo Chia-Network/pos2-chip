@@ -86,12 +86,23 @@ public:
         size_t total_data_read_bytes = 0;
         size_t total_random_disk_seeks = 0;
 
+        double split_disk_total_time_ms[2] = { 0.0, 0.0 };
+        size_t split_disk_total_data_read_bytes[2] = { 0, 0 };
+        size_t split_disk_total_random_disk_seeks[2] = { 0, 0 };
+
         double total_block_time_ms = 0.0;
         double maximum_block_time_ms = 0.0;
         double minimum_block_time_ms = std::numeric_limits<double>::max();
         double total_time_passing_plot_id_filter_ms = 0.0;
         double total_time_passing_proof_fragment_scan_ms = 0.0;
         double total_time_fetching_full_proofs_partitions_ms = 0.0;
+
+        double split_disk_total_block_time_ms[2] = { 0.0, 0.0 };
+        double split_disk_maximum_block_time_ms[2] = { 0.0, 0.0 };
+        double split_disk_minimum_block_time_ms[2] = { std::numeric_limits<double>::max(), std::numeric_limits<double>::max() };
+        double split_disk_total_time_passing_plot_id_filter_ms[2] = { 0.0, 0.0 };
+        double split_disk_total_time_passing_proof_fragment_scan_ms[2] = { 0.0, 0.0 };
+        double split_disk_total_time_fetching_full_proofs_partitions_ms[2] = { 0.0, 0.0 };
 
         size_t num_plots_passed_filter = 0;
         size_t num_plots_passed_proof_fragment_scan_filter = 0;
@@ -144,6 +155,8 @@ public:
         for (size_t nChallenges = 0; nChallenges < num_challenges; ++nChallenges)
         { // simulate a days worth of challenges
             total_block_time_ms = 0.0;
+            split_disk_total_block_time_ms[0] = 0.0;
+            split_disk_total_block_time_ms[1] = 0.0;
             for (size_t i = 0; i < num_plots; ++i)
             {
                 // random chance to pass plot id filter
@@ -169,6 +182,14 @@ public:
                 total_time_ms += passes_plot_id_filter_time_to_scan;
                 total_random_disk_seeks += 1;
 
+                // these are for disk 1 holding t3 partitions
+                split_disk_total_data_read_bytes[0] += bytes_to_read;
+                split_disk_total_time_passing_plot_id_filter_ms[0] += passes_plot_id_filter_time_to_scan;
+                split_disk_total_block_time_ms[0] += passes_plot_id_filter_time_to_scan;
+                split_disk_total_time_ms[0] += passes_plot_id_filter_time_to_scan;
+                split_disk_total_random_disk_seeks[0] += 1;
+
+
                 // now check if passed proof fragment scan filter
                 modulus = (1ULL << proof_fragment_scan_filter_bits_);
                 if ((std::rand() % static_cast<int>(modulus)) != 0)
@@ -181,18 +202,31 @@ public:
                 // once passed plot filter, we read the full t3 and t4/t5 partitions, twice! Once for A and B partitions.
                 size_t partition_bytes_to_read_after_proof_fragment_scan = (t3_part_bytes + t4t5_part_bytes); // one full partition
                 double ms_to_read_full_partition = 1000.0 * (static_cast<double>(partition_bytes_to_read_after_proof_fragment_scan) / (1000.0 * 1000.0)) / hdd_read_MBs_;
-                double passes_proof_fragment_scan_time_to_read_full_partitions = 2 * hdd_seek_time_ms_ + 2 * ms_to_read_full_partition;
+                double passes_proof_fragment_scan_time_to_read_full_partition = hdd_seek_time_ms_ + ms_to_read_full_partition;
 #ifdef DEBUG_DISK_BENCH
                 std::cout << "ms to read full partition: " << ms_to_read_full_partition << " ms" << std::endl;
                 std::cout << "total_bytes_to_read_after_proof_fragment_scan: " << partition_bytes_to_read_after_proof_fragment_scan << " bytes" << std::endl;
                 std::cout << "passes_proof_fragment_scan_time_to_read_A_B_full_partitions: " << passes_proof_fragment_scan_time_to_read_full_partitions << " ms" << std::endl;
 #endif
-                total_data_read_bytes += partition_bytes_to_read_after_proof_fragment_scan;
-                total_block_time_ms += passes_proof_fragment_scan_time_to_read_full_partitions;
-                total_time_passing_proof_fragment_scan_ms += passes_proof_fragment_scan_time_to_read_full_partitions;
-                total_time_ms += passes_proof_fragment_scan_time_to_read_full_partitions;
-                total_data_read_bytes += partition_bytes_to_read_after_proof_fragment_scan;
+                total_data_read_bytes += 2 * partition_bytes_to_read_after_proof_fragment_scan;
+                total_block_time_ms += 2 * passes_proof_fragment_scan_time_to_read_full_partition;
+                total_time_passing_proof_fragment_scan_ms += 2 * passes_proof_fragment_scan_time_to_read_full_partition;
+                total_time_ms += 2 * passes_proof_fragment_scan_time_to_read_full_partition;
                 total_random_disk_seeks += 2;
+
+                // t3 partitions are on disk 1, t4/t5 on disk 2
+                split_disk_total_data_read_bytes[0] += 2 * t3_part_bytes;
+                split_disk_total_data_read_bytes[1] += 2 * t4t5_part_bytes;
+                double ms_to_read_t3_partition = hdd_seek_time_ms_ + 1000.0 * (static_cast<double>(t3_part_bytes) / (1000.0 * 1000.0)) / hdd_read_MBs_;
+                double ms_to_read_t4t5_partition = hdd_seek_time_ms_ + 1000.0 * (static_cast<double>(t4t5_part_bytes) / (1000.0 * 1000.0)) / hdd_read_MBs_;
+                split_disk_total_block_time_ms[0] += 2 * ms_to_read_t3_partition;
+                split_disk_total_block_time_ms[1] += 2 * ms_to_read_t4t5_partition;
+                split_disk_total_time_passing_proof_fragment_scan_ms[0] += 2 * ms_to_read_t3_partition;
+                split_disk_total_time_passing_proof_fragment_scan_ms[1] += 2 * ms_to_read_t4t5_partition;
+                split_disk_total_time_ms[0] += 2 * ms_to_read_t3_partition;
+                split_disk_total_time_ms[1] += 2 * ms_to_read_t4t5_partition;
+                split_disk_total_random_disk_seeks[0] += 2;
+                split_disk_total_random_disk_seeks[1] += 2;
 
                 // now do chaining filter simulation
                 challenge[0] = rand();
@@ -211,23 +245,43 @@ public:
                 if (qualityChains.size() > 0)
                 {
                     num_plots_passed_chaining++;
+                    total_proofs_found += qualityChains.size();
 
+                    // when have to fetch full proofs, each quality link in chain needs to fetch 1 additional leaf node from T3.
+                    // with 16 elements in the chain, this is 16 additional reads of 32KB each.
+                    // NOTE: in real scenario, only plots passing difficulty filter for pool would need to do this. Should not be much more than 1 each block.
                     // TODO: if a lot of chains, chance same partitions might be read (N in M buckets combination probability)
                     // have to fetch leaf nodes. Simple seek and scan of 32KB.
-                    total_data_read_bytes += 32 * 1024;
-                    total_random_disk_seeks += 1;
+                    /*total_data_read_bytes += qualityChains.size() * NUM_CHAIN_LINKS * 32 * 1024;
+                    total_random_disk_seeks += NUM_CHAIN_LINKS * qualityChains.size();
                     double time_per_leaf_fetch_ms = hdd_seek_time_ms_ + ms_to_read_32KB;
-                    double time_for_all_chain_fetches_ms = (double)qualityChains.size() * 2 * time_per_leaf_fetch_ms;
+                    double time_for_all_chain_fetches_ms = (double)qualityChains.size() * NUM_CHAIN_LINKS * time_per_leaf_fetch_ms;
                     total_block_time_ms += time_for_all_chain_fetches_ms;
                     total_time_fetching_full_proofs_partitions_ms += time_for_all_chain_fetches_ms;
                     total_time_ms += time_for_all_chain_fetches_ms;
-                    total_proofs_found += qualityChains.size();
+                    
+                    // this only affects split disk 1 since leaf nodes are in t3 partitions
+                    split_disk_total_data_read_bytes[0] += qualityChains.size() * NUM_CHAIN_LINKS * 32 * 1024;
+                    split_disk_total_random_disk_seeks[0] += NUM_CHAIN_LINKS * qualityChains.size();
+                    split_disk_total_block_time_ms[0] += time_for_all_chain_fetches_ms;
+                    split_disk_total_time_fetching_full_proofs_partitions_ms[0] += time_for_all_chain_fetches_ms;
+                    split_disk_total_time_ms[0] += time_for_all_chain_fetches_ms;*/
                 }
             }
             if (total_block_time_ms > maximum_block_time_ms)
                 maximum_block_time_ms = total_block_time_ms;
             if (total_block_time_ms < minimum_block_time_ms)
                 minimum_block_time_ms = total_block_time_ms;
+
+            if (split_disk_total_block_time_ms[0] > split_disk_maximum_block_time_ms[0])
+                split_disk_maximum_block_time_ms[0] = split_disk_total_block_time_ms[0];
+            if (split_disk_total_block_time_ms[0] < split_disk_minimum_block_time_ms[0])
+                split_disk_minimum_block_time_ms[0] = split_disk_total_block_time_ms[0];
+            if (split_disk_total_block_time_ms[1] > split_disk_maximum_block_time_ms[1])
+                split_disk_maximum_block_time_ms[1] = split_disk_total_block_time_ms[1];
+            if (split_disk_total_block_time_ms[1] < split_disk_minimum_block_time_ms[1])
+                split_disk_minimum_block_time_ms[1] = split_disk_total_block_time_ms[1];
+
 #ifndef DEBUG_DISK_BENCH
             if (nChallenges % 100 == 0)
             {
@@ -243,15 +297,17 @@ public:
         double hdd_load = total_time_ms / time_per_block_ms;
 
         std::cout << "---- completed " << num_challenges << " challenges ----" << std::endl;
-        std::cout << "Plots passed filter: " << num_plots_passed_filter << " out of " << num_plots << " ("
-                  << (static_cast<double>(num_plots_passed_filter) * 100.0 / static_cast<double>(num_plots)) << "%)" << std::endl;
-        std::cout << "Plots passed proof fragment scan filter: " << num_plots_passed_proof_fragment_scan_filter << " out of " << num_plots << " ("
-                  << (static_cast<double>(num_plots_passed_proof_fragment_scan_filter) * 100.0 / static_cast<double>(num_plots)) << "%)" << std::endl;
+        std::cout << "Plots passed filter: " << num_plots_passed_filter << " out of " << num_plots << " for " << num_challenges << " challenges ("
+                  << (static_cast<double>(num_plots_passed_filter) * 100.0 / static_cast<double>(num_plots * num_challenges)) << "%)" << std::endl;
+        double expected_plots_passing_filter = static_cast<double>(num_plots * num_challenges) / static_cast<double>(1 << plot_id_filter_bits_);
+        std::cout << "Expected plots passing filter: " << expected_plots_passing_filter << std::endl;
+        std::cout << "Plots passed proof fragment scan filter: " << num_plots_passed_proof_fragment_scan_filter << " out of " << num_plots << " for " << num_challenges << " challenges ("
+                  << (static_cast<double>(num_plots_passed_proof_fragment_scan_filter) * 100.0 / static_cast<double>(num_plots * num_challenges)) << "%)" << std::endl;
         std::cout << "Total time for " << num_plots << " plots: " << total_time_ms << " ms" << std::endl;
-        std::cout << "Plots passed chaining: " << num_plots_passed_chaining << " out of " << num_plots << " ("
-                  << (static_cast<double>(num_plots_passed_chaining) * 100.0 / static_cast<double>(num_plots)) << "%)" << std::endl;
+        std::cout << "Plots passed chaining: " << num_plots_passed_chaining << " out of " << num_plots << " for " << num_challenges << " challenges ("
+                  << (static_cast<double>(num_plots_passed_chaining) * 100.0 / static_cast<double>(num_plots * num_challenges)) << "%)" << std::endl;
         std::cout << "Total proofs found: " << total_proofs_found << std::endl;
-        std::cout << "Average proofs per plot per challenge:" << (static_cast<double>(total_proofs_found) / static_cast<double>(num_plots)) << std::endl;
+        std::cout << "Average proofs per plot per challenge:" << (static_cast<double>(total_proofs_found) / static_cast<double>(num_plots * num_challenges)) << std::endl;
 
         std::cout << "Average time per plot: " << (total_time_ms / static_cast<double>(num_plots)) << " ms" << std::endl;
         std::cout << "Time spent passing plot id filter: " << total_time_passing_plot_id_filter_ms << " ms (% " << (total_time_passing_plot_id_filter_ms / total_time_ms) * 100.0 << ")" << std::endl;
@@ -260,6 +316,33 @@ public:
         std::cout << "Total data bytes read: " << total_data_read_bytes << std::endl;
         std::cout << "Average data read per plot: " << (total_data_read_bytes / num_plots) << " bytes" << std::endl;
         std::cout << "Total random disk seeks: " << total_random_disk_seeks << std::endl;
+
+        std::cout << "---- Split Disk Stats ----" << std::endl;
+        double perc_data_on_disk_1 = static_cast<double>(t3_part_bytes) / static_cast<double>(t3_part_bytes + t4t5_part_bytes);
+        double perc_data_on_disk_2 = static_cast<double>(t4t5_part_bytes) / static_cast<double>(t3_part_bytes + t4t5_part_bytes);
+        std::cout << "Percentage of data on Disk 1 (t3 partitions): " << perc_data_on_disk_1 * 100.0 << "%" << std::endl;
+        std::cout << "Percentage of data on Disk 2 (t4/t5 partitions): " << perc_data_on_disk_2 * 100.0 << "%" << std::endl;
+        double multipler_disk_1_load = 1.0 / perc_data_on_disk_1;
+        double multipler_disk_2_load = 1.0 / perc_data_on_disk_2;
+        std::cout << "Estimated Disk 1 load multiplier: " << multipler_disk_1_load << std::endl;
+        std::cout << "Estimated Disk 2 load multiplier: " << multipler_disk_2_load << std::endl;
+        for (int disk_idx = 0; disk_idx < 2; ++disk_idx)
+        {
+            std::cout << "Disk " << disk_idx + 1 << " total data bytes read: " << split_disk_total_data_read_bytes[disk_idx] << std::endl;
+            std::cout << "Disk " << disk_idx + 1 << " total random disk seeks: " << split_disk_total_random_disk_seeks[disk_idx] << std::endl;
+            std::cout << "Disk " << disk_idx + 1 << " total time ms: " << split_disk_total_time_ms[disk_idx] << " ms" << std::endl;
+            std::cout << "Disk " << disk_idx + 1 << " average time per plot: " << (split_disk_total_time_ms[disk_idx] / static_cast<double>(num_plots)) << " ms" << std::endl;
+            std::cout << "Disk " << disk_idx + 1 << " time passing plot id filter: " << split_disk_total_time_passing_plot_id_filter_ms[disk_idx] << " ms" << std::endl;
+            std::cout << "Disk " << disk_idx + 1 << " time passing proof fragment scan filter: " << split_disk_total_time_passing_proof_fragment_scan_ms[disk_idx] << " ms" << std::endl;
+            std::cout << "Disk " << disk_idx + 1 << " time fetching full proofs partitions: " << split_disk_total_time_fetching_full_proofs_partitions_ms[disk_idx] << " ms" << std::endl;
+            std::cout << "Disk " << disk_idx + 1 << " max block time: " << split_disk_maximum_block_time_ms[disk_idx] << " ms" << std::endl;
+            std::cout << "Disk " << disk_idx + 1 << " min block time: " << split_disk_minimum_block_time_ms[disk_idx] << " ms" << std::endl;
+            std::cout << "------------------------" << std::endl;
+            double load_multiplier = (disk_idx == 0) ? multipler_disk_1_load : multipler_disk_2_load;
+            std::cout << "Estimated HDD load for Disk " << disk_idx + 1 << " for 1 challenge every 9.375 seconds: "
+                      << (load_multiplier * split_disk_total_time_ms[disk_idx] * 100.0 / (static_cast<double>(num_challenges) * time_per_block_ms)) << "%" << std::endl;
+
+        }
 
         std::cout << "----" << std::endl;
         std::cout << "Plot ID filter: " << (1 << plot_id_filter_bits_) << std::endl;

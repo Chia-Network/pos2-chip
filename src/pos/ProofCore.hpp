@@ -533,30 +533,6 @@ public:
         return SafeFractionMath::map_fraction_to_u32(chance);
     }
 
-    size_t expected_plot_bytes()
-    {
-        uint64_t num_elements_in_sub_k = 1ULL << (params_.get_sub_k() - 1);
-        uint64_t numerator = FINAL_TABLE_FILTER * 4;
-        uint64_t denominator = (1ULL << 32);
-        auto frac = std::make_pair(numerator, denominator);
-        frac = SafeFractionMath::mul_fraction_u64(frac, num_elements_in_sub_k, 1);
-        // G3*log2(G3)-(1.43-2.04)*G3
-        // where G3 is frac.
-        uint32_t g3 = frac.first / frac.second;
-        double g3_d = static_cast<double>(frac.first) / static_cast<double>(frac.second);
-        double log2_g3_d = std::log2(g3_d);
-        auto benes_bytes = SafeFractionMath::log2_u32_fraction(g3);
-        std::cout << "k: " << params_.get_k() << std::endl;
-        std::cout << "sub_k: " << params_.get_sub_k() << std::endl;
-        std::cout << "num elements in sub_k: " << num_elements_in_sub_k << std::endl;
-        std::cout << "Expected G3: " << g3 << std::endl;
-        std::cout << "G3 double: " << g3_d << std::endl;
-        std::cout << "log2(G3) double: " << log2_g3_d << std::endl;
-        std::cout << "   num/denom: " << benes_bytes.first << "/" << benes_bytes.second << " = " << ((double)benes_bytes.first / (double)benes_bytes.second) << std::endl;
-
-        return 0;
-    }
-
     // Determines the required fragments pattern based on the challenge.
     FragmentsPattern requiredPatternFromChallenge(BlakeHash::Result256 challenge)
     {
