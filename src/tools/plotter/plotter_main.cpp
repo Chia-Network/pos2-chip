@@ -121,9 +121,9 @@ int main(int argc, char *argv[]) try
             std::cout << partition_id << "..." << std::flush;
             for (size_t i = 0; i < plot.t5_to_t4_back_pointers[partition_id].size(); ++i)
             {
-                uint32_t back_pointer_index = plot.t5_to_t4_back_pointers[partition_id][i].t4_index_l;
-                uint64_t back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_l;
-                uint64_t back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_r;
+                uint32_t back_pointer_index = plot.t5_to_t4_back_pointers[partition_id][i].l;
+                uint64_t back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].l;
+                uint64_t back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].r;
                 uint64_t proof_fragment_l = plot.t3_proof_fragments[back_l];
                 uint64_t proof_fragment_r = plot.t3_proof_fragments[back_r];
                 auto res = validator.validate_table_5_pairs(plot.t5_to_t4_back_pointers[partition_id][i].xs);
@@ -149,9 +149,9 @@ int main(int argc, char *argv[]) try
                     exit(23);
                 }
 
-                back_pointer_index = plot.t5_to_t4_back_pointers[partition_id][i].t4_index_r;
-                back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_l;
-                back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_r;
+                back_pointer_index = plot.t5_to_t4_back_pointers[partition_id][i].r;
+                back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].l;
+                back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].r;
                 proof_fragment_l = plot.t3_proof_fragments[back_l];
                 proof_fragment_r = plot.t3_proof_fragments[back_r];
                 valid_l = fragment_codec.validate_proof_fragment(proof_fragment_l, plot.t5_to_t4_back_pointers[partition_id][i].xs + 16);
