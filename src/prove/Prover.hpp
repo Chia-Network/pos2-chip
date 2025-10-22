@@ -137,7 +137,9 @@ public:
         #endif
         // uint32_t chaining_hash_pass_threshold = proof_core.quality_chain_pass_threshold();
 
+        #ifdef DEBUG_CHAINING
         std::cout << "Found fragments passing filter: " << filtered_fragments.size() << std::endl;
+        #endif
         for (const auto &frag_res : filtered_fragments)
         {
             uint64_t fragment = frag_res.fragment;
