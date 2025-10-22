@@ -12,6 +12,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iomanip>
+#include <random>
 
 /*
 Completed 9200 of 9216 challenges...
@@ -141,17 +142,21 @@ public:
 #endif
         links.reserve(num_quality_links);
 
-        // change seed for different runs
-        std::srand(static_cast<unsigned int>(time(nullptr)));
+        // use a proper 32-bit PRNG
+        std::random_device rd;
+        std::mt19937 rng(rd());
+        std::uniform_int_distribution<uint32_t> dist32(0, std::numeric_limits<uint32_t>::max());
+        std::uniform_int_distribution<int> distPattern(0, 1);
+        std::uniform_int_distribution<uint64_t> dist64(0, std::numeric_limits<uint64_t>::max());
 
         // Generate random quality links
         for (int i = 0; i < num_quality_links; ++i)
         {
             QualityLink link;
-            link.pattern = static_cast<FragmentsPattern>(rand() % 2); // Randomly choose between OUTSIDE_FRAGMENT_IS_LR and OUTSIDE_FRAGMENT_IS_RR
+            link.pattern = static_cast<FragmentsPattern>(distPattern(rng)); // 0 or 1
             for (int j = 0; j < 3; ++j)
             {
-                link.fragments[j] = rand() % std::numeric_limits<uint64_t>::max();
+                link.fragments[j] = dist64(rng);
             }
             links.push_back(link);
         }
@@ -168,7 +173,9 @@ public:
                 // random chance to pass plot id filter
                 uint64_t modulus = (1ULL << plot_id_filter_bits);
 
-                if ((std::rand() % static_cast<int>(modulus)) != 0)
+                // draw uniformly in [0, modulus-1]
+                std::uniform_int_distribution<uint64_t> dist_plot_id(0, modulus - 1);
+                if (dist_plot_id(rng) != 0)
                 {
                     continue; // skip this plot
                 }
@@ -197,7 +204,8 @@ public:
 
                 // now check if passed proof fragment scan filter
                 modulus = (1ULL << proof_fragment_scan_filter_bits);
-                if ((std::rand() % static_cast<int>(modulus)) != 0)
+                std::uniform_int_distribution<uint64_t> dist_proof_scan(0, modulus - 1);
+                if (dist_proof_scan(rng) != 0)
                 {
                     continue; // skip this plot
                 }
@@ -234,10 +242,14 @@ public:
                 split_disk_total_random_disk_seeks[1] += 2;
 
                 // now do chaining filter simulation
-                challenge[0] = rand();
-                challenge[1] = rand();
-                challenge[2] = rand();
-                challenge[3] = rand();
+                // fill all 32 bytes of the challenge with random data
+                for (size_t off = 0; off < challenge.size(); off += 4) {
+                    uint32_t r = dist32(rng);
+                    challenge[off + 0] = static_cast<uint8_t>(r & 0xFF);
+                    challenge[off + 1] = static_cast<uint8_t>((r >> 8) & 0xFF);
+                    challenge[off + 2] = static_cast<uint8_t>((r >> 16) & 0xFF);
+                    challenge[off + 3] = static_cast<uint8_t>((r >> 24) & 0xFF);
+                }
                 prover.setChallenge(challenge);
                 BlakeHash::Result256 next_challenge = proof_core.hashing.challengeWithPlotIdHash(challenge.data());
                 QualityLink firstLink = links[0];
