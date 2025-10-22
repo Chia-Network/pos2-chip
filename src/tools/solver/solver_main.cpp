@@ -13,30 +13,30 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
     ProofFragmentCodec fragment_codec(plot.params);
 
 #ifdef RETAIN_X_VALUES_TO_T3
-    for (int partition = 0; partition < plot.data.t5_to_t4_back_pointers.size(); partition++)
+    for (size_t partition = 0; partition < plot.data.t5_to_t4_back_pointers.size(); partition++)
         // int partition = 0;
-        for (int test_slot = 0; test_slot < plot.data.t5_to_t4_back_pointers[partition].size(); test_slot++)
+        for (size_t test_slot = 0; test_slot < plot.data.t5_to_t4_back_pointers[partition].size(); test_slot++)
         {
             // wait for key press, show current test number
             // std::cout << "Press enter to continue to test " << test_slot << " in partition " << partition << std::endl;
             // std::cin.get();
 
-            T5Pairing t5_pairing = plot.data.t5_to_t4_back_pointers[partition][test_slot]; // now get t4 L and R pairings
-            T4BackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_l];
-            T4BackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_r];
-            ProofFragment fragment_LL = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_l];
-            ProofFragment fragment_LR = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_r];
-            ProofFragment fragment_RL = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_l];
-            ProofFragment fragment_RR = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_r];
+            PlotBackPointers t5_pairing = plot.data.t5_to_t4_back_pointers[partition][test_slot]; // now get t4 L and R pairings
+            PlotBackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.l];
+            PlotBackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.r];
+            ProofFragment fragment_LL = plot.data.t3_proof_fragments[t4_to_t3_L.l];
+            ProofFragment fragment_LR = plot.data.t3_proof_fragments[t4_to_t3_L.r];
+            ProofFragment fragment_RL = plot.data.t3_proof_fragments[t4_to_t3_R.l];
+            ProofFragment fragment_RR = plot.data.t3_proof_fragments[t4_to_t3_R.r];
             std::cout << "Fragments LL: " << fragment_LL << std::endl;
             // decode it to get x-bits
 
-            uint64_t decrypted_xs_LL = fragment_codec.decode(fragment_LL);
-            uint64_t decrypted_xs_LR = fragment_codec.decode(fragment_LR);
-            uint64_t decrypted_xs_RL = fragment_codec.decode(fragment_RL);
-            uint64_t decrypted_xs_RR = fragment_codec.decode(fragment_RR);
+            //uint64_t decrypted_xs_LL = fragment_codec.decode(fragment_LL);
+            //uint64_t decrypted_xs_LR = fragment_codec.decode(fragment_LR);
+            //uint64_t decrypted_xs_RL = fragment_codec.decode(fragment_RL);
+            //uint64_t decrypted_xs_RR = fragment_codec.decode(fragment_RR);
 
-            if (fragment_codec.validate_proof_fragment(fragment_LL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l].data()))
+            if (fragment_codec.validate_proof_fragment(fragment_LL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.l].data()))
             {
                 std::cout << "Fragments LL match x-bits." << std::endl;
             }
@@ -45,7 +45,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
                 std::cerr << "Fragments LL do not match x-bits." << std::endl;
                 return 1;
             }
-            if (fragment_codec.validate_proof_fragment(fragment_LR, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r].data()))
+            if (fragment_codec.validate_proof_fragment(fragment_LR, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.r].data()))
             {
                 std::cout << "Fragments LR match x-bits." << std::endl;
             }
@@ -54,7 +54,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
                 std::cerr << "Fragments LR do not match x-bits." << std::endl;
                 return 1;
             }
-            if (fragment_codec.validate_proof_fragment(fragment_RL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l].data()))
+            if (fragment_codec.validate_proof_fragment(fragment_RL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.l].data()))
             {
                 std::cout << "Fragments RL match x-bits." << std::endl;
             }
@@ -63,7 +63,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
                 std::cerr << "Fragments RL do not match x-bits." << std::endl;
                 return 1;
             }
-            if (fragment_codec.validate_proof_fragment(fragment_RR, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r].data()))
+            if (fragment_codec.validate_proof_fragment(fragment_RR, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.r].data()))
             {
                 std::cout << "Fragments RR match x-bits." << std::endl;
             }
@@ -81,38 +81,38 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             int bit_drop = plot.params.get_k() / 2;
             for (int i = 0; i < 8; i++)
             {
-                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i]);
+                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.l][i] << " ";
+                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.l][i]);
                 if (i % 2 == 0)
                 {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i] >> bit_drop);
+                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.l][i] >> bit_drop);
                 }
             }
             for (int i = 0; i < 8; i++)
             {
-                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i]);
+                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.r][i] << " ";
+                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.r][i]);
                 if (i % 2 == 0)
                 {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i] >> bit_drop);
+                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.r][i] >> bit_drop);
                 }
             }
             for (int i = 0; i < 8; i++)
             {
-                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i]);
+                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.l][i] << " ";
+                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.l][i]);
                 if (i % 2 == 0)
                 {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i] >> bit_drop);
+                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.l][i] >> bit_drop);
                 }
             }
             for (int i = 0; i < 8; i++)
             {
-                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i]);
+                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.r][i] << " ";
+                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.r][i]);
                 if (i % 2 == 0)
                 {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i] >> bit_drop);
+                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.r][i] >> bit_drop);
                 }
             }
             std::cout << std::endl;
@@ -131,7 +131,7 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             }
 
             Solver solver(plot.params);
-            std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list, xs_solution);
+            std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t const, 256>(x_bits_list), xs_solution);
 
             std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
             for (size_t i = 0; i < all_proofs.size(); i++)
