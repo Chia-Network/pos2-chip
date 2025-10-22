@@ -21,9 +21,9 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             // std::cout << "Press enter to continue to test " << test_slot << " in partition " << partition << std::endl;
             // std::cin.get();
 
-            PlotBackPointers t5_pairing = plot.data.t5_to_t4_back_pointers[partition][test_slot]; // now get t4 L and R pairings
-            PlotBackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.l];
-            PlotBackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.r];
+            T5PlotBackPointers t5_pairing = plot.data.t5_to_t4_back_pointers[partition][test_slot]; // now get t4 L and R pairings
+            T4PlotBackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.l];
+            T4PlotBackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.r];
             ProofFragment fragment_LL = plot.data.t3_proof_fragments[t4_to_t3_L.l];
             ProofFragment fragment_LR = plot.data.t3_proof_fragments[t4_to_t3_L.r];
             ProofFragment fragment_RL = plot.data.t3_proof_fragments[t4_to_t3_R.l];

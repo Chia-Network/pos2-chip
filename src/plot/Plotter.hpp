@@ -120,7 +120,7 @@ public:
 
         // 6) Partitioned Table4 + Table5
         std::vector<std::vector<T4BackPointers>> all_t4;
-        std::vector<std::vector<PlotBackPointers>> all_t5;
+        std::vector<std::vector<T5PlotBackPointers>> all_t5;
         ProofParams sub_params(plot_id_.data(), numeric_cast<uint8_t>(proof_params_.get_sub_k()), 2);
 
         for (size_t pid = 0; pid < t3_results.partitioned_pairs.size(); ++pid) {
@@ -163,7 +163,7 @@ public:
             
             all_t4.push_back(std::move(t4_res.t4_to_t3_back_pointers));
             // convert t5 pairs to backpointers
-            std::vector<PlotBackPointers> t5_back_pointers;
+            std::vector<T5PlotBackPointers> t5_back_pointers;
             for (const auto& pair : t5_pairs) {
                 t5_back_pointers.push_back({ pair.t4_index_l, pair.t4_index_r });
             }
@@ -182,7 +182,7 @@ public:
         timer_.stop();
         
         timer_.start("Finalizing Table 4");
-        std::vector<std::vector<PlotBackPointers>> all_t4_finalized;
+        std::vector<std::vector<T4PlotBackPointers>> all_t4_finalized;
         for (auto& t4bp : all_t4) {
             auto t4_final = pruner.finalize_t4_partition(t4bp);
             all_t4_finalized.push_back(std::move(t4_final));

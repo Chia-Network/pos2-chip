@@ -206,16 +206,22 @@ public:
     //   For a given partition’s t4 pointers, update each pointer to refer to the new
     //   t3 indexes from the prepared t3_new_mapping.
     // -------------------------------------------------------------------------
-    std::vector<PlotBackPointers> finalize_t4_partition(std::vector<T4BackPointers> &t4_partition_back_pointers_to_t3)
+    std::vector<T4PlotBackPointers> finalize_t4_partition(std::vector<T4BackPointers> &t4_partition_back_pointers_to_t3)
     {
-        std::vector<PlotBackPointers> plot_back_pointers;
+        std::vector<T4PlotBackPointers> plot_back_pointers;
         plot_back_pointers.resize(t4_partition_back_pointers_to_t3.size());
         for (size_t i = 0; i < t4_partition_back_pointers_to_t3.size(); ++i)
         {
             const auto &t4_bp = t4_partition_back_pointers_to_t3[i];
-            PlotBackPointers &bp = plot_back_pointers[i];
+            T4PlotBackPointers &bp = plot_back_pointers[i];
             bp.l = numeric_cast<uint32_t>(t3_new_mapping[t4_bp.fragment_index_l]);
             bp.r = numeric_cast<uint32_t>(t3_new_mapping[t4_bp.fragment_index_r]);
+
+            #ifdef RETAIN_X_VALUES
+            for (size_t xi = 0; xi < 16; ++xi) {
+                bp.xs[xi] = t4_bp.xs[xi];
+            }
+            #endif
         }
         return plot_back_pointers;
     }

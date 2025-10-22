@@ -19,8 +19,6 @@
 // use retain x values to t3 to make a plot and save x values to disk for analysis
 // use BOTH includes to for deeper validation of results
 // #define RETAIN_X_VALUES_TO_T3 true
-
-// NOTE: using RETAIN_X_VALUES requires updates to PlotBackPointers for support.
 // #define RETAIN_X_VALUES true
 
 // T4 and T5 are bipartite for optimal compression, T3 links back to T2 and T2 to T1 are omitted
