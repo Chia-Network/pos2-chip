@@ -100,8 +100,8 @@ public:
         PlotData data;
         data.t3_proof_fragments = readVector<uint64_t>(in);
         data.t4_to_t3_lateral_ranges = readRanges(in);
-        data.t4_to_t3_back_pointers = readNestedVector<T4BackPointers>(in);
-        data.t5_to_t4_back_pointers = readNestedVector<T5Pairing>(in);
+        data.t4_to_t3_back_pointers = readNestedVector<PlotBackPointers>(in);
+        data.t5_to_t4_back_pointers = readNestedVector<PlotBackPointers>(in);
         #ifdef RETAIN_X_VALUES_TO_T3
         data.xs_correlating_to_proof_fragments    = readVector<std::array<uint32_t,8>>(in);
         #endif

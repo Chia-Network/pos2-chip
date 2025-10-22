@@ -269,48 +269,48 @@ public:
         return quality_chains;
     }
 
-    std::vector<QualityLink> getFirstQualityLinks(FragmentsParent /*parent*/, FragmentsPattern required_pattern, uint64_t t3_fragment_index, uint32_t t4_partition)
+    std::vector<QualityLink> getFirstQualityLinks(FragmentsParent /*parent*/, FragmentsPattern required_pattern, uint32_t t3_fragment_index, uint32_t t4_partition)
     {
         std::vector<QualityLink> links;
         std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
-        std::vector<T4BackPointers> t4_to_t3_back_pointers = plot_.value().data.t4_to_t3_back_pointers[t4_partition];
-        std::vector<T5Pairing> t5_to_t4_back_pointers = plot_.value().data.t5_to_t4_back_pointers[t4_partition];
+        std::vector<PlotBackPointers> t4_to_t3_back_pointers = plot_.value().data.t4_to_t3_back_pointers[t4_partition];
+        std::vector<PlotBackPointers> t5_to_t4_back_pointers = plot_.value().data.t5_to_t4_back_pointers[t4_partition];
         // find the T4 entry that matches the t3_index
-        for (size_t t4_index = 0; t4_index < t4_to_t3_back_pointers.size(); t4_index++)
+        for (uint32_t t4_index = 0; t4_index < t4_to_t3_back_pointers.size(); t4_index++)
         {
-            T4BackPointers entry = t4_to_t3_back_pointers[t4_index];
-            if (entry.fragment_index_r == t3_fragment_index)
+            PlotBackPointers entry = t4_to_t3_back_pointers[t4_index];
+            if (entry.r == t3_fragment_index)
             {
                 // we found a T4 entry that matches the T3 index
                 // now get it's parents and other fragments
                 for (size_t t5_index = 0; t5_index < t5_to_t4_back_pointers.size(); t5_index++)
                 // for (const auto &t5_entry : t5_to_t4_back_pointers)
                 {
-                    T5Pairing t5_entry = t5_to_t4_back_pointers[t5_index];
+                    PlotBackPointers t5_entry = t5_to_t4_back_pointers[t5_index];
 
-                    if ((required_pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR) && (t5_entry.t4_index_l == t4_index))
+                    if ((required_pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR) && (t5_entry.l == t4_index))
                     {
                         QualityLink link;
                         // LR link
-                        link.fragments[0] = t3_proof_fragments[entry.fragment_index_l]; // LL
-                        link.fragments[1] = t3_proof_fragments[entry.fragment_index_r]; // LR
-                        T4BackPointers other_entry = t4_to_t3_back_pointers[t5_entry.t4_index_r];
-                        link.fragments[2] = t3_proof_fragments[other_entry.fragment_index_l]; // RL
+                        link.fragments[0] = t3_proof_fragments[entry.l]; // LL
+                        link.fragments[1] = t3_proof_fragments[entry.r]; // LR
+                        PlotBackPointers other_entry = t4_to_t3_back_pointers[t5_entry.r];
+                        link.fragments[2] = t3_proof_fragments[other_entry.l]; // RL
                         link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;              // this is an LR link, so outside index is RR
-                        link.outside_t3_index = other_entry.fragment_index_r;                 // RR
+                        link.outside_t3_index = other_entry.r;                 // RR
 
                         links.push_back(link);
                     }
-                    else if ((required_pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR) && (t5_entry.t4_index_r == t4_index))
+                    else if ((required_pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR) && (t5_entry.r == t4_index))
                     {
                         // RR link
                         QualityLink link;
-                        T4BackPointers other_entry = t4_to_t3_back_pointers[t5_entry.t4_index_l];
-                        link.fragments[0] = t3_proof_fragments[other_entry.fragment_index_l]; // LL
-                        link.fragments[1] = t3_proof_fragments[entry.fragment_index_l];       // RL
-                        link.fragments[2] = t3_proof_fragments[entry.fragment_index_r];       // RR
+                        PlotBackPointers other_entry = t4_to_t3_back_pointers[t5_entry.l];
+                        link.fragments[0] = t3_proof_fragments[other_entry.l]; // LL
+                        link.fragments[1] = t3_proof_fragments[entry.l];       // RL
+                        link.fragments[2] = t3_proof_fragments[entry.r];       // RR
                         link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;              // this is an RR link, so outside index is LR
-                        link.outside_t3_index = other_entry.fragment_index_r;                 // LR
+                        link.outside_t3_index = other_entry.r;                 // LR
 
                         links.push_back(link);
                     }
@@ -402,15 +402,15 @@ public:
         // 2. get t4 partition B, and find r links that point to t3 partition A range
         std::cout << "Partition Parent T4: " << partition_parent_t4 << std::endl;
         #endif
-        std::vector<T4BackPointers> t4_b_to_t3 = plot_.value().data.t4_to_t3_back_pointers[partition_parent_t4];
-        std::vector<T5Pairing> t5_b_to_t4_b = plot_.value().data.t5_to_t4_back_pointers[partition_parent_t4];
+        std::vector<PlotBackPointers> t4_b_to_t3 = plot_.value().data.t4_to_t3_back_pointers[partition_parent_t4];
+        std::vector<PlotBackPointers> t5_b_to_t4_b = plot_.value().data.t5_to_t4_back_pointers[partition_parent_t4];
 #ifdef DEBUG_CHAINING
         int links_found = 0;
 #endif
         for (size_t t4_index = 0; t4_index < t4_b_to_t3.size(); t4_index++)
         {
-            T4BackPointers entry = t4_b_to_t3[t4_index];
-            if (t3_partition_range.isInRange(entry.fragment_index_r))
+            PlotBackPointers entry = t4_b_to_t3[t4_index];
+            if (t3_partition_range.isInRange(entry.r))
             {
 
                 // we found a link that points to partition A. Now, in T5 find the parent nodes, where either the l or r pointer points to this entry in T4 partition B.
@@ -418,8 +418,8 @@ public:
                 for (size_t t5_index = 0; t5_index < t5_b_to_t4_b.size(); t5_index++)
                 // for (const auto &t5_entry : t5_b_to_t4_b)
                 {
-                    T5Pairing t5_entry = t5_b_to_t4_b[t5_index];
-                    if (t5_entry.t4_index_l == t4_index)
+                    PlotBackPointers t5_entry = t5_b_to_t4_b[t5_index];
+                    if (t5_entry.l == t4_index)
                     {
                         QualityLink link;
 
@@ -427,27 +427,27 @@ public:
                         // and fragments will be 0:LL, 1:LR, 2:RL with outside index being RR.
 
                         // get other side child node
-                        T4BackPointers other_entry = t4_b_to_t3[t5_entry.t4_index_r];
-                        link.fragments[0] = t3_proof_fragments[entry.fragment_index_l];       // LL
-                        link.fragments[1] = t3_proof_fragments[entry.fragment_index_r];       // LR
-                        link.fragments[2] = t3_proof_fragments[other_entry.fragment_index_l]; // RL
+                        PlotBackPointers other_entry = t4_b_to_t3[t5_entry.r];
+                        link.fragments[0] = t3_proof_fragments[entry.l];       // LL
+                        link.fragments[1] = t3_proof_fragments[entry.r];       // LR
+                        link.fragments[2] = t3_proof_fragments[other_entry.l]; // RL
                         link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;              // this is an LR link, so outside index is RR
-                        link.outside_t3_index = other_entry.fragment_index_r;                 // RR
+                        link.outside_t3_index = other_entry.r;                 // RR
 
                         links.push_back(link);
                     }
-                    if (t5_entry.t4_index_r == t4_index)
+                    if (t5_entry.r == t4_index)
                     {
                         // if t4 is the right pointer of t4 index, then the t3 entry is an RR link.
                         QualityLink link;
 
                         // get other side child node
-                        T4BackPointers other_entry = t4_b_to_t3[t5_entry.t4_index_l];
-                        link.fragments[0] = t3_proof_fragments[other_entry.fragment_index_l]; // LL
-                        link.fragments[1] = t3_proof_fragments[entry.fragment_index_l];       // RL
-                        link.fragments[2] = t3_proof_fragments[entry.fragment_index_r];       // RR
+                        PlotBackPointers other_entry = t4_b_to_t3[t5_entry.l];
+                        link.fragments[0] = t3_proof_fragments[other_entry.l]; // LL
+                        link.fragments[1] = t3_proof_fragments[entry.l];       // RL
+                        link.fragments[2] = t3_proof_fragments[entry.r];       // RR
                         link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;              // this is an RR link, so outside index is LR
-                        link.outside_t3_index = other_entry.fragment_index_r;                 // LR
+                        link.outside_t3_index = other_entry.r;                 // LR
 
                         links.push_back(link);
                     }
