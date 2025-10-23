@@ -145,6 +145,13 @@ public:
             uint32_t l_partition = proof_core.fragment_codec.get_lateral_to_t4_partition(fragment);
             uint32_t r_partition = proof_core.fragment_codec.get_r_t4_partition(fragment);
 
+            // load partition data
+            #ifdef DEBUG_CHAINING
+            std::cout << "read partitions for file: " << plot_file_name_ << std::endl;
+            #endif
+            PlotFile::readPartitionT4T5BackPointers(plot_file_name_, plot_.value(), l_partition);
+            PlotFile::readPartitionT4T5BackPointers(plot_file_name_, plot_.value(), r_partition);
+
             #ifdef DEBUG_CHAINING
             // std::cout << "          Total partitions: " << plot.params.get_num_partitions() << std::endl;
             std::cout << "          Partition A(L): " << l_partition << std::endl;

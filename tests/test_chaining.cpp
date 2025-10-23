@@ -84,7 +84,8 @@ TEST_CASE("quality-chain-distribution")
     // a little "hacky", we setup a bogus file name and then override the plot file contents directly for testing
     // so this won't need to create or read a plot file.
     PlotData empty;
-    PlotFile::PlotFileContents plot{empty, params};
+    std::vector<uint64_t> partition_offsets;
+    PlotFile::PlotFileContents plot{empty, params, partition_offsets};
     plot.params = params;
     Prover prover(challenge, "test_plot_file.dat");
     prover._testing_setPlotFileContents(plot);

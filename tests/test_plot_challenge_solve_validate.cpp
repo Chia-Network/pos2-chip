@@ -79,9 +79,6 @@ TEST_CASE("plot-k18-strength2-4-5")
         prover.readPlotFileIfNeeded();
         ENSURE(prover.getProofParams() == plotter.getProofParams());
 
-        // once prover had read file let's cleanup
-        std::remove(plot_file_name.c_str());
-
         int proof_fragment_filter_bits = 1; // 1 bit means 50% of fragments are filtered out
 
         std::vector<QualityChain> quality_chains = prover.prove(proof_fragment_filter_bits);
@@ -219,6 +216,9 @@ TEST_CASE("plot-k18-strength2-4-5")
             }
 
         }
+
+        // once prover had read file let's cleanup
+        std::remove(plot_file_name.c_str());
     }
 }
 

@@ -7,6 +7,12 @@
 #include "PlotData.hpp"
 #include "pos/ProofParams.hpp"
 
+//#define DEBUG_PLOT_FILE true
+#ifdef DEBUG_PLOT_FILE
+#include <iostream>
+#include <filesystem>
+#endif
+
 class PlotFile
 {
 public:
@@ -20,6 +26,9 @@ public:
     struct PlotFileContents {
         PlotData    data;
         ProofParams params;
+        // Offsets to each partition's data on disk; each partition contains
+        // t4_to_t3 back pointers followed immediately by t5_to_t4 back pointers.
+        std::vector<uint64_t> partition_offsets;
     };
 
     /// Read PlotData from a binary file. The v2 plot header format is as
@@ -51,16 +60,54 @@ public:
         out.write(reinterpret_cast<const char*>(&k), 1);
         out.write(reinterpret_cast<const char*>(&match_key_bits), 1);
 
+        // Write memo
         out.write(reinterpret_cast<char const*>(memo.data()), memo.size());
 
-        // Write plot data
+        // Use a single outer count for partition pairs (t4,t5) and placeholders
+        // for their offsets. Each partition region will hold t4 vector then t5 vector.
+        uint64_t outer = data.t4_to_t3_back_pointers.size();
+        if (data.t5_to_t4_back_pointers.size() != outer)
+            throw std::runtime_error("Mismatched partition outer sizes for t4/t5");
+
+        #ifdef DEBUG_PLOT_FILE
+        std::cout << "Writing partitions (outer): " << outer << std::endl;
+        #endif
+
+        out.write(reinterpret_cast<char const*>(&outer), sizeof(outer));
+        uint64_t zero = 0;
+        std::streampos offsets_pos = out.tellp();
+        for (uint64_t i = 0; i < outer; ++i)
+            out.write(reinterpret_cast<char const*>(&zero), sizeof(zero));
+
+        // Write plot data (non-partitioned)
         writeVector(out, data.t3_proof_fragments);
         writeRanges(out, data.t4_to_t3_lateral_ranges);
-        writeNestedVector(out, data.t4_to_t3_back_pointers);
-        writeNestedVector(out, data.t5_to_t4_back_pointers);
+
+        // Now write each partition's t4 then t5 vectors and remember file offsets
+        std::vector<uint64_t> offsets;
+        offsets.reserve(outer);
+        for (uint64_t i = 0; i < outer; ++i)
+        {
+            uint64_t offset = static_cast<uint64_t>(out.tellp());
+            offsets.push_back(offset);
+            writeVector(out, data.t4_to_t3_back_pointers[i]);
+            writeVector(out, data.t5_to_t4_back_pointers[i]);
+        }
+
         #ifdef RETAIN_X_VALUES_TO_T3
         writeVector(out, data.xs_correlating_to_proof_fragments);
         #endif
+
+        // Backfill offsets
+        if (outer)
+        {
+            out.seekp(offsets_pos);
+            for (auto off : offsets)
+                out.write(reinterpret_cast<char const*>(&off), sizeof(off));
+        }
+
+        // Seek to end for finalization
+        out.seekp(0, std::ios::end);
 
         if (!out)
             throw std::runtime_error("Failed to write " + filename);
@@ -93,15 +140,34 @@ public:
         in.read(reinterpret_cast<char*>(&strength), sizeof(strength));
         ProofParams params = ProofParams(plot_id_bytes, k, strength);
 
-        // skip puzzle hash, farmer PK and local SK
+        // Skip the memo (puzzle hash, farmer PK, local SK) before reading partition
+        // counts which the writer placed immediately after the memo.
         in.seekg(32 + 48 + 32, std::ifstream::cur);
 
-        // 5) Read plot data
+        uint64_t outer = 0;
+        in.read(reinterpret_cast<char*>(&outer), sizeof(outer));
+        #ifdef DEBUG_PLOT_FILE
+        std::cout << "Read outer partitions: " << outer << std::endl;
+        #endif
+        std::vector<uint64_t> offsets(outer);
+        for (uint64_t i = 0; i < outer; ++i)
+            in.read(reinterpret_cast<char*>(&offsets[i]), sizeof(offsets[i]));
+        #ifdef DEBUG_PLOT_FILE
+        std::cout << "Read partition offsets." << std::endl;
+        for (uint64_t i = 0; i < outer; ++i)
+            std::cout << "  offset[" << i << "] = " << offsets[i] << std::endl;
+        #endif
+
+        // 5) Read plot data (non-partitioned parts)
         PlotData data;
         data.t3_proof_fragments = readVector<uint64_t>(in);
         data.t4_to_t3_lateral_ranges = readRanges(in);
-        data.t4_to_t3_back_pointers = readNestedVector<T4PlotBackPointers>(in);
-        data.t5_to_t4_back_pointers = readNestedVector<T5PlotBackPointers>(in);
+
+        // Initialize empty outer vectors sized to the partition counts so callers
+        // can later populate partitions on demand using the offsets we saved.
+        data.t4_to_t3_back_pointers = std::vector<std::vector<T4PlotBackPointers>>(outer);
+        data.t5_to_t4_back_pointers = std::vector<std::vector<T5PlotBackPointers>>(outer);
+
         #ifdef RETAIN_X_VALUES_TO_T3
         data.xs_correlating_to_proof_fragments    = readVector<std::array<uint32_t,8>>(in);
         #endif
@@ -111,8 +177,49 @@ public:
 
         return {
             .data = data,
-            .params = params
+            .params = params,
+            .partition_offsets = std::move(offsets)
         };
+    }
+
+    // Read both t4 and t5 back-pointer vectors for a specific partition.
+    static void readPartitionT4T5BackPointers(const std::string &filename, PlotFileContents &contents, size_t partition_index)
+    {
+        #ifdef DEBUG_PLOT_FILE
+        std::cout << "PlotFile::readPartition requested: file='" << filename << "' partition=" << partition_index << std::endl;
+        std::cout << "  partition_offsets.size() = " << contents.partition_offsets.size() << std::endl;
+        #endif
+        if (partition_index >= contents.partition_offsets.size())
+            throw std::out_of_range("Partition index out of range");
+        // If either vector is non-empty assume the partition is loaded.
+        if (!contents.data.t4_to_t3_back_pointers[partition_index].empty() ||
+            !contents.data.t5_to_t4_back_pointers[partition_index].empty())
+            return; // already loaded
+
+        std::ifstream in(filename, std::ios::binary);
+        #ifdef DEBUG_PLOT_FILE
+        std::cout << "  file exists: " << std::boolalpha << std::filesystem::exists(filename) << std::noboolalpha << std::endl;
+        #endif
+        if (!in) {
+            std::cerr << "  Failed to open file '" << filename << "' for partition read." << std::endl;
+            throw std::runtime_error("Failed to open " + filename);
+        }
+
+        uint64_t offset = contents.partition_offsets[partition_index];
+        in.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+        
+        contents.data.t4_to_t3_back_pointers[partition_index] = readVector<T4PlotBackPointers>(in);
+        contents.data.t5_to_t4_back_pointers[partition_index] = readVector<T5PlotBackPointers>(in);
+        #ifdef DEBUG_PLOT_FILE
+        std::cout << "  loaded t4 vector size: " << contents.data.t4_to_t3_back_pointers[partition_index].size() << std::endl;
+        std::cout << "  loaded t5 vector size: " << contents.data.t5_to_t4_back_pointers[partition_index].size() << std::endl;
+        #endif
+
+        if (!in)
+        {
+            std::cerr << "  stream error after reading partition " << partition_index << ", failbit=" << in.fail() << " eofbit=" << in.eof() << std::endl;
+            throw std::runtime_error("Failed to read partition " + std::to_string(partition_index));
+        }
     }
 
 private:

@@ -32,6 +32,11 @@ TEST_CASE("plot-read-write")
 
     timer.start("Reading plot file: " + file_name);
     PlotFile::PlotFileContents read_plot = PlotFile::readData(file_name);
+    // read all partitions
+    for (size_t partition_id = 0; partition_id < read_plot.data.t4_to_t3_back_pointers.size(); ++partition_id)
+    {
+        PlotFile::readPartitionT4T5BackPointers(file_name, read_plot, partition_id);
+    }
     timer.stop();
 
     ENSURE(plot == read_plot.data);

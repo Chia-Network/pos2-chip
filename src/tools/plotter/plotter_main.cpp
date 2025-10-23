@@ -188,20 +188,6 @@ int main(int argc, char *argv[]) try
         timer.start("Writing plot file: " + filename);
         PlotFile::writeData(filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
         timer.stop();
-
-        // test read
-        // if we have x values the comparison function won't be valid since plot does not store x values.
-        std::cout << "Reading plot file: " << filename << std::endl;
-        PlotFile::PlotFileContents read_plot = PlotFile::readData(filename);
-       
-        if ((read_plot.data == plot) && (read_plot.params == plotter.getProofParams()))
-        {
-            std::cout << "Plot read/write successful." << std::endl;
-        }
-        else
-        {
-            std::cerr << "Read plot does not match original." << std::endl;
-        }
     }
 
     return 0;
