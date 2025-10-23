@@ -22,5 +22,6 @@ endif()
 add_subdirectory(src/tools/plotter)
 add_subdirectory(src/tools/solver)
 add_subdirectory(src/tools/prover)
+add_subdirectory(src/tools/analytics)
 
 add_subdirectory(tests)
