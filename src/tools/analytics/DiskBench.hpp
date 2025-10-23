@@ -144,7 +144,8 @@ public:
 
         // use a proper 32-bit PRNG
         std::random_device rd;
-        std::mt19937 rng(rd());
+        auto seed = rd();
+        std::mt19937 rng(seed);
         std::uniform_int_distribution<uint32_t> dist32(0, std::numeric_limits<uint32_t>::max());
         std::uniform_int_distribution<int> distPattern(0, 1);
         std::uniform_int_distribution<uint64_t> dist64(0, std::numeric_limits<uint64_t>::max());
@@ -319,6 +320,7 @@ public:
         double hdd_load = total_time_ms / time_per_block_ms;
 
         std::cout << "---- completed " << num_challenges << " challenges ----" << std::endl;
+        std::cout << "Random seed used: " << seed << std::endl;
         std::cout << "Plots passed filter: " << num_plots_passed_filter << " out of " << num_plots << " for " << num_challenges << " challenges ("
                   << (static_cast<double>(num_plots_passed_filter) * 100.0 / static_cast<double>(num_plots * num_challenges)) << "%)" << std::endl;
         double expected_plots_passing_filter = static_cast<double>(num_plots * num_challenges) / static_cast<double>(1 << plot_id_filter_bits);
