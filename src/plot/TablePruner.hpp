@@ -162,7 +162,7 @@ public:
         t3_new_mapping.resize(t3_proof_fragments.size(), -1);
 
         // Prepare lateral partition ranges
-        T4ToT3LateralPartitionRanges ranges(params_.get_num_partitions() * 2, {t3_proof_fragments.size(), 0});
+        T4ToT3LateralPartitionRanges ranges(params_.get_num_partitions() * 2, {numeric_cast<uint32_t>(t3_proof_fragments.size()), 0});
         ProofFragmentCodec fragment_codec(params_);
 
         for (size_t i = 0; i < t3_proof_fragments.size(); ++i)
@@ -182,8 +182,8 @@ public:
                 // update this partition's range at new index
                 // ranges are inclusive
                 auto &r = ranges[lateral];
-                r.start = std::min(r.start, (uint64_t)t3_pruned_index);
-                r.end = std::max(r.end, (uint64_t)t3_pruned_index);
+                r.start = std::min(r.start, numeric_cast<uint32_t>(t3_pruned_index));
+                r.end = std::max(r.end, numeric_cast<uint32_t>(t3_pruned_index));
 
                 ++t3_pruned_index;
             }
@@ -197,6 +197,16 @@ public:
         #ifdef RETAIN_X_VALUES_TO_T3
         xs_correlating_to_proof_fragments.resize(t3_pruned_index);
         #endif
+
+        // output all the ranges
+        for (size_t i = 0; i < ranges.size(); ++i)
+        {
+            const auto &r = ranges[i];
+            std::cout << "T4 to T3 lateral partition " << i << ": "
+                      << " start index: " << r.start
+                      << " end index: " << r.end
+                      << std::endl;
+        }
 
         return ranges;
     }

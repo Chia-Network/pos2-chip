@@ -5,11 +5,11 @@
 #include "pos/ProofCore.hpp"
 
 struct Range {
-    uint64_t start;
-    uint64_t end;
+    uint32_t start;
+    uint32_t end;
 
     // ranges are INCLUSIVE
-    bool isInRange(uint64_t value) const {
+    bool isInRange(uint32_t value) const {
         return value >= start && value <= end;
     }
 
