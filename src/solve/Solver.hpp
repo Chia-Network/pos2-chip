@@ -405,7 +405,10 @@ public:
         // Phase 11: T3, T4, T5 Matching – Further pair T2 matches.
         std::vector<std::vector<T3_match>> t3_matches(t2_matches.size() / 2);
         std::vector<std::vector<T4_match>> t4_matches(t2_matches.size() / 4);
-        std::vector<std::vector<T5_match>> t5_matches(t2_matches.size() / 8);
+        assert(t2_matches.size() == 128);
+        assert(t3_matches.size() == 64);
+        assert(t4_matches.size() == 32);
+        std::array<std::vector<T5_match>, 16> t5_matches;
         matchT3T4T5Candidates(num_k_bits_, t2_matches, t3_matches, t4_matches, t5_matches);
 
 #ifdef DEBUG_VERIFY
@@ -437,7 +440,7 @@ public:
                                const std::vector<std::vector<T2_match>> &t2_matches,
                                std::vector<std::vector<T3_match>> &t3_matches,
                                std::vector<std::vector<T4_match>> &t4_matches,
-                               std::vector<std::vector<T5_match>> &t5_matches)
+                               std::span<std::vector<T5_match>, 16> const t5_matches)
     {
 
         Timer timer;
@@ -583,32 +586,34 @@ public:
 
     // Phase 12 helper: Construct final proofs from T5 matches.
     // full proof is all t5 x-value collections, should be in same sequence order as quality chain
-    std::vector<std::array<uint32_t, 512>> constructProofs(const std::vector<std::vector<T5_match>> &t5_matches)
+    std::vector<std::array<uint32_t, 512>> constructProofs(std::span<std::vector<T5_match>, 16> const t5_matches)
     {
-        if (t5_matches.empty())
-        {
-            return {}; // return empty if no matches
-        }
         std::vector<std::array<uint32_t, 512>> all_proofs;
 
         std::array<uint32_t, 512> full_proof;
-        size_t idx = 0;
-        for (size_t g = 0; g < t5_matches.size(); g++)
-        {
-            for (const auto &match : t5_matches[g])
+
+        // indices into the current t5 match at each of the 16 matches
+        std::array<size_t, 16> t5_vector{{0}};
+        size_t g = 0;
+
+        for (;;) {
+            if (t5_matches[g].size() == t5_vector[g])
             {
-                for (size_t x_pos = 0; x_pos < 32; x_pos++)
-                {
-                    full_proof[idx] = match.x_values[x_pos];
-                    ++idx;
-                }
+                if (g == 0) break;
+                g -= 1;
+                continue;
+            }
+            auto const& match = t5_matches[g][t5_vector[g]];
+            t5_vector[g] += 1;
+
+            std::copy(match.x_values.begin(), match.x_values.end(), &full_proof[g * 32]);
+            g += 1;
+            if (g == 16) {
+                all_proofs.push_back(full_proof);
+                g -= 1;
             }
         }
-        if (idx != 512)
-        {
-            return {}; // return empty if no matches
-        }
-        all_proofs.push_back(full_proof);
+
         return all_proofs;
     }
 

@@ -111,6 +111,7 @@ bool solve_partial_proof(
     Solver solver(params);
     std::vector<std::array<uint32_t, 512>> full_proofs = solver.solve(x_bits);
     if (full_proofs.empty()) return false;
+    // TODO: support returning multiple proofs
     std::copy(full_proofs[0].begin(), full_proofs[0].end(), output);
     return true;
 }

@@ -56,7 +56,8 @@ fn main() {
             let partial_proof = prover.get_partial_proof(&q).expect("get_partial_proofs");
             if !args.disable_solving {
                 let full_proof = solve_proof(&partial_proof, &plot_id, k);
-
+                // we expect the proof to be valid
+                assert!(!full_proof.is_empty());
                 assert!(validate_proof_v2(&plot_id, k, &challenge, 2, 4, &full_proof).is_some());
             }
         }
