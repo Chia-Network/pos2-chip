@@ -592,7 +592,16 @@ public:
 
         std::array<uint32_t, 512> full_proof;
 
-        // indices into the current t5 match at each of the 16 matches
+        // There are rare cases where a partial proof of the 32 sub set of x's
+        // produces more than one solution. When this happens, we can actually
+        // combine the extra solutions to make additional proofs with the other
+        // sub sets. Note all these solutions will be valid, and share the same
+        // partial proof.
+
+        // indices into the each t5_match, indicating the current combination
+        // we're creating the full proof for. The common case is that each g
+        // only has a single match. But if there more, every combination of
+        // match is a valid proof.
         std::array<size_t, 16> t5_vector{{0}};
         size_t g = 0;
 
