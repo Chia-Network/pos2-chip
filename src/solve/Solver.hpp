@@ -199,7 +199,6 @@ public:
         (void)x_solution;
 #endif
         const int num_k_bits_ = params_.get_k();
-        num_x_pairs_ = x_bits_list.size();
 
         // Derived parameters for phase 1:
         const int x1_bits = num_k_bits_ / 2;
@@ -255,7 +254,7 @@ public:
 #ifdef NON_BIPARTITE_BEFORE_T3
         filterX2Candidates(x1_bitmask, num_unique_x_pairs, x2_potential_match_xs, x2_potential_match_hashes);
 #else
-        filterX2CandidatesBiPartite(x1_bitmask, num_x_pairs_, x2_potential_match_xs, x2_potential_match_hashes);
+        filterX2CandidatesBiPartite(x1_bitmask, x2_potential_match_xs, x2_potential_match_hashes);
 #endif
 
         // Phase 6: Sort the filtered x2 candidates.
@@ -363,7 +362,7 @@ public:
         }
 #endif
         // Phase 10: T2 Matching – Process adjacent T1 groups to produce T2 matches.
-        std::vector<std::vector<T2_match>> t2_matches = matchT2Candidates(t1_match_groups, x_bits_group);
+        std::array<std::vector<T2_match>, 128> t2_matches = matchT2Candidates(t1_match_groups, x_bits_group);
 #ifdef DEBUG_VERIFY
         if (true)
         {
@@ -403,11 +402,8 @@ public:
 #endif
 
         // Phase 11: T3, T4, T5 Matching – Further pair T2 matches.
-        std::vector<std::vector<T3_match>> t3_matches(t2_matches.size() / 2);
-        std::vector<std::vector<T4_match>> t4_matches(t2_matches.size() / 4);
-        assert(t2_matches.size() == 128);
-        assert(t3_matches.size() == 64);
-        assert(t4_matches.size() == 32);
+        std::array<std::vector<T3_match>, 64> t3_matches;
+        std::array<std::vector<T4_match>, 32> t4_matches;
         std::array<std::vector<T5_match>, 16> t5_matches;
         matchT3T4T5Candidates(num_k_bits_, t2_matches, t3_matches, t4_matches, t5_matches);
 
@@ -437,9 +433,9 @@ public:
 
     // Phase 11 helper: T3, T4, T5 matching – further pair and validate matches.
     void matchT3T4T5Candidates(int /*num_k_bits*/,
-                               const std::vector<std::vector<T2_match>> &t2_matches,
-                               std::vector<std::vector<T3_match>> &t3_matches,
-                               std::vector<std::vector<T4_match>> &t4_matches,
+                               std::span<std::vector<T2_match>, 128> const t2_matches,
+                               std::span<std::vector<T3_match>, 64> const t3_matches,
+                               std::span<std::vector<T4_match>, 32> const t4_matches,
                                std::span<std::vector<T5_match>, 16> const t5_matches)
     {
 
@@ -626,8 +622,8 @@ public:
         return all_proofs;
     }
 
-    std::vector<std::vector<T2_match>> matchT2Candidates(
-        const std::vector<std::vector<T1_Match>> &t1_match_groups,
+    std::array<std::vector<T2_match>, 128> matchT2Candidates(
+        std::span<std::vector<T1_Match>> const t1_match_groups,
         const XBitGroupMappings &x_bits_group)
     {
         Timer timer, sub_timer;
@@ -649,11 +645,10 @@ public:
         std::vector<uint32_t> hashes_bitmask(size_t(1) << HASHES_BITMASK_SIZE_BITS, 0);
         std::vector<T1_Match> L_short_list;
 
-        size_t num_t2_groups = num_x_pairs_ / 2;
-        std::vector<std::vector<T2_match>> t2_matches(num_t2_groups);
+        std::array<std::vector<T2_match>, 128> t2_matches;
 
         // Process adjacent groups: group 0 with 1, 2 with 3, etc.
-        for (size_t t2_group = 0; t2_group < num_t2_groups; ++t2_group)
+        for (size_t t2_group = 0; t2_group < t2_matches.size(); ++t2_group)
         {
             size_t group_mapping_index_l = t2_group * 2;
             size_t group_mapping_index_r = group_mapping_index_l + 1;
@@ -1667,10 +1662,11 @@ public:
     }
 
     void filterX2CandidatesBiPartite(const std::vector<uint32_t> &x1_bitmask,
-                                     size_t num_x_pairs,
                                      std::vector<uint32_t> &x2_potential_match_xs,
                                      std::vector<uint32_t> &x2_potential_match_hashes)
     {
+        const size_t num_x_pairs = 256;
+
         int num_k_bits = params_.get_k();
         const int num_section_bits = params_.get_num_section_bits();
         const size_t last_section_l = params_.get_num_sections() / 2 - 1;
@@ -2145,7 +2141,6 @@ private:
     ProofParams params_;
     ProofSolverTimings timings_;
 
-    size_t num_x_pairs_ = 0;
     int bitmask_shift_ = 0;
     bool use_prefetching_ = true;
 };
