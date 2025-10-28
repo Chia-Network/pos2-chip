@@ -199,7 +199,6 @@ public:
         (void)x_solution;
 #endif
         const int num_k_bits_ = params_.get_k();
-        num_x_pairs_ = x_bits_list.size();
 
         // Derived parameters for phase 1:
         const int x1_bits = num_k_bits_ / 2;
@@ -255,7 +254,7 @@ public:
 #ifdef NON_BIPARTITE_BEFORE_T3
         filterX2Candidates(x1_bitmask, num_unique_x_pairs, x2_potential_match_xs, x2_potential_match_hashes);
 #else
-        filterX2CandidatesBiPartite(x1_bitmask, num_x_pairs_, x2_potential_match_xs, x2_potential_match_hashes);
+        filterX2CandidatesBiPartite(x1_bitmask, x2_potential_match_xs, x2_potential_match_hashes);
 #endif
 
         // Phase 6: Sort the filtered x2 candidates.
@@ -646,7 +645,6 @@ public:
         std::vector<uint32_t> hashes_bitmask(size_t(1) << HASHES_BITMASK_SIZE_BITS, 0);
         std::vector<T1_Match> L_short_list;
 
-        assert(num_x_pairs_ == 256);
         std::array<std::vector<T2_match>, 128> t2_matches;
 
         // Process adjacent groups: group 0 with 1, 2 with 3, etc.
@@ -1664,10 +1662,11 @@ public:
     }
 
     void filterX2CandidatesBiPartite(const std::vector<uint32_t> &x1_bitmask,
-                                     size_t num_x_pairs,
                                      std::vector<uint32_t> &x2_potential_match_xs,
                                      std::vector<uint32_t> &x2_potential_match_hashes)
     {
+        const size_t num_x_pairs = 256;
+
         int num_k_bits = params_.get_k();
         const int num_section_bits = params_.get_num_section_bits();
         const size_t last_section_l = params_.get_num_sections() / 2 - 1;
@@ -2142,8 +2141,6 @@ private:
     ProofParams params_;
     ProofSolverTimings timings_;
 
-    // TODO: this is a constant, always 256
-    size_t num_x_pairs_ = 0;
     int bitmask_shift_ = 0;
     bool use_prefetching_ = true;
 };
