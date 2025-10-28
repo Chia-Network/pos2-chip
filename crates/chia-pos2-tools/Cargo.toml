@@ -1,0 +1,22 @@
+[package]
+name = "chia-pos2-tools"
+version = "0.1.2"
+edition = "2024"
+license = "Apache-2.0"
+description = "Testing tools for chia-pos2"
+authors = [
+    "Arvid Norberg <arvid@chia.net>",
+]
+homepage = "https://github.com/Chia-Network/pos2/crates/chia-po2-tools"
+repository = "https://github.com/Chia-Network/pos2/crates/chia-pos2-tools"
+
+[dependencies]
+chia-pos2 = { workspace = true }
+sha2 = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+hex = { workspace = true }
+
+[[bin]]
+name = "test-prover"
+test = false
+bench = false

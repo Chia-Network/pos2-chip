@@ -6,8 +6,12 @@ lto = "thin"
 
 [workspace.dependencies]
 chia-bls = "0.29.0"
+chia-pos2 = { path = "crates/chia-pos2", version = "0.1.2" }
 blake3 = "1.8.2"
 cc = { version = "1.2.16", features = ["parallel"] }
 rstest = "0.26.1"
 serde = { version = "1.0.219", features = ["derive"] }
 serde-big-array = "0.5.1"
+clap = "4.5.38"
+sha2 = "0.10.9"
+hex = "0.4.3"
