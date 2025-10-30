@@ -426,8 +426,6 @@ public:
         // TODO: handle rare chance we get a false positive full proof
         auto all_proofs = constructProofs(t5_matches);
 
-        timings_.printSummary();
-
         return all_proofs;
     }
 
@@ -2132,6 +2130,8 @@ public:
     {
         bitmask_shift_ = shift;
     }
+
+    ProofSolverTimings const& timings() const { return timings_; }
 
 private:
     // ------------------------------------------------------------------------

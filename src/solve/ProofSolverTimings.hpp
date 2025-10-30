@@ -20,7 +20,7 @@ struct ProofSolverTimings
     double t2_scan_for_matches       = 0;
     double misc                      = 0;
 
-    void printSummary()
+    void printSummary() const
     {
         constexpr int LABEL_W = 25;
         constexpr int VALUE_W =  8;
