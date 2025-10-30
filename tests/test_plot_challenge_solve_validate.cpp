@@ -136,7 +136,7 @@ TEST_CASE("plot-k18-strength2-4-5")
             std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t const, 256>(x_bits_list));
 
             ENSURE(!all_proofs.empty());
-            ENSURE(all_proofs.size() == 1); // not sure how to handle multiple proofs for now, should be extremely rare.
+            ENSURE(all_proofs.size() >= 1); // extrememly rare case could be multiple proofs
             if (all_proofs.size() == 0)
             {
                 std::cerr << "Error: no proofs found." << std::endl;
@@ -144,11 +144,10 @@ TEST_CASE("plot-k18-strength2-4-5")
             }
             else if (all_proofs.size() > 1)
             {
-                std::cerr << "Warning: RARE event - multiple proofs found (" << all_proofs.size() << "). Update test to validate and find correct proof." << std::endl;
-                return;
+                std::cout << "RARE event - multiple proofs found (" << all_proofs.size() << ")." << std::endl;
             }
 
-            std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
+            std::cout << "nChain: " << nChain << " found " << all_proofs.size() << " proofs." << std::endl;
             for (size_t i = 0; i < all_proofs.size(); i++)
             {
                 std::cout << "Proof " << i << " x-values (" << all_proofs[i].size() << "): ";
@@ -157,50 +156,59 @@ TEST_CASE("plot-k18-strength2-4-5")
                     std::cout << all_proofs[i][j] << ", ";
                 }
                 std::cout << std::endl;
-            }
+            
+                std::array<uint32_t, 512> const& proof = all_proofs[0];
+                std::cout << "Proof size: " << proof.size() << std::endl;
 
-            // at this point should have exactly one proof.
-
-            std::cout << "nChain: " << nChain << " found " << all_proofs.size() << " proofs." << std::endl;
-            std::array<uint32_t, 512> const& proof = all_proofs[0];
-            std::cout << "Proof size: " << proof.size() << std::endl;
-
-            ENSURE(proof.size() == NUM_CHAIN_LINKS * 32); // should always have 32 x values per link
-#ifdef RETAIN_X_VALUES_TO_T3
-            ENSURE(proof.size() == check_proof_xs.size());
-            for (size_t i = 0; i < proof.size(); i++)
-            {
-                ENSURE(proof[i] == check_proof_xs[i]);
-            }
-#endif
-
-            // std::cout << "Proof: ";
-            // for (size_t i = 0; i < proof.size(); i++)
-            //{
-            //     std::cout << proof[i] << " ";
-            // }
-            // std::cout << std::endl;
-
-            // now verify the proof
-            ProofValidator proof_validator(prover.getProofParams());
-            std::optional<QualityChainLinks> res = proof_validator.validate_full_proof(proof, challenge, proof_fragment_filter_bits);
-            ENSURE(res.has_value());
-
-            QualityChainLinks const& quality_links = res.value();
-            bool links_match = true;
-            // run through quality links and ensure they match the original quality chain's links
-            for (int i = 0; i < NUM_CHAIN_LINKS; i++)
-            {
-                auto const& check_fragments = quality_links[i].fragments;
-                auto const& original_fragments = quality_chains[nChain].chain_links[i].fragments;
-                // ensure fragments match
-                if (!(check_fragments == original_fragments))
+                ENSURE(proof.size() == NUM_CHAIN_LINKS * 32); // should always have 32 x values per link
+    #ifdef RETAIN_X_VALUES_TO_T3
+                ENSURE(proof.size() == check_proof_xs.size());
+                for (size_t i = 0; i < proof.size(); i++)
                 {
-                    links_match = false;
-                    std::cerr << "Error: quality link " << i << " fragments does not match original." << std::endl;
+                    ENSURE(proof[i] == check_proof_xs[i]);
+                }
+    #endif
+
+                // std::cout << "Proof: ";
+                // for (size_t i = 0; i < proof.size(); i++)
+                //{
+                //     std::cout << proof[i] << " ";
+                // }
+                // std::cout << std::endl;
+
+                // now verify the proof
+                ProofValidator proof_validator(prover.getProofParams());
+                std::optional<QualityChainLinks> res = proof_validator.validate_full_proof(proof, challenge, proof_fragment_filter_bits);
+                ENSURE(res.has_value());
+
+                QualityChainLinks const& quality_links = res.value();
+                bool links_match = true;
+                // run through quality links and ensure they match the original quality chain's links
+                for (int c = 0; c < NUM_CHAIN_LINKS; c++)
+                {
+                    auto const& check_fragments = quality_links[c].fragments;
+                    auto const& original_fragments = quality_chains[nChain].chain_links[c].fragments;
+                    // ensure fragments match
+                    if (!(check_fragments == original_fragments))
+                    {
+                        links_match = false;
+                        std::cerr << "Error: quality link " << c << " fragments does not match original." << std::endl;
+                    }
+                }
+                ENSURE(links_match);
+            }
+
+            // if we have more than one proof, make sure they aren't duplicates
+            if (all_proofs.size() > 1)
+            {
+                for (size_t i = 0; i < all_proofs.size(); i++)
+                {
+                    for (size_t j = i + 1; j < all_proofs.size(); j++)
+                    {
+                        ENSURE(!(all_proofs[i] == all_proofs[j]));
+                    }
                 }
             }
-            ENSURE(links_match);
 
         }
     }
