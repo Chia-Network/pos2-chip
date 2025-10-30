@@ -122,31 +122,21 @@ pub fn solve_proof(partial_proof: &PartialProof, plot_id: &Bytes32, k: u8) -> Ve
         return vec![];
     }
 
-    bits::compact_bits(&proof, k, partial_proof.strength)
+    bits::compact_bits(&proof, k)
 }
 
 pub fn validate_proof_v2(
     plot_id: &Bytes32,
     size: u8,
     challenge: &Bytes32,
-    required_plot_strength: u8,
+    strength: u8,
     proof_fragment_scan_filter: u8,
     proof: &[u8],
 ) -> Option<[u8; 385]> {
-    let (x_values, strength) = bits::expand_bits(proof, 512, size);
+    let x_values = bits::expand_bits(proof, size)?;
 
     if x_values.len() != NUM_CHAIN_LINKS * 32 {
         // a full proof has exactly 512 x-values. This is invalid or incomplete
-        return None;
-    }
-
-    if strength > 255 {
-        // strength is supposed to fit in 8 bits
-        return None;
-    }
-    let strength = strength as u8;
-    if strength < required_plot_strength {
-        // strength is not high enough
         return None;
     }
 
