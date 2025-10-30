@@ -28,14 +28,26 @@ impl Default for PartialProof {
     }
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for PartialProof {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self {
+            proof_fragments: <[u64; NUM_CHAIN_LINKS * 4]>::arbitrary(u)?,
+            strength: u.int_in_range::<u8>(2..=63)?,
+        })
+    }
+}
+
 #[repr(C)]
 #[derive(Default, Clone)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 struct Result256 {
     r: [u32; 8],
 }
 
 #[repr(C)]
 #[derive(Default, Clone)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 struct QualityLink {
     // there are 2 patterns: either LR or RR is included in the fragment, but never both.
     // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
@@ -47,6 +59,7 @@ struct QualityLink {
 
 #[repr(C)]
 #[derive(Default, Clone)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 /// This object contains a quality proof along with metadata required to look
 /// up the remaining proof fragments from the plot, to form a partial proof
 pub struct QualityChain {

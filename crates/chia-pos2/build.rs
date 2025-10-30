@@ -1,5 +1,5 @@
 fn main() {
-    println!("cargo:rerun-if-changed=../../src/api.cpp");
+    println!("cargo:rerun-if-changed=../../src");
 
     let mut build = cc::Build::new();
     build
