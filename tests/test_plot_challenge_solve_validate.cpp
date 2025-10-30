@@ -135,6 +135,8 @@ TEST_CASE("plot-k18-strength2-4-5")
             Solver solver(prover.getProofParams());
             std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t const, 256>(x_bits_list));
 
+            solver.timings().printSummary();
+
             ENSURE(!all_proofs.empty());
             ENSURE(all_proofs.size() == 1); // not sure how to handle multiple proofs for now, should be extremely rare.
             if (all_proofs.size() == 0)

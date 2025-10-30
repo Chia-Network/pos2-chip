@@ -133,6 +133,8 @@ int exhaustive_test(PlotFile::PlotFileContents &plot)
             Solver solver(plot.params);
             std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list, xs_solution);
 
+            solver.timings().printSummary();
+
             std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
             for (size_t i = 0; i < all_proofs.size(); i++)
             {
@@ -202,6 +204,8 @@ int benchmark(uint8_t k, uint8_t plot_strength)
     const std::vector<uint32_t> x_solution;
     std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t const, 256>(x_bits_list_vector), x_solution);
 
+    solver.timings().printSummary();
+
     /*std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
     for (size_t i = 0; i < all_proofs.size(); i++)
     {
@@ -257,6 +261,8 @@ int xbits(const std::string &plot_id_hex, const std::vector<uint32_t> &x_bits_li
 
     const std::vector<uint32_t> x_solution;
     std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t const, 256>(x_bits_list), x_solution);
+
+    solver.timings().printSummary();
 
     std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
     for (size_t i = 0; i < all_proofs.size(); i++)

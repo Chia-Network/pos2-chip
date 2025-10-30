@@ -49,6 +49,8 @@ TEST_CASE("solve-partial")
     assert(x_bits_list.size() == 256);
     std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t, 256>(x_bits_list), k18_xs_in_proof);
 
+    solver.timings().printSummary();
+
     ENSURE(!all_proofs.empty());
     /*if (all_proofs.size() == 0)
     {
