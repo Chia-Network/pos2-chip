@@ -501,11 +501,13 @@ public:
                         std::vector<T4Pairing> t4_pairings = validator.validate_table_4_pairs(x_values);
                         if (t4_pairings.size() > 0)
                         {
-                            // std::cout << t4_pairings.size() << " T4 pairings found." << std::endl;
-                            for (size_t idx = 0; idx < t4_pairings.size(); ++idx)
-                            {
-                                T4_match t4;
-                                t4.x_values = {groupA[j].x_values[0], groupA[j].x_values[1],
+                            // the validator may return more than one valid T4 pairing for the same x_values
+                            // this could happen when the upper and lower partitions of the L and R sides coincide and each produce a valid pairing
+                            // e.g. when L has lower/upper partition [4, 11] and R has [11, 4] and both pass tests.
+                            // In either case, the x-values are the same for both pairings, so the Solver just needs to pair the x-values once.
+                            // Later, validate_t5_pairings used by the solver will re-validate the full T5 proof and check both pairings again.
+                            T4_match t4;
+                            t4.x_values = {groupA[j].x_values[0], groupA[j].x_values[1],
                                                groupA[j].x_values[2], groupA[j].x_values[3],
                                                groupA[j].x_values[4], groupA[j].x_values[5],
                                                groupA[j].x_values[6], groupA[j].x_values[7],
@@ -513,10 +515,7 @@ public:
                                                groupB[k].x_values[2], groupB[k].x_values[3],
                                                groupB[k].x_values[4], groupB[k].x_values[5],
                                                groupB[k].x_values[6], groupB[k].x_values[7]};
-                                // t4.match_info = pairing.match_info;
-                                // t4.meta = pairing.meta;
-                                t4_matches[t4_group].push_back(t4);
-                            }
+                            t4_matches[t4_group].push_back(t4);
                         }
                     }
                 }
