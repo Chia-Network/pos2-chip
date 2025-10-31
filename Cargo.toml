@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "crates/*/fuzz"]
 
 [profile.release]
 lto = "thin"
@@ -15,3 +15,4 @@ serde-big-array = "0.5.1"
 clap = "4.5.38"
 sha2 = "0.10.9"
 hex = "0.4.3"
+arbitrary = "1.4.2"

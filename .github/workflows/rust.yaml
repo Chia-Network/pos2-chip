@@ -56,6 +56,36 @@ jobs:
         run: cargo test --all --release --all-features
 
 
+  fuzz_tests:
+    name: Fuzz (${{ matrix.package.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: chia-pos2
+        toolchain:
+          - nightly-2025-01-12
+        max_total_time:
+          - 20
+    env:
+      CARGO_PROFILE_RELEASE_LTO: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: ${{ matrix.toolchain }}
+
+      - name: Install cargo-fuzz
+        run: cargo +"${{ matrix.toolchain }}" install cargo-fuzz
+
+      - name: Fuzz
+        env: ${{ matrix.package.env || fromJSON('{}') }}
+        run: |
+          cd crates/"${{ matrix.package.name }}"
+          cargo fuzz list | xargs -I "%" sh -c "cargo +'${{ matrix.toolchain }}' fuzz run % -- -max_total_time=${{ matrix.max_total_time}} || exit 255"
+
   build-crate:
     name: Build Crate
     runs-on: ubuntu-24.04

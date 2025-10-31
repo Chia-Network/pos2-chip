@@ -1,0 +1,30 @@
+[package]
+name = "chia-pos2-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { workspace = true }
+
+[dependencies.chia-pos2]
+path = ".."
+features = ["arbitrary"]
+
+[[bin]]
+name = "solver"
+path = "fuzz_targets/solver.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "validate"
+path = "fuzz_targets/validate.rs"
+test = false
+doc = false
+bench = false

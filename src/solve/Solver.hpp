@@ -1545,6 +1545,7 @@ public:
                             int bit = bitmask_hash & 31;
                             if (x1_bitmask[slot] & (1u << bit))
                             {
+                                assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
                                 size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
                                 x2_potential_match_xs[idx] = uint32_t(x + i);
                                 x2_potential_match_hashes[idx] = chacha_hash;
@@ -1595,6 +1596,7 @@ public:
                             int slot = bitmash_hash >> 5, bit = bitmash_hash & 31;
                             if (x1_bitmask[slot] & (1u << bit))
                             {
+                                assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
                                 size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
                                 x2_potential_match_xs[idx] = uint32_t((x - BATCH) + i);
                                 x2_potential_match_hashes[idx] = chacha_hash;
@@ -1623,6 +1625,7 @@ public:
                         int slot = bitmask_hash >> 5, bit = bitmask_hash & 31;
                         if (x1_bitmask[slot] & (1u << bit))
                         {
+                            assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
                             size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
                             x2_potential_match_xs[idx] = uint32_t((end - BATCH) + i);
                             x2_potential_match_hashes[idx] = chacha_hash;
@@ -1750,6 +1753,7 @@ public:
                             int bit = bitmask_hash & 31;
                             if (x1_bitmask[slot] & (1u << bit))
                             {
+                                assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
                                 size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
                                 x2_potential_match_xs[idx] = uint32_t(x + i);
                                 x2_potential_match_hashes[idx] = chacha_hash;
@@ -1809,6 +1813,7 @@ public:
                             int slot = bitmash_hash >> 5, bit = bitmash_hash & 31;
                             if (x1_bitmask[slot] & (1u << bit))
                             {
+                                assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
                                 size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
                                 x2_potential_match_xs[idx] = uint32_t((x - BATCH) + i);
                                 x2_potential_match_hashes[idx] = chacha_hash;
@@ -1844,6 +1849,7 @@ public:
                         int slot = bitmask_hash >> 5, bit = bitmask_hash & 31;
                         if (x1_bitmask[slot] & (1u << bit))
                         {
+                            assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
                             size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
                             x2_potential_match_xs[idx] = uint32_t((end - BATCH) + i);
                             x2_potential_match_hashes[idx] = chacha_hash;

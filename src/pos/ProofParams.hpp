@@ -25,6 +25,12 @@ public:
         if (strength_ < 2) {
             throw std::invalid_argument("ProofParams: strength must be at least 2.");
         }
+        if (strength_ > 63) {
+            throw std::invalid_argument("ProofParams: strength must be less than 64.");
+        }
+        if (strength_ > k + get_num_section_bits()) {
+            throw std::invalid_argument("ProofParams: strength must be less than k - section_bits");
+        }
         if (get_sub_k() > k) {
             throw std::invalid_argument("ProofParams: k must be at least 12");
         }
@@ -76,9 +82,12 @@ public:
 
     // Returns the number of match target bits.
     // (Double-check this calculation for T3+ and partition variants if necessary.)
-    inline size_t get_num_match_target_bits(size_t table_id) const
+    inline size_t get_num_match_target_bits(size_t const table_id) const
     {
-        return k_ - get_num_section_bits() - get_num_match_key_bits(table_id);
+        const auto match_bits = get_num_match_key_bits(table_id);
+        const auto section_bits = get_num_section_bits();
+        assert(section_bits + match_bits <= k_);
+        return k_ - section_bits - match_bits;
     }
 
     // Returns the number of meta bits.

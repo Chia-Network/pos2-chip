@@ -15,9 +15,13 @@ repository = "https://github.com/Chia-Network/pos2/crates/chia-pos2"
 [lib]
 bench = false
 
+[features]
+arbitrary = ["dep:arbitrary"]
+
 [dependencies]
 serde = { workspace = true }
 serde-big-array = { workspace = true }
+arbitrary = { workspace = true, features = ["derive"], optional = true }
 
 [build-dependencies]
 cc = { workspace = true }
