@@ -10,7 +10,10 @@ fn main() {
         .include("cpp")
         .file("cpp/api.cpp");
 
-    if std::env::var_os("OPT_LEVEL").unwrap_or("".into()) == "0" {
+    let is_fuzzing = std::env::var("CARGO_CFG_FUZZING").is_ok();
+    let is_debug_build = std::env::var_os("OPT_LEVEL").unwrap_or("".into()) == "0";
+
+    if is_debug_build || is_fuzzing {
         // This enables libc++ hardening
         build.define("_LIBCPP_HARDENING_MODE", "_LIBCPP_HARDENING_MODE_DEBUG");
     }
