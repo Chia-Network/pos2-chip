@@ -182,6 +182,21 @@ public:
         timer_.stop();
         
         timer_.start("Finalizing Table 4");
+        /*for (size_t partition_id = 0; partition_id < all_t4.size(); ++partition_id) {
+            std::cout << "Finalizing t4 partition " << partition_id << std::endl;
+            std::vector<T4PlotBackPointers> t4_data = pruner.finalize_t4_partition(all_t4[partition_id]);
+            for (const auto &t4_entry : t4_data) {
+                std::cout << "  t4 entry: [" << t4_entry.t3_index_l << ", " << t4_entry.t3_index_r << "]" << std::endl;
+                ProofFragment t3_l = t3_results.proof_fragments[t4_entry.t3_index_l];
+
+                if (t4_to_t3_lateral_partition_ranges.isInRange(t4_entry.t3_index_l) == false ||
+                    t4_to_t3_lateral_partition_ranges.isInRange(t4_entry.t3_index_r) == false) {
+                    std::cerr << "Error: t4 entry points to out-of-range t3 index!" << std::endl;
+                    exit(23);
+                }
+            }
+
+        }*/
         std::vector<std::vector<T4PlotBackPointers>> all_t4_finalized;
         for (auto& t4bp : all_t4) {
             auto t4_final = pruner.finalize_t4_partition(t4bp);

@@ -97,7 +97,6 @@ public:
 
         PlotFile::PlotFileContents plot = plot_.value();
 
-        // 2) Does it pass plot id filter?
         ProofCore proof_core(plot.params);
 
         BlakeHash::Result256 next_challenge = proof_core.hashing.challengeWithPlotIdHash(challenge_.data());
