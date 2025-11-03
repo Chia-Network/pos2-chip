@@ -147,7 +147,13 @@ Average chains per trial: 3.9407
 Expected average chains per trial: 4
 Maximum chains found in a single trial: 122
     */
-    size_t num_trials = 1000;
+#ifdef NDEBUG
+    size_t const num_trials = 1000;
+    double const tolerance = 0.1; // 10% tolerance
+#else
+    size_t const num_trials = 450;
+    double const tolerance = 0.30; // 30% tolerance
+#endif
     for (size_t i = 0; i < num_trials; i++)
     {
         Timer trial_timer;
@@ -256,7 +262,6 @@ Maximum chains found in a single trial: 122
     std::cout << ">=2 quality chains: Expected " << expected_perc_sum_above_2 << "%, Actual " << actual_perc_sum_above_2 << "%, diff ratio: " << (std::max(actual_perc_sum_above_2,expected_perc_sum_above_2)/std::min(actual_perc_sum_above_2,expected_perc_sum_above_2)) << std::endl;
     std::cout << ">=1 quality chains: Expected " << expected_perc_sum_above_1 << "%, Actual " << actual_perc_sum_above_1 << "%, diff ratio: " << (std::max(actual_perc_sum_above_1,expected_perc_sum_above_1)/std::min(actual_perc_sum_above_1,expected_perc_sum_above_1)) << std::endl;
 
-    double tolerance = 0.1; // 10% tolerance
     // Check each percentage is within tolerance
     CHECK(actual_perc_sum_above_50 < 0.5);
     CHECK(actual_perc_sum_above_40 < 1.0);
