@@ -41,7 +41,7 @@ public:
 
         std::vector<std::vector<uint32_t>> counts_by_thread(num_threads, std::vector<uint32_t>(radix, 0));
         std::vector<std::thread> threads;
-        const int num_elements_per_thread = static_cast<int>(num_elements / num_threads);
+        const size_t num_elements_per_thread = static_cast<int>(num_elements / num_threads);
 
         for (int pass = 0; pass < num_passes; ++pass) {
             if (verbose)
@@ -53,21 +53,32 @@ public:
             if (verbose)
                 countPhaseTimer.start("Count phase");
 
-            for (size_t t = 0; t < num_threads; ++t) {
-                threads.emplace_back([&, t]() {
-                    // Reset counts
-                    for (size_t r = 0; r < radix; ++r)
-                        counts_by_thread[t][r] = 0;
+            try {
+                for (size_t t = 0; t < num_threads; ++t) {
+                    threads.emplace_back([&, t]() {
+                        // Reset counts
+                        for (size_t r = 0; r < radix; ++r)
+                            counts_by_thread[t][r] = 0;
                     
-                    size_t start = num_elements_per_thread * t;
-                    size_t end = (t == num_threads - 1) ? num_elements : num_elements_per_thread * (t + 1);
-                    for (size_t i = start; i < end; ++i) {
-                        // Extract key using the provided key extractor.
-                        KeyType key = (data[i].*key_extractor_ >> shift) & radix_mask;
-                        counts_by_thread[t][key]++;
-                    }
-                });
+                        size_t start = num_elements_per_thread * t;
+                        size_t end = (t == num_threads - 1) ? num_elements : num_elements_per_thread * (t + 1);
+                        for (size_t i = start; i < end; ++i) {
+                            // Extract key using the provided key extractor.
+                            KeyType key = (data[i].*key_extractor_ >> shift) & radix_mask;
+                            counts_by_thread[t][key]++;
+                        }
+                    });
+                }
             }
+            catch (const std::exception& e) {
+                std::cerr << "Exception in Radix Sort count phase " << e.what() << std::endl;
+                exit(0);
+            }
+            catch (...) {
+                std::cerr << "Unknown exception in Radix Sort count phase" << std::endl;
+                exit(0);
+            }
+
             for (auto& th : threads)
                 th.join();
 
@@ -105,17 +116,29 @@ public:
             Timer redistributionTimer;
             if (verbose)
                 redistributionTimer.start("Redistribution phase");
-            for (size_t t = 0; t < num_threads; ++t) {
-                threads.emplace_back([&, t]() {
-                    size_t start = num_elements_per_thread * t;
-                    size_t end = (t == num_threads - 1) ? num_elements : num_elements_per_thread * (t + 1);
-                    for (size_t i = start; i < end; ++i) {
-                        KeyType key = (data[i].*key_extractor_ >> shift) & radix_mask;
-                        size_t outpos = offsets_for_thread[t][key]++;
-                        buffer[outpos] = data[i];
-                    }
-                });
+
+            try {
+                for (size_t t = 0; t < num_threads; ++t) {
+                    threads.emplace_back([&, t]() {
+                        size_t start = num_elements_per_thread * t;
+                        size_t end = (t == num_threads - 1) ? num_elements : num_elements_per_thread * (t + 1);
+                        for (size_t i = start; i < end; ++i) {
+                            KeyType key = (data[i].*key_extractor_ >> shift) & radix_mask;
+                            size_t outpos = offsets_for_thread[t][key]++;
+                            buffer[outpos] = data[i];
+                        }
+                    });
+                }
             }
+            catch (const std::exception& e) {
+                std::cerr << "Exception in Radix Sort count phase " << e.what() << std::endl;
+                exit(0);
+            }
+            catch (...) {
+                std::cerr << "Exception in Radix Sort redistribution phase" << std::endl;
+                exit(0);
+            }
+
             for (auto& th : threads)
                 th.join();
 
