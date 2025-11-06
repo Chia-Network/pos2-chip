@@ -131,11 +131,11 @@ public:
                 }
             }
             catch (const std::exception& e) {
-                std::cerr << "Exception in Radix Sort count phase " << e.what() << std::endl;
+                std::cerr << "Exception in Radix Sort redistribution phase " << e.what() << std::endl;
                 exit(0);
             }
             catch (...) {
-                std::cerr << "Exception in Radix Sort redistribution phase" << std::endl;
+                std::cerr << "Unknown exception in Radix Sort redistribution phase" << std::endl;
                 exit(0);
             }
 
