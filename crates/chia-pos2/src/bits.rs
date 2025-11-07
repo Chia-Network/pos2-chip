@@ -46,6 +46,12 @@ pub(crate) fn compact_bits(x_values: &[u32], k: u8) -> Vec<u8> {
 /// extracts all k-size values from the proof buffer and returns them as a
 /// vector of u32
 pub(crate) fn expand_bits(proof: &[u8], k: u8) -> Option<Vec<u32>> {
+    if k == 0 {
+        return None;
+    }
+    if k > 32 {
+        return None;
+    }
     let mut x_values = Vec::<u32>::with_capacity(proof.len() * 8 / usize::from(k));
 
     let mut val = 0_u32;

@@ -18,7 +18,7 @@ bool validate_proof(
     uint8_t const* challenge,
     uint8_t const proof_fragment_scan_filter,
     uint32_t const* proof,
-    QualityChain* quality)
+    QualityChain* quality) try
 {
     ProofParams const params(plot_id, k_size, strength);
     ProofValidator validator(params);
@@ -33,6 +33,10 @@ bool validate_proof(
     quality->chain_links = quality_links.value();
     quality->strength = strength;
     return true;
+}
+catch (std::exception const& e) {
+    std::cerr << e.what() << std::endl;
+    return false;
 }
 
 // find quality proofs for a challenge.
@@ -93,7 +97,7 @@ bool solve_partial_proof(
     uint8_t const* plot_id,
     uint8_t const k,
     uint8_t const strength,
-    uint32_t* output)
+    uint32_t* output) try
 {
     ProofParams params(plot_id, k, strength);
     ProofFragmentCodec c(params);
@@ -115,6 +119,10 @@ bool solve_partial_proof(
     std::copy(full_proofs[0].begin(), full_proofs[0].end(), output);
     return true;
 }
+catch (std::exception const& e) {
+    std::cerr << e.what() << std::endl;
+    return false;
+}
 
 // filename is the full path, null terminated
 // plot_id must point to 32 bytes of plot ID
@@ -130,7 +138,8 @@ bool create_plot(char const* filename, uint8_t const k, uint8_t const strength, 
     PlotFile::writeData(filename, plot, plotter.getProofParams(), std::span<uint8_t const, 32 + 48 + 32>(memo, memo + 32 + 48 + 32));
     return true;
 }
-catch (std::exception const&) {
+catch (std::exception const& e) {
+    std::cerr << e.what() << std::endl;
     return false;
 }
 
