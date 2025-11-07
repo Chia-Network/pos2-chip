@@ -1472,7 +1472,7 @@ public:
                             std::vector<uint32_t> &x2_potential_match_xs,
                             std::vector<uint32_t> &x2_potential_match_hashes)
     {
-        int num_k_bits = params_.get_k();
+        const int num_k_bits = params_.get_k();
         const uint64_t NUM_XS = (1ULL << num_k_bits);
 
         // Determine “num_threads” much like TBB did
@@ -1489,13 +1489,16 @@ public:
         const size_t num_match_target_hashes =
             num_x_pairs * x1_range_size * num_match_keys;
 
-        double hit_probability =
+        const double hit_probability =
             double(num_match_target_hashes) /
             double(NUM_XS >> this->bitmask_shift_);
+        // add extra safety margin for each reduction in k from 28
+        const double extra_margin = (num_k_bits < 28) ? 1.0 + 0.01 * double(28 - num_k_bits) : 1.0;
         const uint64_t estimated_matches =
-            uint64_t((double)hit_probability * (double)NUM_XS);
+            uint64_t(hit_probability * static_cast<double>(NUM_XS) * extra_margin);
 
-        size_t MAX_RESULTS_PER_THREAD = estimated_matches / num_threads;
+        // round down to multiple of 16
+        const size_t MAX_RESULTS_PER_THREAD = (estimated_matches / num_threads) & ~size_t(0xf);
 
         if (false)
         {
@@ -1503,6 +1506,7 @@ public:
             std::cout << "num_match_target_hashes: " << num_match_target_hashes << std::endl;
             std::cout << "NUM_XS: " << NUM_XS << std::endl;
             std::cout << "hit_probability: " << hit_probability << std::endl;
+            std::cout << "extra margin: " << extra_margin << std::endl;
             std::cout << "estimated_matches: " << estimated_matches << std::endl;
             std::cout << "esimtated matches calc:" << (double)hit_probability * (double)NUM_XS << std::endl;
         }
@@ -1520,6 +1524,7 @@ public:
         // build [0,1,2…num_threads-1]
         std::vector<int> thread_ids(num_threads);
         std::iota(thread_ids.begin(), thread_ids.end(), 0);
+        std::atomic<bool> failed = false;
 
         if (!use_prefetching_)
         {
@@ -1550,9 +1555,15 @@ public:
                                 x2_potential_match_xs[idx] = uint32_t(x + i);
                                 x2_potential_match_hashes[idx] = chacha_hash;
                                 ++thread_matches;
+                                if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
+                                {
+                                    failed.store(true);
+                                    goto done;
+                                }
                             }
                         }
                     }
+done:
                     matches_per_thread[t] = thread_matches; });
             timings_.chachafilterx2sbybitmask += timer.stop();
         }
@@ -1601,6 +1612,11 @@ public:
                                 x2_potential_match_xs[idx] = uint32_t((x - BATCH) + i);
                                 x2_potential_match_hashes[idx] = chacha_hash;
                                 ++thread_matches;
+                                if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
+                                {
+                                    failed.store(true);
+                                    goto done;
+                                }
                             }
                         }
                         // prefetch for next round
@@ -1630,11 +1646,21 @@ public:
                             x2_potential_match_xs[idx] = uint32_t((end - BATCH) + i);
                             x2_potential_match_hashes[idx] = chacha_hash;
                             ++thread_matches;
+                            if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
+                            {
+                                failed.store(true);
+                                goto done;
+                            }
                         }
                     }
-
+done:
                     matches_per_thread[t] = thread_matches; });
             timings_.chachafilterx2sbybitmask += timer.stop();
+        }
+
+        if (failed.load())
+        {
+            throw std::runtime_error("Too many matches. This is unlikely to happen, so we won't be solving this");
         }
 
         // now sum up, compact, and resize just as before…
@@ -1667,7 +1693,7 @@ public:
     {
         const size_t num_x_pairs = 256;
 
-        int num_k_bits = params_.get_k();
+        const int num_k_bits = params_.get_k();
         const int num_section_bits = params_.get_num_section_bits();
         const size_t last_section_l = params_.get_num_sections() / 2 - 1;
         const uint64_t NUM_XS = (1ULL << num_k_bits);
@@ -1686,13 +1712,17 @@ public:
         const size_t num_match_target_hashes =
             num_x_pairs * x1_range_size * num_match_keys;
 
-        double hit_probability =
+        const double hit_probability =
             double(num_match_target_hashes) /
             double(NUM_XS >> this->bitmask_shift_);
-        const uint64_t estimated_matches =
-            uint64_t(hit_probability * double(NUM_XS));
 
-        size_t MAX_RESULTS_PER_THREAD = 2 * estimated_matches / num_threads;
+        // add extra safety margin for each reduction in k from 28
+        const double extra_margin = (num_k_bits < 28) ? 1.0 + 0.01 * double(28 - num_k_bits) : 1.0;
+        const uint64_t estimated_matches =
+            uint64_t(hit_probability * static_cast<double>(NUM_XS) * extra_margin);
+
+        // round down to multiple of 16
+        const size_t MAX_RESULTS_PER_THREAD = (2 * estimated_matches / num_threads) & ~size_t(0xf);
 
         // --- allocate output buffers just once ---
         Timer timer;
@@ -1708,6 +1738,7 @@ public:
         // build [0,1,2…num_threads-1]
         std::vector<int> thread_ids(num_threads);
         std::iota(thread_ids.begin(), thread_ids.end(), 0);
+        std::atomic<bool> failed = false;
 
         if (!use_prefetching_)
         {
@@ -1758,10 +1789,16 @@ public:
                                 x2_potential_match_xs[idx] = uint32_t(x + i);
                                 x2_potential_match_hashes[idx] = chacha_hash;
                                 ++thread_matches;
+                                if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
+                                {
+                                    failed.store(true);
+                                    goto done;
+                                }
                             }
                             ++num_checks;
                         }
                     }
+done:
                     matches_per_thread[t] = thread_matches;
                     num_checks_per_thread[t] = num_checks; });
             timings_.chachafilterx2sbybitmask += timer.stop();
@@ -1818,6 +1855,11 @@ public:
                                 x2_potential_match_xs[idx] = uint32_t((x - BATCH) + i);
                                 x2_potential_match_hashes[idx] = chacha_hash;
                                 ++thread_matches;
+                                if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
+                                {
+                                    failed.store(true);
+                                    goto done;
+                                }
                             }
                         }
                         // prefetch for next round
@@ -1854,11 +1896,21 @@ public:
                             x2_potential_match_xs[idx] = uint32_t((end - BATCH) + i);
                             x2_potential_match_hashes[idx] = chacha_hash;
                             ++thread_matches;
+                            if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
+                            {
+                                failed.store(true);
+                                goto done;
+                            }
                         }
                     }
-
+done:
                     matches_per_thread[t] = thread_matches; });
             timings_.chachafilterx2sbybitmask += timer.stop();
+        }
+
+        if (failed.load())
+        {
+            throw std::runtime_error("Too many matches. This is unlikely to happen, so we won't be solving this");
         }
 
         // now sum up, compact, and resize just as before…
