@@ -20,6 +20,8 @@ bool validate_proof(
     uint32_t const* proof,
     QualityChain* quality) try
 {
+    if ((k_size & 1) == 1)
+        throw std::invalid_argument("k must be even");
     ProofParams const params(plot_id, k_size, strength);
     ProofValidator validator(params);
     std::optional<QualityChainLinks> quality_links = validator.validate_full_proof(
@@ -99,6 +101,8 @@ bool solve_partial_proof(
     uint8_t const strength,
     uint32_t* output) try
 {
+    if ((k & 1) == 1)
+        throw std::invalid_argument("k must be even");
     ProofParams params(plot_id, k, strength);
     ProofFragmentCodec c(params);
 
@@ -133,6 +137,8 @@ catch (std::exception const& e) {
 // returns true on success
 bool create_plot(char const* filename, uint8_t const k, uint8_t const strength, uint8_t const* plot_id, uint8_t const* memo) try {
 
+    if ((k & 1) == 1)
+        throw std::invalid_argument("k must be even");
     Plotter plotter(std::span<uint8_t const, 32>(plot_id, plot_id + 32), int(k), int(strength));
     PlotData plot = plotter.run();
     PlotFile::writeData(filename, plot, plotter.getProofParams(), std::span<uint8_t const, 32 + 48 + 32>(memo, memo + 32 + 48 + 32));
