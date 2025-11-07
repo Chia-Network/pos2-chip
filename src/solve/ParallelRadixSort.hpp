@@ -3,9 +3,9 @@
 #include <vector>
 #include <cstdint>
 #include <span>
-#include <thread>
 #include <atomic>
 #include "common/Timer.hpp"
+#include "common/thread.hpp"
 
 class ParallelRadixSort {
 public:
@@ -25,7 +25,7 @@ public:
         }
 
         std::vector<std::vector<int>> counts_by_thread(num_threads, std::vector<int>(radix, 0));
-        std::vector<std::thread> threads;
+        std::vector<thread> threads;
         // get each threads start and end index
         const size_t num_elements_per_thread = data.size() / num_threads;
 
@@ -41,12 +41,11 @@ public:
 
             for (int t = 0; t < num_threads; ++t) {
                 threads.emplace_back([&, t]() {
-            
                     // fill counts to zero
                     for (int r = 0; r < radix; ++r) {
                         counts_by_thread[t][r] = 0;
                     }
-                            
+
                     size_t start = num_elements_per_thread * t;
                     size_t end = (t == num_threads - 1) ? data.size() : num_elements_per_thread * (t + 1);
 
@@ -57,15 +56,13 @@ public:
                 });
             }
 
-            for (auto& thread : threads) {
-                thread.join();
-            }
+            threads.clear();
             if (verbose)
             {
                 countPhaseTimer.stop();
                 countPhaseTimer.start("Prefix sum phase");
             }
-            
+
             // now merge all counts into one global count
             std::vector<uint32_t> counts(radix, 0);
             for (int t = 0; t < num_threads; ++t) {
@@ -103,7 +100,6 @@ public:
             }
             // now we know each threads own bucket counts, so when the thread scans the same data, it can place the data in the correct bucket with the offset assigned to it from all the threads.
 
-            threads.clear();
             // Redistribution phase
             Timer redistributionTimer;
             if (verbose) redistributionTimer.start("Redistribution phase");
@@ -119,18 +115,10 @@ public:
                 });
             }
 
-
-            for (auto& thread : threads) {
-                thread.join();
-            }
+            threads.clear();
             redistributionTimer.stop();
 
-            threads.clear();
-
-            
             std::swap(data, buffer);
-        
-            
         }
     }
 
@@ -166,7 +154,7 @@ public:
         }
 
         std::vector<std::vector<int>> counts_by_thread(num_threads, std::vector<int>(radix, 0));
-        std::vector<std::thread> threads;
+        std::vector<thread> threads;
         const size_t num_elements_per_thread = keys.size() / num_threads;
 
         for (int pass = 0; pass < num_passes; ++pass) {
@@ -203,9 +191,6 @@ public:
                 });
             }
 
-            for (auto& thread : threads) {
-                thread.join();
-            }
             threads.clear();
 
             if (verbose)
@@ -258,9 +243,6 @@ public:
                 });
             }
 
-            for (auto& thread : threads) {
-                thread.join();
-            }
             threads.clear();
 
             if (verbose)
