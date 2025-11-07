@@ -1,25 +1,18 @@
 #pragma once
 
-#include <thread>
 #include <vector>
 #include <iterator>
 #include <algorithm>
 #include <numeric>
 #include <functional>
 #include <cassert>
-#include <thread>
 #include <future>
+
+#include "common/thread.hpp"
 
 // A small, self-contained parallel_for_range utility.
 // - Iterates over [first, last) and calls fn(element) for each element.
-// - Uses std::jthread when available; falls back to std::thread+join behavior.
 // - Provides an overload that accepts an explicit max_threads for testing.
-
-#if defined(__cpp_lib_jthread)
-using worker_t = std::jthread;
-#else
-using worker_t = std::thread;
-#endif
 
 template <typename It, typename Fn>
 void parallel_for_range(It first, It last, Fn fn)
@@ -45,7 +38,7 @@ void parallel_for_range(It first, It last, Fn fn, unsigned max_threads)
         return;
     }
 
-    std::vector<worker_t> workers;
+    std::vector<thread> workers;
     workers.reserve(num_threads);
 
     for (unsigned t = 0; t < num_threads; ++t)
@@ -55,21 +48,8 @@ void parallel_for_range(It first, It last, Fn fn, unsigned max_threads)
         It b = std::next(first, start);
         It e = std::next(first, end);
 
-#if defined(__cpp_lib_jthread)
         workers.emplace_back([b, e, &fn]() {
             for (It it = b; it != e; ++it) fn(*it);
         });
-#else
-        workers.emplace_back([b, e, &fn]() {
-            for (It it = b; it != e; ++it) fn(*it);
-        });
-#endif
     }
-
-#if !defined(__cpp_lib_jthread)
-    for (auto &w : workers)
-        if (w.joinable())
-            w.join();
-#endif
-    // if using jthread, destructor joins automatically
 }
