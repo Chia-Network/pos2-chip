@@ -1492,10 +1492,14 @@ public:
         double hit_probability =
             double(num_match_target_hashes) /
             double(NUM_XS >> this->bitmask_shift_);
+        // add extra safety margin for each reduction in k from 28
+        double extra_margin = (num_k_bits < 28) ? 1.0 + 0.01 * double(28 - num_k_bits) : 1.0;
         const uint64_t estimated_matches =
-            uint64_t((double)hit_probability * (double)NUM_XS);
+            uint64_t((double)hit_probability * (double)NUM_XS * extra_margin);
 
         size_t MAX_RESULTS_PER_THREAD = estimated_matches / num_threads;
+        // round down to multiple of 16
+        MAX_RESULTS_PER_THREAD = MAX_RESULTS_PER_THREAD - (MAX_RESULTS_PER_THREAD % 16);
 
         if (false)
         {
@@ -1503,6 +1507,7 @@ public:
             std::cout << "num_match_target_hashes: " << num_match_target_hashes << std::endl;
             std::cout << "NUM_XS: " << NUM_XS << std::endl;
             std::cout << "hit_probability: " << hit_probability << std::endl;
+            std::cout << "extra margin: " << extra_margin << std::endl;
             std::cout << "estimated_matches: " << estimated_matches << std::endl;
             std::cout << "esimtated matches calc:" << (double)hit_probability * (double)NUM_XS << std::endl;
         }
@@ -1515,7 +1520,7 @@ public:
         timings_.allocating += timer.stop();
 
         // per-thread match counts
-        std::vector<int> matches_per_thread(num_threads, 0);
+        std::vector<size_t> matches_per_thread(num_threads, 0);
 
         // build [0,1,2…num_threads-1]
         std::vector<int> thread_ids(num_threads);
@@ -1526,7 +1531,7 @@ public:
             timer.start("Chacha multi-threaded bitmask test");
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
                           {
-                    int thread_matches = 0;
+                    size_t thread_matches = 0;
                     ProofCore proof_core(params_);
                     uint64_t start = uint64_t(t) * chunk_size;
                     uint64_t end = (t + 1 == (int)num_threads)
@@ -1549,6 +1554,11 @@ public:
                                 x2_potential_match_xs[idx] = uint32_t(x + i);
                                 x2_potential_match_hashes[idx] = chacha_hash;
                                 ++thread_matches;
+                                if (thread_matches >= MAX_RESULTS_PER_THREAD)
+                                {
+                                    // avoid overflow
+                                    throw std::runtime_error("Too many x2 potential matches for thread");
+                                }
                             }
                         }
                     }
@@ -1560,7 +1570,7 @@ public:
             timer.start("Chacha multi-threaded bitmask test with prefetching");
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
                           {
-                    int thread_matches = 0;
+                    size_t thread_matches = 0;
                     ProofCore proof_core(params_);
                     uint64_t start = uint64_t(t) * chunk_size;
                     uint64_t end = (t + 1 == (int)num_threads)
@@ -1599,6 +1609,11 @@ public:
                                 x2_potential_match_xs[idx] = uint32_t((x - BATCH) + i);
                                 x2_potential_match_hashes[idx] = chacha_hash;
                                 ++thread_matches;
+                                if (thread_matches >= MAX_RESULTS_PER_THREAD)
+                                {
+                                    // avoid overflow
+                                    throw std::runtime_error("Too many x2 potential matches for thread");
+                                }
                             }
                         }
                         // prefetch for next round
@@ -1627,6 +1642,11 @@ public:
                             x2_potential_match_xs[idx] = uint32_t((end - BATCH) + i);
                             x2_potential_match_hashes[idx] = chacha_hash;
                             ++thread_matches;
+                            if (thread_matches >= MAX_RESULTS_PER_THREAD)
+                            {
+                                // avoid overflow
+                                throw std::runtime_error("Too many x2 potential matches for thread");
+                            }
                         }
                     }
 
@@ -1636,7 +1656,7 @@ public:
 
         // now sum up, compact, and resize just as before…
         timer.start("Counting total matches across threads");
-        int total = 0;
+                int total = 0;
         for (int m : matches_per_thread)
             total += m;
         timings_.misc += timer.stop();
