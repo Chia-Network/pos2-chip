@@ -18,14 +18,13 @@ public:
         const int num_threads = std::thread::hardware_concurrency();
 
         Timer timer;
-        if (verbose) 
+        if (verbose)
         {
             std::cout << "ParallelRadixSort: Sorting " << data.size() << " elements with " << num_threads << " threads" << std::endl;
             timer.start();
         }
 
         std::vector<std::vector<int>> counts_by_thread(num_threads, std::vector<int>(radix, 0));
-        std::vector<thread> threads;
         // get each threads start and end index
         const size_t num_elements_per_thread = data.size() / num_threads;
 
@@ -39,24 +38,26 @@ public:
             if (verbose)
                 countPhaseTimer.start("Count phase");
 
-            for (int t = 0; t < num_threads; ++t) {
-                threads.emplace_back([&, t]() {
-                    // fill counts to zero
-                    for (int r = 0; r < radix; ++r) {
-                        counts_by_thread[t][r] = 0;
-                    }
+            {
+                std::vector<thread> threads;
+                for (int t = 0; t < num_threads; ++t) {
+                    threads.emplace_back([&, t]() {
+                        // fill counts to zero
+                        for (int r = 0; r < radix; ++r) {
+                            counts_by_thread[t][r] = 0;
+                        }
 
-                    size_t start = num_elements_per_thread * t;
-                    size_t end = (t == num_threads - 1) ? data.size() : num_elements_per_thread * (t + 1);
+                        size_t start = num_elements_per_thread * t;
+                        size_t end = (t == num_threads - 1) ? data.size() : num_elements_per_thread * (t + 1);
 
-                    for (size_t i = start; i < end; ++i) {
-                        uint32_t key = (data[i] >> shift) & radix_mask;
-                        counts_by_thread[t][key]++;
-                    }
-                });
+                        for (size_t i = start; i < end; ++i) {
+                            uint32_t key = (data[i] >> shift) & radix_mask;
+                            counts_by_thread[t][key]++;
+                        }
+                    });
+                }
             }
 
-            threads.clear();
             if (verbose)
             {
                 countPhaseTimer.stop();
@@ -103,19 +104,21 @@ public:
             // Redistribution phase
             Timer redistributionTimer;
             if (verbose) redistributionTimer.start("Redistribution phase");
-            for (int t = 0; t < num_threads; ++t) {
-                threads.emplace_back([&, t]() {
-                    size_t start = num_elements_per_thread * t;
-                    size_t end = (t == num_threads - 1) ? data.size() : num_elements_per_thread * (t + 1);
-                    for (size_t i = start; i < end; ++i) {
-                        uint32_t key = (data[i] >> shift) & radix_mask;
-                        int outpos = offsets_for_thread[t][key]++;
-                        buffer[outpos] = data[i];
-                    }
-                });
+            {
+                std::vector<thread> threads;
+                for (int t = 0; t < num_threads; ++t) {
+                    threads.emplace_back([&, t]() {
+                        size_t start = num_elements_per_thread * t;
+                        size_t end = (t == num_threads - 1) ? data.size() : num_elements_per_thread * (t + 1);
+                        for (size_t i = start; i < end; ++i) {
+                            uint32_t key = (data[i] >> shift) & radix_mask;
+                            int outpos = offsets_for_thread[t][key]++;
+                            buffer[outpos] = data[i];
+                        }
+                    });
+                }
             }
 
-            threads.clear();
             redistributionTimer.stop();
 
             std::swap(data, buffer);
@@ -154,7 +157,6 @@ public:
         }
 
         std::vector<std::vector<int>> counts_by_thread(num_threads, std::vector<int>(radix, 0));
-        std::vector<thread> threads;
         const size_t num_elements_per_thread = keys.size() / num_threads;
 
         for (int pass = 0; pass < num_passes; ++pass) {
@@ -175,23 +177,24 @@ public:
                 countPhaseTimer.start("Count phase");
 
             // Count phase
-            for (int t = 0; t < num_threads; ++t) {
-                threads.emplace_back([&, t]() {
-                    for (int r = 0; r < radix; ++r) {
-                        counts_by_thread[t][r] = 0;
-                    }
+            {
+                std::vector<thread> threads;
+                for (int t = 0; t < num_threads; ++t) {
+                    threads.emplace_back([&, t]() {
+                        for (int r = 0; r < radix; ++r) {
+                            counts_by_thread[t][r] = 0;
+                        }
 
-                    size_t start = num_elements_per_thread * t;
-                    size_t end = (t == num_threads - 1) ? keys.size() : num_elements_per_thread * (t + 1);
+                        size_t start = num_elements_per_thread * t;
+                        size_t end = (t == num_threads - 1) ? keys.size() : num_elements_per_thread * (t + 1);
 
-                    for (size_t i = start; i < end; ++i) {
-                        uint32_t key = (keys[i] >> shift) & radix_mask;
-                        counts_by_thread[t][key]++;
-                    }
-                });
+                        for (size_t i = start; i < end; ++i) {
+                            uint32_t key = (keys[i] >> shift) & radix_mask;
+                            counts_by_thread[t][key]++;
+                        }
+                    });
+                }
             }
-
-            threads.clear();
 
             if (verbose)
             {
@@ -230,20 +233,21 @@ public:
             }
 
             // Redistribution phase
-            for (int t = 0; t < num_threads; ++t) {
-                threads.emplace_back([&, t]() {
-                    size_t start = num_elements_per_thread * t;
-                    size_t end = (t == num_threads - 1) ? keys.size() : num_elements_per_thread * (t + 1);
-                    for (size_t i = start; i < end; ++i) {
-                        uint32_t key = (keys[i] >> shift) & radix_mask;
-                        int outpos = offsets_for_thread[t][key]++;
-                        keyBuffer[outpos] = keys[i];
-                        valueBuffer[outpos] = values[i];
-                    }
-                });
+            {
+            std::vector<thread> threads;
+                for (int t = 0; t < num_threads; ++t) {
+                    threads.emplace_back([&, t]() {
+                        size_t start = num_elements_per_thread * t;
+                        size_t end = (t == num_threads - 1) ? keys.size() : num_elements_per_thread * (t + 1);
+                        for (size_t i = start; i < end; ++i) {
+                            uint32_t key = (keys[i] >> shift) & radix_mask;
+                            int outpos = offsets_for_thread[t][key]++;
+                            keyBuffer[outpos] = keys[i];
+                            valueBuffer[outpos] = values[i];
+                        }
+                    });
+                }
             }
-
-            threads.clear();
 
             if (verbose)
             {
