@@ -117,8 +117,9 @@ public:
     // Displays the plot parameters and a hexadecimal representation of the plot ID.
     void show() const
     {
-        std::cout << "Plot parameters: k=" << k_
-                  << ", sub_k=" << get_sub_k();
+        std::cout << "Plot parameters: k=" << static_cast<int>(k_)
+                  << ", sub_k=" << get_sub_k()
+                  << ", strength=" << static_cast<int>(get_match_key_bits());
         std::cout << " | Plot ID: ";
         for (int i = 0; i < 32; ++i)
         {

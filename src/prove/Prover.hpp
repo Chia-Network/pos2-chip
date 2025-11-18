@@ -61,27 +61,32 @@ public:
         : challenge_(challenge), plot_file_name_(plot_file_name)
     {
     }
+
+    // initializer with challenge and plot file contents for testing
+    Prover(const std::array<uint8_t, 32> &challenge, const PlotFile &plot_file)
+        : challenge_(challenge), plot_(plot_file)
+    {
+    }
+
     ~Prover() = default;
 
-    void readPlotFileIfNeeded()
+    void readHeadersFromFile()
     {
-        if (!plot_.has_value())
-        {
-            #ifdef DEBUG_PROOF_VALIDATOR
-            std::cout << "Reading plot file: " << plot_file_name_ << std::endl;
-            #endif
-            plot_ = PlotFile::readData(plot_file_name_);
-            #ifdef DEBUG_PROOF_VALIDATOR
-            std::cout << "Plot file read successfully: " << plot_file_name_ << std::endl;
-            plot_.value().params.debugPrint();
-            #endif
+        if (!plot_.has_value()) {
+            std::cout << "Prover: has no plot" << std::endl;
+            plot_ = PlotFile(plot_file_name_);
+            std::cout << "Prover: Loading plot file headers from disk: " << plot_file_name_ << std::endl;
+            //plot_.value().readHeadersFromFile(plot_file_name_);
         }
-        else
-        {
-            #ifdef DEBUG_PROOF_VALIDATOR
-            std::cout << "Plot file already read." << std::endl;
-            #endif
+        else {
+            std::cout << "Prover: Plot file headers already loaded." << std::endl;
         }
+    }
+
+    // TODO: pass in ProofParams and header cache, so don't have to load indexes each time.
+    void setHeadersFromCache()
+    {
+        throw std::runtime_error("Not implemented yet.");
     }
 
     std::vector<QualityChain> prove(int proof_fragment_scan_filter_bits)
@@ -92,10 +97,14 @@ public:
         // 3) For each passing fragment, get their Quality Links (if any) that seed the initial entries in the Quality Chains.
         // 4) For each Quality Chain, grow and expand the number of chains link by link until we reach the chain length limit (NUM_CHAIN_LINKS).
 
-        // 1) Read plot file
-        readPlotFileIfNeeded();
-
-        PlotFile::PlotFileContents plot = plot_.value();
+        std::cout << "Prover: Reading plot file: " << plot_file_name_ << std::endl;
+        // Ensure we have a PlotFile instance loaded (construct from filename on first use)
+        if (!plot_.has_value()) {
+            throw std::runtime_error("Prover: Plot file not loaded.");
+        }
+        plot_.value().readEntireT3FromFile(plot_file_name_);
+        std::cout << "Prover get Contents from plot." << std::endl;
+        auto &plot = plot_->getContents();
 
         ProofCore proof_core(plot.params);
 
@@ -112,6 +121,7 @@ public:
 
         // 2) Scan the plot data for fragments that pass the Proof Fragment Scan Filter
         ProofFragmentScanFilter scan_filter(plot.params, next_challenge, proof_fragment_scan_filter_bits);
+        ProofFragmentScanFilter::ScanRange range = scan_filter.getScanRangeForFilter();
         std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.scan(plot.data.t3_proof_fragments);
         stats_.num_scan_filter_passed++;
         stats_.num_fragments_passed_scan_filter += filtered_fragments.size();
@@ -148,8 +158,8 @@ public:
             #ifdef DEBUG_CHAINING
             std::cout << "read partitions for file: " << plot_file_name_ << std::endl;
             #endif
-            PlotFile::readPartitionT4T5BackPointers(plot_file_name_, plot_.value(), l_partition);
-            PlotFile::readPartitionT4T5BackPointers(plot_file_name_, plot_.value(), r_partition);
+            plot_->ensurePartitionT4T5BackPointersLoaded(plot_file_name_, l_partition);
+            plot_->ensurePartitionT4T5BackPointersLoaded(plot_file_name_, r_partition);
 
             #ifdef DEBUG_CHAINING
             // std::cout << "          Total partitions: " << plot.params.get_num_partitions() << std::endl;
@@ -216,11 +226,11 @@ public:
 
         std::vector<QualityChain> quality_chains;
 
-        ProofCore proof_core_(plot_.value().params);
+        ProofCore proof_core_(plot_->getContents().params);
 
         // First, create new chain for each first link
         QualityChain chain;
-        chain.strength = plot_.value().params.get_strength();
+        chain.strength = plot_->getContents().params.get_strength();
         chain.chain_links[0] = firstLink; // the first link is always the first in the chain
 
         chain.chain_hash = proof_core_.firstLinkHash(firstLink, next_challenge); // set the hash for the first link
@@ -278,9 +288,9 @@ public:
     std::vector<QualityLink> getFirstQualityLinks(FragmentsParent /*parent*/, FragmentsPattern required_pattern, uint32_t t3_fragment_index, uint32_t t4_partition)
     {
         std::vector<QualityLink> links;
-        std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
-        std::vector<T4PlotBackPointers> t4_to_t3_back_pointers = plot_.value().data.t4_to_t3_back_pointers[t4_partition];
-        std::vector<T5PlotBackPointers> t5_to_t4_back_pointers = plot_.value().data.t5_to_t4_back_pointers[t4_partition];
+        std::vector<ProofFragment> t3_proof_fragments = plot_->getContents().data.t3_proof_fragments;
+        std::vector<T4PlotBackPointers> t4_to_t3_back_pointers = plot_->getContents().data.t4_to_t3_back_pointers[t4_partition];
+        std::vector<T5PlotBackPointers> t5_to_t4_back_pointers = plot_->getContents().data.t5_to_t4_back_pointers[t4_partition];
         // find the T4 entry that matches the t3_index
         for (uint32_t t4_index = 0; t4_index < t4_to_t3_back_pointers.size(); t4_index++)
         {
@@ -361,16 +371,16 @@ public:
         std::vector<QualityLink> links;
 
         // 1. get t3 partition A range, and scan R side links from partitionB that link to partition_A
-        Range t3_partition_range = plot_.value().data.t4_to_t3_lateral_ranges[partition_t3];
-        std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
+        Range t3_partition_range = plot_->getContents().data.t4_to_t3_lateral_ranges[partition_t3];
+        std::vector<ProofFragment> t3_proof_fragments = plot_->getContents().data.t3_proof_fragments;
         #ifdef DEBUG_CHAINING
         std::cout << "Partition T3: " << partition_t3 << std::endl;
         std::cout << "t3_partition_range: " << t3_partition_range.start << " - " << t3_partition_range.end << std::endl;
         // 2. get t4 partition B, and find r links that point to t3 partition A range
         std::cout << "Partition Parent T4: " << partition_parent_t4 << std::endl;
         #endif
-        std::vector<T4PlotBackPointers> t4_b_to_t3 = plot_.value().data.t4_to_t3_back_pointers[partition_parent_t4];
-        std::vector<T5PlotBackPointers> t5_b_to_t4_b = plot_.value().data.t5_to_t4_back_pointers[partition_parent_t4];
+        std::vector<T4PlotBackPointers> t4_b_to_t3 = plot_->getContents().data.t4_to_t3_back_pointers[partition_parent_t4];
+        std::vector<T5PlotBackPointers> t5_b_to_t4_b = plot_->getContents().data.t5_to_t4_back_pointers[partition_parent_t4];
 #ifdef DEBUG_CHAINING
         int links_found = 0;
 #endif
@@ -435,8 +445,6 @@ public:
 
     std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain const& chain)
     {
-        readPlotFileIfNeeded();
-
         std::vector<uint64_t> proof_fragments;
         #ifdef DEBUG_CHAINING
         std::cout << "Getting all proof fragments for chain with " << chain.chain_links.size() << " links." << std::endl;
@@ -447,7 +455,7 @@ public:
             if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
             {
                 proof_fragments.push_back(link.fragments[0]);                                             // LL
-                uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
+                uint64_t outside_fragment = plot_->getContents().data.t3_proof_fragments[link.outside_t3_index]; // RR
                 proof_fragments.push_back(outside_fragment);                                              // LR
                 proof_fragments.push_back(link.fragments[1]);                                             // RL
                 proof_fragments.push_back(link.fragments[2]);                                             // RR
@@ -461,7 +469,7 @@ public:
                 proof_fragments.push_back(link.fragments[0]);                                             // LL
                 proof_fragments.push_back(link.fragments[1]);                                             // LR
                 proof_fragments.push_back(link.fragments[2]);                                             // RL
-                uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
+                uint64_t outside_fragment = plot_->getContents().data.t3_proof_fragments[link.outside_t3_index]; // RR
                 proof_fragments.push_back(outside_fragment);                                              // RR
 
                 #ifdef DEBUG_CHAINING
@@ -505,21 +513,21 @@ public:
     {
         if (plot_.has_value())
         {
-            return plot_.value().params;
+            return plot_->getParams();
         }
         else
         {
-            throw std::runtime_error("Plot file not loaded.");
+            throw std::runtime_error("getProofParams:Plot file not loaded.");
         }
     }
 
     void _testing_setPlotFileContents(const PlotFile::PlotFileContents &plot_contents)
     {
-        plot_ = plot_contents;
+        //plot_.emplace(plot_contents);
     }
 
 private:
-    std::optional<PlotFile::PlotFileContents> plot_;
+    std::optional<PlotFile> plot_;
     std::array<uint8_t, 32> challenge_;
     std::string plot_file_name_;
 

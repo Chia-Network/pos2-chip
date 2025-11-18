@@ -219,7 +219,7 @@ int benchmark(uint8_t k, uint8_t plot_strength)
 int do_exhaustive_test(const std::string &plot_file)
 {
     // read plot file
-    PlotFile::PlotFileContents plot = PlotFile::readData(plot_file);
+    /*PlotFile::PlotFileContents plot = PlotFile::readData(plot_file);
     if (plot.data == PlotData())
     {
         std::cerr << "Error: plot file is empty or invalid." << std::endl;
@@ -233,7 +233,7 @@ int do_exhaustive_test(const std::string &plot_file)
 #ifdef RETAIN_X_VALUES_TO_T3
     exhaustive_test(plot);
 #endif
-
+*/
     return 0;
 }
 

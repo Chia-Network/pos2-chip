@@ -83,12 +83,13 @@ TEST_CASE("quality-chain-distribution")
 
     // a little "hacky", we setup a bogus file name and then override the plot file contents directly for testing
     // so this won't need to create or read a plot file.
-    PlotData empty;
-    std::vector<uint64_t> partition_offsets;
-    PlotFile::PlotFileContents plot{empty, params, partition_offsets};
-    plot.params = params;
-    Prover prover(challenge, "test_plot_file.dat");
-    prover._testing_setPlotFileContents(plot);
+    PlotFile::PlotFileContents empty;
+    std::array<uint8_t, 32 + 48 + 32> empty_memo{};
+
+    // initalize plotfile with params, empty memo, and empty data
+    // will only be using prover for chaining functions on synthetic data
+    PlotFile bogus(params, empty_memo, empty.data);
+    Prover prover(challenge, bogus);
 
     // create random quality links
     std::vector<QualityLink> links;
@@ -128,6 +129,7 @@ TEST_CASE("quality-chain-distribution")
     Timer timer;
     timer.start();
     double maximum_trial_time_ms = 0.0;
+    
 
     /*
     Results for 20,000 trials with k=28, strength=2:
@@ -148,6 +150,8 @@ Average chains per trial: 3.9407
 Expected average chains per trial: 4
 Maximum chains found in a single trial: 122
     */
+
+     
     size_t num_trials = 1000;
     for (size_t i = 0; i < num_trials; i++)
     {
@@ -289,7 +293,7 @@ Maximum chains found in a single trial: 122
     
     CHECK(average_chains_per_trial >= expected_avg_chains_per_trial * (1.0 - tolerance));
     CHECK(average_chains_per_trial <= expected_avg_chains_per_trial * (1.0 + tolerance));
-
+    
 }
 
 std::string print_bits(const std::span<uint8_t> blob)

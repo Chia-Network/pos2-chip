@@ -186,7 +186,13 @@ int main(int argc, char *argv[]) try
         #endif
         filename += '_' + plot_id_hex + ".bin";
         timer.start("Writing plot file: " + filename);
-        PlotFile::writeData(filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
+        // use the new instance API: create PlotFileContents and write with PlotFile::writeToFile
+        {
+            // construct PlotFile with ProofParams (ProofParams has no default ctor)
+            std::array<uint8_t, 32 + 48 + 32> memo{};
+            PlotFile pf(plotter.getProofParams(), memo, plot);
+            pf.writeToFile(filename);
+        }
         timer.stop();
     }
 
