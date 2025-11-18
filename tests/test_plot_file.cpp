@@ -82,7 +82,8 @@ TEST_CASE("plot-read-write")
     }
 
 
-    PlotFormat plot_format;
+    // use the memo from the loaded PlotFile and fully qualify the type to avoid ambiguity
+    PlotFormat plot_format(read_plot.params, pf_loaded.getMemo(), partitioned_data);
 
     // read all partitions
     for (size_t partition_id = 0; partition_id < read_plot.data.t4_to_t3_back_pointers.size(); ++partition_id)
@@ -234,19 +235,20 @@ TEST_CASE("plot-read-write")
 
     // read PlotFormat back from disk, load up all partitions, and verify data matches
     timer.start("Reading plot format file: " + plot_format_file_name);
-    PlotFormat::PlotFormatContents read_plot_format = plot_format.readHeaderData(plot_format_file_name);
-    for (size_t partition_id = 0; partition_id < read_plot_format.data.t4_to_t3_back_pointers.size(); ++partition_id)
+    PlotFormat read_plot_format(plot_format_file_name); 
+    //PlotFormat::PlotFormatContents read_plot_format = plot_format.readHeaderData(plot_format_file_name);
+    for (size_t partition_id = 0; partition_id < read_plot_format.getParams().get_num_partitions() * 2; ++partition_id)
     {  
         std::cout << "Reading partition " << partition_id << std::endl;
-        plot_format.readPartition(plot_format_file_name, read_plot_format, partition_id);
+        read_plot_format.ensurePartitionT4T5BackPointersLoaded(plot_format_file_name, partition_id);
     }
     timer.stop();
 
+    PlotFormat::PlotFormatContents read_plot_format_contents = read_plot_format.getContents();
     // check that read_plot_format matches partitioned_data
-    ENSURE(read_plot_format.data.t3_proof_fragments == partitioned_data.t3_proof_fragments);
-    ENSURE(read_plot_format.data.t4_to_t3_back_pointers == partitioned_data.t4_to_t3_back_pointers);
-    ENSURE(read_plot_format.data.t5_to_t4_back_pointers == partitioned_data.t5_to_t4_back_pointers);
-
+    ENSURE(read_plot_format_contents.data.t3_proof_fragments == partitioned_data.t3_proof_fragments);
+    ENSURE(read_plot_format_contents.data.t4_to_t3_back_pointers == partitioned_data.t4_to_t3_back_pointers);
+    ENSURE(read_plot_format_contents.data.t5_to_t4_back_pointers == partitioned_data.t5_to_t4_back_pointers);
     ENSURE(plot == read_plot.data);
     ENSURE(plotter.getProofParams() == read_plot.params);
 }

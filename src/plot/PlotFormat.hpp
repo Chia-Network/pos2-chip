@@ -39,7 +39,44 @@ public:
         // Offsets to each partition's data on disk; each partition contains
         // t3 proof fragments, t4_to_t3 back pointers followed immediately by t5_to_t4 back pointers.
         std::vector<uint64_t> partition_offsets;
+
+        // Provide a default ctor so PlotFormatContents can be default-constructed.
+        // Construct params with an all-zero plot-id to satisfy ProofParams' ctor.
+        static inline constexpr std::array<uint8_t, 32> ZERO_PLOT_ID{}; 
+        PlotFormatContents()
+            : data()
+            , params(ZERO_PLOT_ID.data(), 28, 2)
+            , partition_offsets()
+        {}
     };
+
+    // New: stateful constructors, inputs params, memo, and plot data
+    PlotFormat(const ProofParams& params, std::span<uint8_t const, 32 + 48 + 32> const memo, const PartitionedPlotData& data)
+    {
+        contents_.params = params;
+        contents_.data = data;
+        // copy memo data
+        std::memcpy(memo_.data(), memo.data(), memo.size());
+    }
+
+    PlotFormat(const std::string &filename)
+    {
+        std::cout << "Plot format init: " << filename << std::endl;
+        std::array<uint8_t, 32> ZERO_PLOT_ID{}; // all-zero plot ID
+        contents_.params = ProofParams(ZERO_PLOT_ID.data(), 28, 2); // dummy init
+        memo_.fill(0); // initialize memo to zeros
+        readHeadersFromFile(filename);
+    }
+
+    void readHeadersFromFile(const std::string &filename)
+    {
+        std::cout << "PlotFormat:: readHeadersFromFile " << filename << std::endl;
+        std::ifstream in(filename, std::ios::binary);
+        readHeadersFromFile(in);
+
+        if (!in)
+            throw std::runtime_error("Failed to read plot file headers from " + filename);
+    }
 
     static PartitionedPlotData convertFromPlotData(PlotData &plot_data, const ProofParams &params) {
     
@@ -217,11 +254,10 @@ public:
             throw std::runtime_error("Failed to write " + filename);
     }
 
-    static PlotFormatContents readHeaderData(const std::string &filename)
+void readHeadersFromFile(std::ifstream &in)
     {
-        std::ifstream in(filename, std::ios::binary);
         if (!in)
-            throw std::runtime_error("Failed to open " + filename);
+            throw std::runtime_error("Failed to open plot file");
 
         char magic[4] = {};
         in.read(magic, sizeof(magic));
@@ -242,56 +278,44 @@ public:
 
         uint8_t strength;
         in.read(reinterpret_cast<char*>(&strength), sizeof(strength));
-        ProofParams params = ProofParams(plot_id_bytes, k, strength);
+        std::cout << "READ STRENGTH: " << static_cast<int>(strength) << std::endl;
+        contents_.params = ProofParams(plot_id_bytes, k, strength);
 
-        // Skip the memo (puzzle hash, farmer PK, local SK) before reading partition
-        // counts which the writer placed immediately after the memo.
-        in.seekg(32 + 48 + 32, std::ifstream::cur);
+        // Read the memo into internal storage instead of skipping it
+        in.read(reinterpret_cast<char*>(memo_.data()), memo_.size());
 
         uint64_t outer = 0;
         in.read(reinterpret_cast<char*>(&outer), sizeof(outer));
         #ifdef DEBUG_PLOT_FILE
         std::cout << "Read outer partitions: " << outer << std::endl;
         #endif
-        std::vector<uint64_t> offsets(outer);
+        contents_.partition_offsets.assign(outer, 0);
         for (uint64_t i = 0; i < outer; ++i)
-            in.read(reinterpret_cast<char*>(&offsets[i]), sizeof(offsets[i]));
+            in.read(reinterpret_cast<char*>(&contents_.partition_offsets[i]), sizeof(contents_.partition_offsets[i]));
         #ifdef DEBUG_PLOT_FILE
         std::cout << "Read partition offsets." << std::endl;
         for (uint64_t i = 0; i < outer; ++i)
-            std::cout << "  offset[" << i << "] = " << offsets[i] << std::endl;
+            std::cout << "  offset[" << i << "] = " << contents_.partition_offsets[i] << std::endl;
         #endif
-
         if (!in)
-            throw std::runtime_error("Failed to read plot file" + filename);
-
-        PartitionedPlotData data;
-        data.t4_to_t3_back_pointers.resize(outer);
-        data.t5_to_t4_back_pointers.resize(outer);
-        data.t3_proof_fragments.resize(outer);
-
-        return {
-            .data = data,
-            .params = params,
-            .partition_offsets = std::move(offsets)
-        };
-    }
+            throw std::runtime_error("Failed to read plot file headers");
+    } 
 
     // Read both t4 and t5 back-pointer vectors for a specific partition.
-    static void readPartition(const std::string &filename, PlotFormatContents &contents, size_t partition_index)
+    void ensurePartitionT4T5BackPointersLoaded(const std::string &filename, size_t partition_index)
     {
         #ifdef DEBUG_PLOT_FILE
         std::cout << "PlotFile::readPartition requested: file='" << filename << "' partition=" << partition_index << std::endl;
         std::cout << "  partition_offsets.size() = " << contents.partition_offsets.size() << std::endl;
         #endif
-        if (partition_index >= contents.partition_offsets.size())
+        if (partition_index >= contents_.partition_offsets.size())
             throw std::out_of_range("Partition index out of range");
 
         //size_t reverse_mapped_t3_partition = map_t3_lateral_partition_to_t4(partition_index, contents.params.get_num_partitions());
         // If either vector is non-empty assume the partition is loaded.
-        if (!contents.data.t3_proof_fragments[partition_index].empty() ||
-            !contents.data.t4_to_t3_back_pointers[partition_index].empty() ||
-            !contents.data.t5_to_t4_back_pointers[partition_index].empty())
+        if (!contents_.data.t3_proof_fragments[partition_index].empty() ||
+            !contents_.data.t4_to_t3_back_pointers[partition_index].empty() ||
+            !contents_.data.t5_to_t4_back_pointers[partition_index].empty())
             return; // already loaded
 
         std::ifstream in(filename, std::ios::binary);
@@ -303,15 +327,15 @@ public:
             throw std::runtime_error("Failed to open " + filename);
         }
 
-        uint64_t offset = contents.partition_offsets[partition_index];
+        uint64_t offset = contents_.partition_offsets[partition_index];
         in.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
-        contents.data.t3_proof_fragments[partition_index] = readVector<ProofFragment>(in);
-        contents.data.t4_to_t3_back_pointers[partition_index] = readVector<PartitionedBackPointer>(in);
-        contents.data.t5_to_t4_back_pointers[partition_index] = readVector<T5PlotBackPointers>(in);
+        contents_.data.t3_proof_fragments[partition_index] = readVector<ProofFragment>(in);
+        contents_.data.t4_to_t3_back_pointers[partition_index] = readVector<PartitionedBackPointer>(in);
+        contents_.data.t5_to_t4_back_pointers[partition_index] = readVector<T5PlotBackPointers>(in);
         #ifdef DEBUG_PLOT_FILE
-        std::cout << "  loaded t3 vector size: " << contents.data.t3_proof_fragments[partition_index].size() << std::endl;
-        std::cout << "  loaded t4 vector size: " << contents.data.t4_to_t3_back_pointers[partition_index].size() << std::endl;
-        std::cout << "  loaded t5 vector size: " << contents.data.t5_to_t4_back_pointers[partition_index].size() << std::endl;
+        std::cout << "  loaded t3 vector size: " << contents_.data.t3_proof_fragments[partition_index].size() << std::endl;
+        std::cout << "  loaded t4 vector size: " << contents_.data.t4_to_t3_back_pointers[partition_index].size() << std::endl;
+        std::cout << "  loaded t5 vector size: " << contents_.data.t5_to_t4_back_pointers[partition_index].size() << std::endl;
         #endif
 
         if (!in)
@@ -321,7 +345,25 @@ public:
         }
     }
 
+    ProofParams getParams() const {
+        return contents_.params;
+    }
+
+    PlotFormatContents getContents() const {
+        return contents_;
+    }
+
 private:
+    PlotFormatContents contents_;
+    std::array<uint8_t, 32 + 48 + 32> memo_;
+
+    // Helper: construct a minimal valid ProofParams without needing a default ctor
+    static ProofParams makeDummyParams()
+    {
+        uint8_t zeros[32] = {};
+        return ProofParams(zeros, 0, 0);
+    }
+
     template <typename T>
     static void writeVector(std::ofstream &out, std::vector<T> const &v)
     {
