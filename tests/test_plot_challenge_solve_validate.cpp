@@ -1,6 +1,7 @@
 #include "test_util.h"
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
+#include "plot/PlotFormat.hpp"
 #include "prove/Prover.hpp"
 #include "common/Utils.hpp"
 #include "solve/Solver.hpp"
@@ -71,6 +72,15 @@ TEST_CASE("plot-k18-strength2-4-5")
             pf.writeToFile(plot_file_name);
         }
         timer.stop();
+
+        // convert to PlotFormat
+        PartitionedPlotData partitioned_data = PlotFormat::convertFromPlotData(plot, plotter.getProofParams());
+        std::string plot_format_file_name = (std::string("plot_format_") + "k") + std::to_string(k) + "_" + std::to_string(plot_strength) + "_" + plot_id_hex + ".pf";
+        timer.start("Writing plot format file: " + plot_format_file_name);
+        {
+            std::array<uint8_t, 32 + 48 + 32> memo{};
+            PlotFormat::writeData(plot_format_file_name, partitioned_data, plotter.getProofParams(), memo);
+        }
 
         // timer.start("Reading plot file: " + plot_file_name);
         // PlotFile::PlotFileContents read_plot = PlotFile::readData(plot_file_name);

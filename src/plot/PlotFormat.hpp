@@ -41,6 +41,96 @@ public:
         std::vector<uint64_t> partition_offsets;
     };
 
+    static PartitionedPlotData convertFromPlotData(PlotData &plot_data, const ProofParams &params) {
+    
+        PartitionedPlotData partitioned_data;
+        partitioned_data.t3_proof_fragments.resize(params.get_num_partitions() * 2);
+        partitioned_data.t4_to_t3_back_pointers.resize(params.get_num_partitions() * 2);
+        partitioned_data.t5_to_t4_back_pointers.resize(params.get_num_partitions() * 2);
+
+        // first distribute t3 proof fragments into partitions
+        for (size_t t4_partition_id = 0; t4_partition_id < params.get_num_partitions() * 2; ++t4_partition_id)
+        {
+            Range const &range = plot_data.t4_to_t3_lateral_ranges[t4_partition_id];
+            for (uint32_t t3_index = range.start; t3_index <= range.end; ++t3_index)
+            {
+                partitioned_data.t3_proof_fragments[t4_partition_id].push_back(plot_data.t3_proof_fragments[t3_index]);
+            }
+        }
+
+        // then process t4 to t3 back pointers into partitioned format
+        for (size_t partition_id = 0; partition_id < params.get_num_partitions() * 2; ++partition_id)
+        {
+            size_t expected_t3_l_partition = PlotFormat::map_t4_to_t3_lateral_partition(partition_id, params.get_num_partitions());
+            std::cout << "T4 partition " << partition_id << " expected T3 partition " << expected_t3_l_partition << std::endl;
+        
+            // check that all t4tot3 back pointers are in the t3 partition range
+            Range t3_partition_range = plot_data.t4_to_t3_lateral_ranges[partition_id];
+            std::cout << "T4 to T3 lateral range: " << t3_partition_range.start << " - " << t3_partition_range.end << std::endl;
+
+            uint64_t t3_range_per_partition = (static_cast<uint64_t>(1) << (2 * params.get_k())) / (2 * params.get_num_partitions());
+            uint64_t t3_partition_start_value = t3_range_per_partition * (static_cast<uint64_t>(expected_t3_l_partition));
+            uint64_t t3_partition_end_value = t3_partition_start_value + t3_range_per_partition - 1;
+            std::cout << "T3 partition " << expected_t3_l_partition << " value range: "
+                  << t3_partition_start_value << " - " << t3_partition_end_value << std::endl;
+
+            size_t count = 0;
+            uint32_t max_l_index = 0;
+            uint32_t max_r_index = 0;
+            for (const auto &t4_entry : plot_data.t4_to_t3_back_pointers[partition_id])
+            {
+                ProofFragment t3_l = plot_data.t3_proof_fragments[t4_entry.l];
+                ProofFragment t3_r = plot_data.t3_proof_fragments[t4_entry.r];
+            
+                if ((count < 5) || (count > plot_data.t4_to_t3_back_pointers[partition_id].size() - 5))
+                {
+                    std::cout << "  T4 entry l: " << t4_entry.l << " r: " << t4_entry.r << std::endl;
+                    std::cout << "    T3 proof fragment at l: " << t3_l << std::endl;
+                    std::cout << "    T3 proof fragment at r: " << t3_r << std::endl;
+                }
+            
+
+                // find t3_r partition by scanning ranges
+                uint32_t t3_r_partition = 0;
+                uint32_t t3_r_partition_start_value = 0;
+
+                size_t mapped_r_partition = 0;
+
+                for (size_t range_index = 0; range_index < plot_data.t4_to_t3_lateral_ranges.size(); ++range_index)
+                {
+                    const auto &range = plot_data.t4_to_t3_lateral_ranges[range_index];
+                    if (range.isInRange(t4_entry.r))
+                    {
+                        //t3_r_partition = (range_index < read_plot.data.t4_to_t3_back_pointers.size() / 2) ? (range_index * 2) : ((range_index - read_plot.data.t4_to_t3_back_pointers.size() / 2) * 2 + 1);
+                        t3_r_partition = PlotFormat::map_t4_to_t3_lateral_partition(range_index, params.get_num_partitions());
+                        mapped_r_partition = range_index;
+                        t3_r_partition_start_value = range.start;
+                        break;
+                    }
+                }
+
+                PartitionedBackPointer partitioned_back_pointer;
+                PartitionedBackPointer::Input input;
+                input.l_absolute_t3_index = t4_entry.l;
+                input.r_absolute_t3_index = t4_entry.r;
+                input.t3_l_partition_range_start = t3_partition_range.start;
+                input.t3_r_partition = mapped_r_partition;//t3_r_partition;
+                input.t3_r_partition_range_start = t3_r_partition_start_value;
+                input.num_partition_bits = params.get_num_partition_bits();
+                partitioned_back_pointer.setPointer(input);
+
+                // now add to partitioned data set
+                partitioned_data.t4_to_t3_back_pointers[partition_id].push_back(partitioned_back_pointer);
+
+            }
+        }
+
+        // t5 partitions stay the same
+        partitioned_data.t5_to_t4_back_pointers = plot_data.t5_to_t4_back_pointers;
+
+        return partitioned_data;
+    }
+
     /// Read PlotData from a binary file. The v2 plot header format is as
     // follows:
     // 4 bytes:  "pos2"
