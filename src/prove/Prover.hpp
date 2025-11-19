@@ -521,11 +521,6 @@ public:
         }
     }
 
-    void _testing_setPlotFileContents(const PlotFile::PlotFileContents &plot_contents)
-    {
-        //plot_.emplace(plot_contents);
-    }
-
 private:
     std::optional<PlotFile> plot_;
     std::array<uint8_t, 32> challenge_;

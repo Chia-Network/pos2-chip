@@ -1,4 +1,28 @@
 #pragma once
+// Template unification rationale:
+// Flat (PlotData) vs Partitioned (PartitionedPlotData) differ mainly in:
+// - layout of t3_proof_fragments (vector vs vector<vector<>>)
+// - presence/absence of lateral ranges serialization inside each partition
+// - per-partition offsets loading logic.
+// A traits-based template can unify header IO and vector (de)serialization.
+// Below is an experimental scaffold (disabled) illustrating this.
+// Enable if duplication becomes hard to maintain.
+// #if 0
+// struct FlatPlotTraits {
+// using DataType = PlotData;
+// static constexpr bool Partitioned = false;
+// };
+// struct PartitionedPlotTraits {
+// using DataType = PartitionedPlotData;
+// static constexpr bool Partitioned = true;
+// };
+// template <typename Traits>
+// class PlotFileBase {
+// // Minimal sketch; would migrate common header read/write here
+// // and branch with if constexpr (Traits::Partitioned).
+// };
+// using PlotFileUnified = PlotFileBase<FlatPlotTraits>;
+// #endif
 
 #include <string>
 #include <fstream>

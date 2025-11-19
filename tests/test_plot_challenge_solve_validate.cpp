@@ -1,6 +1,7 @@
 #include "test_util.h"
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
+#include "plot/PlotFileT.hpp"
 #include "plot/PlotFormat.hpp"
 #include "prove/Prover.hpp"
 #include "common/Utils.hpp"
@@ -68,7 +69,7 @@ TEST_CASE("plot-k18-strength2-4-5")
         timer.start("Writing plot file: " + plot_file_name);
         {
             std::array<uint8_t, 32 + 48 + 32> memo{};
-            PlotFile pf(plotter.getProofParams(), memo, plot);
+            FlatPlotFile pf(plotter.getProofParams(), memo, plot);
             pf.writeToFile(plot_file_name);
         }
         timer.stop();
