@@ -59,23 +59,23 @@ public:
         std::memcpy(memo_.data(), memo.data(), memo.size());
     }
 
-    PlotFormat(const std::string &filename)
+    PlotFormat(const std::string &filename) : filename_(filename)
     {
         std::cout << "Plot format init: " << filename << std::endl;
         std::array<uint8_t, 32> ZERO_PLOT_ID{}; // all-zero plot ID
         contents_.params = ProofParams(ZERO_PLOT_ID.data(), 28, 2); // dummy init
         memo_.fill(0); // initialize memo to zeros
-        readHeadersFromFile(filename);
+        readHeadersFromFile();
     }
 
-    void readHeadersFromFile(const std::string &filename)
+    void readHeadersFromFile()
     {
-        std::cout << "PlotFormat:: readHeadersFromFile " << filename << std::endl;
-        std::ifstream in(filename, std::ios::binary);
+        std::cout << "PlotFormat:: readHeadersFromFile " << filename_ << std::endl;
+        std::ifstream in(filename_, std::ios::binary);
         readHeadersFromFile(in);
 
         if (!in)
-            throw std::runtime_error("Failed to read plot file headers from " + filename);
+            throw std::runtime_error("Failed to read plot file headers from " + filename_);
     }
 
     static PartitionedPlotData convertFromPlotData(PlotData &plot_data, const ProofParams &params) {
@@ -302,7 +302,7 @@ void readHeadersFromFile(std::ifstream &in)
     } 
 
     // Read both t4 and t5 back-pointer vectors for a specific partition.
-    void ensurePartitionT4T5BackPointersLoaded(const std::string &filename, size_t partition_index)
+    void ensurePartitionT4T5BackPointersLoaded(size_t partition_index)
     {
         #ifdef DEBUG_PLOT_FILE
         std::cout << "PlotFile::readPartition requested: file='" << filename << "' partition=" << partition_index << std::endl;
@@ -318,13 +318,13 @@ void readHeadersFromFile(std::ifstream &in)
             !contents_.data.t5_to_t4_back_pointers[partition_index].empty())
             return; // already loaded
 
-        std::ifstream in(filename, std::ios::binary);
+        std::ifstream in(filename_, std::ios::binary);
         #ifdef DEBUG_PLOT_FILE
-        std::cout << "  file exists: " << std::boolalpha << std::filesystem::exists(filename) << std::noboolalpha << std::endl;
+        std::cout << "  file exists: " << std::boolalpha << std::filesystem::exists(filename_) << std::noboolalpha << std::endl;
         #endif
         if (!in) {
-            std::cerr << "  Failed to open file '" << filename << "' for partition read." << std::endl;
-            throw std::runtime_error("Failed to open " + filename);
+            std::cerr << "  Failed to open file '" << filename_ << "' for partition read." << std::endl;
+            throw std::runtime_error("Failed to open " + filename_);
         }
 
         uint64_t offset = contents_.partition_offsets[partition_index];
@@ -354,6 +354,7 @@ void readHeadersFromFile(std::ifstream &in)
     }
 
 private:
+    std::string filename_;
     PlotFormatContents contents_;
     std::array<uint8_t, 32 + 48 + 32> memo_;
 

@@ -240,7 +240,7 @@ TEST_CASE("plot-read-write")
     for (size_t partition_id = 0; partition_id < read_plot_format.getParams().get_num_partitions() * 2; ++partition_id)
     {  
         std::cout << "Reading partition " << partition_id << std::endl;
-        read_plot_format.ensurePartitionT4T5BackPointersLoaded(plot_format_file_name, partition_id);
+        read_plot_format.ensurePartitionT4T5BackPointersLoaded(partition_id);
     }
     timer.stop();
 
