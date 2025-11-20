@@ -190,7 +190,7 @@ int main(int argc, char *argv[]) try
         {
             // construct PlotFile with ProofParams (ProofParams has no default ctor)
             std::array<uint8_t, 32 + 48 + 32> memo{};
-            PlotFile pf(plotter.getProofParams(), memo, plot);
+            FlatPlotFile pf(plotter.getProofParams(), memo, plot);
             pf.writeToFile(filename);
         }
         timer.stop();

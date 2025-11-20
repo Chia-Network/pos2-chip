@@ -1,8 +1,6 @@
 #include "test_util.h"
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
-#include "plot/PlotFileT.hpp"
-#include "plot/PlotFormat.hpp"
 #include "common/Utils.hpp"
 
 TEST_SUITE_BEGIN("plot-file");
@@ -18,11 +16,11 @@ TEST_CASE("plot-format-partition-mappings")
         size_t t4_partition = t4_partitions[i];
         size_t expected_t3_partition = expected_t3_partition_mappings[i];
 
-        size_t test_t3_partition = PlotFormat::map_t4_to_t3_lateral_partition(t4_partition, num_partitions);
+        size_t test_t3_partition = PartitionedPlotData::map_t4_to_t3_lateral_partition(t4_partition, num_partitions);
         std::cout << "T4 partition " << t4_partition << " maps to T3 partition " << test_t3_partition << std::endl;
         REQUIRE(test_t3_partition == expected_t3_partition);
 
-        size_t back_mapped_t4_partition = PlotFormat::map_t3_lateral_partition_to_t4(test_t3_partition, num_partitions);
+        size_t back_mapped_t4_partition = PartitionedPlotData::map_t3_lateral_partition_to_t4(test_t3_partition, num_partitions);
         std::cout << "  back mapped T4 partition: " << back_mapped_t4_partition << std::endl;
         REQUIRE(back_mapped_t4_partition == t4_partition);
     }
@@ -43,10 +41,16 @@ TEST_CASE("plot-read-write")
     PlotData plot = plotter.run();
     timer.stop();
 
+    // test conversion of PlotData to PartitionedPlotData and back again
+    std::cout << "Testing conversion of PlotData to PartitionedPlotData and back again..." << std::endl;
+    PartitionedPlotData converted_partitioned_data = PartitionedPlotData::convertFromPlotData(plot, plotter.getProofParams());
+    
+
     printfln("Plot completed, writing to file...");
    
 #define tostr std::to_string
     std::string file_name = (std::string("plot_") + "k") + tostr(K) + "_" PLOT_ID_HEX + ".bin";
+    std::string partitioned_plot_file_name = (std::string("plot_") + "k") + tostr(K) + "_" PLOT_ID_HEX + ".ppf";
 
     timer.start("Writing plot file: " + file_name);
     {
@@ -67,6 +71,7 @@ TEST_CASE("plot-read-write")
     FlatPlotFile pf_loaded(file_name);
     pf_loaded.loadNonPartitionBody();
     const FlatPlotFile::Contents &read_plot = pf_loaded.getContents();
+    PlotData const &read_plot_data = read_plot.data;
     timer.stop();
 
     // move all t3 proof fragments into partitioned structure.
@@ -89,14 +94,14 @@ TEST_CASE("plot-read-write")
         }
     }
 
-    for (size_t partition_id = 0; partition_id < pf_loaded.getParams().get_num_partitions() * 2; ++partition_id)
+    for (size_t partition_id = 0; partition_id < pf_loaded.getProofParams().get_num_partitions() * 2; ++partition_id)
     {
         // ensure partition data is loaded into the PlotFile instance
         pf_loaded.ensurePartitionLoaded(partition_id);
     }
 
     // use the memo from the loaded PlotFile and fully qualify the type to avoid ambiguity
-    PlotFormat plot_format(read_plot.params, pf_loaded.getMemo(), partitioned_data);
+    //PlotFormat plot_format(read_plot.params, pf_loaded.getMemo(), partitioned_data);
 
     // read all partitions
     for (size_t partition_id = 0; partition_id < read_plot.data.t4_to_t3_back_pointers.size(); ++partition_id)
@@ -114,7 +119,7 @@ TEST_CASE("plot-read-write")
         // num_partitions -> 1
         // num_partitions + 1 -> 3
         // etc.
-        size_t expected_t3_l_partition = plot_format.map_t4_to_t3_lateral_partition(partition_id, read_plot.params.get_num_partitions());
+        size_t expected_t3_l_partition = PartitionedPlotData::map_t4_to_t3_lateral_partition(partition_id, read_plot.params.get_num_partitions());
         std::cout << "T4 partition " << partition_id << " expected T3 partition " << expected_t3_l_partition << std::endl;
         
         // check that all t4tot3 back pointers are in the t3 partition range
@@ -157,7 +162,7 @@ TEST_CASE("plot-read-write")
                 if (range.isInRange(t4_entry.r))
                 {
                     //t3_r_partition = (range_index < read_plot.data.t4_to_t3_back_pointers.size() / 2) ? (range_index * 2) : ((range_index - read_plot.data.t4_to_t3_back_pointers.size() / 2) * 2 + 1);
-                    t3_r_partition = PlotFormat::map_t4_to_t3_lateral_partition(range_index, read_plot.params.get_num_partitions());
+                    t3_r_partition = PartitionedPlotData::map_t4_to_t3_lateral_partition(range_index, read_plot.params.get_num_partitions());
                     mapped_r_partition = range_index;
                     t3_r_partition_start_value = range.start;
                     break;
@@ -237,14 +242,39 @@ TEST_CASE("plot-read-write")
     }
     timer.stop();
 
-    // now write PlotFormat to disk
+    // now convert PlotData to PartitionedPlotData using PartitionedPlotData's own conversion function
+    PartitionedPlotData partitioned_data_converted = PartitionedPlotData::convertFromPlotData(read_plot_data, read_plot.params);
+    ENSURE(partitioned_data_converted.t3_proof_fragments == partitioned_data.t3_proof_fragments);
+    ENSURE(partitioned_data_converted.t4_to_t3_back_pointers == partitioned_data.t4_to_t3_back_pointers);
+    // data converted should have same as read plot data in t5 as no changes there.
+    ENSURE(read_plot_data.t5_to_t4_back_pointers == partitioned_data_converted.t5_to_t4_back_pointers);
+
+    // now write PartitionedPlotData to disk, read and load all partitions, and verify data matches
     timer.debugOut = true;
-    std::string plot_format_file_name = file_name + ".plot_format";
-    timer.start("Writing plot format file: " + plot_format_file_name);
-    {    
-        plot_format.writeData(plot_format_file_name, partitioned_data, read_plot.params, pf_loaded.getMemo());
+    timer.start("Writing plot format file: " + partitioned_plot_file_name);
+    {   
+        PartitionedPlotFile ppf(read_plot.params, pf_loaded.getMemo(), partitioned_data);
+        ppf.writeToFile(partitioned_plot_file_name);
     }
     timer.stop();
+    
+    // read back from disk, load up all partitions and verify data matches
+    {
+        timer.start("Reading partitioned plot format file: " + partitioned_plot_file_name);
+        PartitionedPlotFile read_ppf(partitioned_plot_file_name);
+        read_ppf.loadNonPartitionBody();
+        for (size_t partition_id = 0; partition_id < read_plot.params.get_num_partitions() * 2; ++partition_id)
+        {  
+            std::cout << "Reading partition " << partition_id << std::endl;
+            read_ppf.ensurePartitionLoaded(partition_id);
+        }
+        timer.stop();
+        auto read_partitioned_data = read_ppf.getContents().data;
+        // check that read_partitioned_data matches partitioned_data
+        ENSURE(read_partitioned_data.t3_proof_fragments == partitioned_data.t3_proof_fragments);
+        ENSURE(read_partitioned_data.t4_to_t3_back_pointers == partitioned_data.t4_to_t3_back_pointers);
+        ENSURE(read_partitioned_data.t5_to_t4_back_pointers == partitioned_data.t5_to_t4_back_pointers);
+    }
 
     // read PlotFormat back from disk, load up all partitions, and verify data matches
     /*timer.start("Reading plot format file: " + plot_format_file_name);

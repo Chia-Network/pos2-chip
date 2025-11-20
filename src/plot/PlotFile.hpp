@@ -1,387 +1,446 @@
 #pragma once
-// Template unification rationale:
-// Flat (PlotData) vs Partitioned (PartitionedPlotData) differ mainly in:
-// - layout of t3_proof_fragments (vector vs vector<vector<>>)
-// - presence/absence of lateral ranges serialization inside each partition
-// - per-partition offsets loading logic.
-// A traits-based template can unify header IO and vector (de)serialization.
-// Below is an experimental scaffold (disabled) illustrating this.
-// Enable if duplication becomes hard to maintain.
-// #if 0
-// struct FlatPlotTraits {
-// using DataType = PlotData;
-// static constexpr bool Partitioned = false;
-// };
-// struct PartitionedPlotTraits {
-// using DataType = PartitionedPlotData;
-// static constexpr bool Partitioned = true;
-// };
-// template <typename Traits>
-// class PlotFileBase {
-// // Minimal sketch; would migrate common header read/write here
-// // and branch with if constexpr (Traits::Partitioned).
-// };
-// using PlotFileUnified = PlotFileBase<FlatPlotTraits>;
-// #endif
 
-#include <string>
+#include <array>
+#include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <stdexcept>
-#include <type_traits>
-#include "PlotData.hpp"
-#include "pos/ProofParams.hpp"
+#include <string>
+#include <vector>
 
-//#define DEBUG_PLOT_FILE true
-#ifdef DEBUG_PLOT_FILE
-#include <iostream>
-#include <filesystem>
-#endif
-#include <span>
-#include <cstring>
-#include <array> // added
+#include "PlotIO.hpp"
 
-class PlotFile
+#define DEBUG_PLOT_FILE true
+
+enum class PlotLayoutKind {
+    Flat,        // global t3, ranges, per-partition t4/t5
+    Partitioned  // per-partition t3, t4, t5
+};
+
+
+// -----------------------------------------------------------------------------
+// Layout utilities (used in Partitioned layout).
+// -----------------------------------------------------------------------------
+
+inline size_t map_t4_to_t3_lateral_partition(size_t t4_partition,
+                                             size_t num_partitions)
+{
+    return (t4_partition < num_partitions)
+           ? (t4_partition * 2)
+           : ((t4_partition - num_partitions) * 2 + 1);
+}
+
+inline size_t map_t3_lateral_partition_to_t4(size_t t3_lateral_partition,
+                                             size_t num_partitions)
+{
+    return (t3_lateral_partition % 2 == 0)
+           ? (t3_lateral_partition / 2)
+           : (num_partitions + (t3_lateral_partition - 1) / 2);
+}
+
+// -----------------------------------------------------------------------------
+// Layout policies
+// -----------------------------------------------------------------------------
+
+struct FlatLayout
+{
+    using Data = PlotData;
+
+    // The policy writes *body* data and collects per-partition offsets.
+    static void writeBody(std::ofstream& out,
+                          Data const& data,
+                          ProofParams const& params,
+                          std::vector<uint64_t>& outOffsets)
+    {
+        // Write non-partitioned data: global t3 + lateral ranges.
+        writeVector(out, data.t3_proof_fragments);
+        writeRanges(out, data.t4_to_t3_lateral_ranges);
+
+        const uint64_t outer = static_cast<uint64_t>(
+            data.t4_to_t3_back_pointers.size()
+        );
+        outOffsets.clear();
+        outOffsets.reserve(outer);
+
+        // Now write each partition's t4 then t5 vectors; record offsets.
+        for (uint64_t i = 0; i < outer; ++i) {
+            uint64_t offset = static_cast<uint64_t>(out.tellp());
+            outOffsets.push_back(offset);
+            writeVector(out, data.t4_to_t3_back_pointers[static_cast<size_t>(i)]);
+            writeVector(out, data.t5_to_t4_back_pointers[static_cast<size_t>(i)]);
+        }
+
+    #ifdef RETAIN_X_VALUES_TO_T3
+        writeVector(out, data.xs_correlating_to_proof_fragments);
+    #endif
+    }
+
+    // Read the non-partitioned body (global t3 + ranges + optional xs).
+    // Called with stream positioned immediately after partition_offsets.
+    static void readNonPartitionBody(std::ifstream& in,
+                                     Data& data,
+                                     ProofParams const& params,
+                                     std::vector<uint64_t> const& partition_offsets)
+    {
+        data = PlotData{};
+
+        data.t3_proof_fragments = readVector<uint64_t>(in);
+        data.t4_to_t3_lateral_ranges = readRanges(in);
+
+        const size_t outer = static_cast<size_t>(partition_offsets.size());
+        data.t4_to_t3_back_pointers.assign(outer, {});
+        data.t5_to_t4_back_pointers.assign(outer, {});
+
+    #ifdef RETAIN_X_VALUES_TO_T3
+        data.xs_correlating_to_proof_fragments =
+            readVector<std::array<uint32_t, 8>>(in);
+    #endif
+    }
+
+    static void ensurePartitionLoaded(Data& data,
+                                      std::ifstream& in,
+                                      size_t partition_index,
+                                      std::vector<uint64_t> const& offsets)
+    {
+        in.seekg(static_cast<std::streamoff>(offsets[partition_index]),
+                 std::ios::beg);
+        data.t4_to_t3_back_pointers[partition_index] =
+            readVector<T4PlotBackPointers>(in);
+        data.t5_to_t4_back_pointers[partition_index] =
+            readVector<T5PlotBackPointers>(in);
+    }
+
+    static bool isPartitionLoaded(Data const& data, size_t idx)
+    {
+        return !data.t4_to_t3_back_pointers[idx].empty()
+            || !data.t5_to_t4_back_pointers[idx].empty();
+    }
+
+    static uint64_t computeOuter(Data const& data,
+                                 ProofParams const& params)
+    {
+        // For flat layout, outer is size of t4_to_t3_back_pointers.
+        return static_cast<uint64_t>(data.t4_to_t3_back_pointers.size());
+    }
+};
+
+struct PartitionedLayout
+{
+    using Data = PartitionedPlotData;
+
+    static void writeBody(std::ofstream& out,
+                          Data const& data,
+                          ProofParams const& params,
+                          std::vector<uint64_t>& outOffsets)
+    {
+        const uint64_t outer =
+            static_cast<uint64_t>(data.t4_to_t3_back_pointers.size());
+        outOffsets.clear();
+        outOffsets.reserve(outer);
+
+        for (uint64_t i = 0; i < outer; ++i) {
+            uint64_t offset = static_cast<uint64_t>(out.tellp());
+            outOffsets.push_back(offset);
+
+            writeVector(out, data.t3_proof_fragments[static_cast<size_t>(i)]);
+            writeVector(out, data.t4_to_t3_back_pointers[static_cast<size_t>(i)]);
+            writeVector(out, data.t5_to_t4_back_pointers[static_cast<size_t>(i)]);
+        }
+
+    #ifdef RETAIN_X_VALUES_TO_T3
+        // Not supported in your current partitioned format.
+        throw std::runtime_error("RETAIN_X_VALUES_TO_T3 is not supported "
+                                 "for PartitionedLayout");
+    #endif
+    }
+
+    static void readNonPartitionBody(std::ifstream& in,
+                                     Data& data,
+                                     ProofParams const& params,
+                                     std::vector<uint64_t> const& partition_offsets)
+    {
+        // For partitioned layout, there is no non-partition global t3/ranges.
+        const size_t outer = static_cast<size_t>(partition_offsets.size());
+        data.t3_proof_fragments.assign(outer, {});
+        data.t4_to_t3_back_pointers.assign(outer, {});
+        data.t5_to_t4_back_pointers.assign(outer, {});
+
+        // Stream is already positioned at first partition; actual reads
+        // are deferred to ensurePartitionLoaded().
+    }
+
+    static void ensurePartitionLoaded(Data& data,
+                                      std::ifstream& in,
+                                      size_t partition_index,
+                                      std::vector<uint64_t> const& offsets)
+    {
+        in.seekg(static_cast<std::streamoff>(offsets[partition_index]),
+                 std::ios::beg);
+        data.t3_proof_fragments[partition_index] =
+            readVector<ProofFragment>(in);
+        data.t4_to_t3_back_pointers[partition_index] =
+            readVector<PartitionedBackPointer>(in);
+        data.t5_to_t4_back_pointers[partition_index] =
+            readVector<T5PlotBackPointers>(in);
+    }
+
+    static bool isPartitionLoaded(Data const& data, size_t idx)
+    {
+        return !data.t3_proof_fragments[idx].empty()
+            || !data.t4_to_t3_back_pointers[idx].empty()
+            || !data.t5_to_t4_back_pointers[idx].empty();
+    }
+
+    static uint64_t computeOuter(Data const& data,
+                                 ProofParams const& params)
+    {
+        // For partitioned layout, outer is t4_to_t3_back_pointers.size().
+        return static_cast<uint64_t>(data.t4_to_t3_back_pointers.size());
+    }
+};
+
+// -----------------------------------------------------------------------------
+// Unified PlotFileT
+// -----------------------------------------------------------------------------
+
+template <typename LayoutPolicy>
+class PlotFileT
 {
 public:
-    // Current on-disk format version, update this when the format changes.
-    #ifdef RETAIN_X_VALUES_TO_T3
-    static constexpr uint8_t FORMAT_VERSION = 3;
-    #else
-    static constexpr uint8_t FORMAT_VERSION = 1;
-    #endif
+    using Data = typename LayoutPolicy::Data;
 
-    struct PlotFileContents {
-        PlotData    data;
+#ifdef RETAIN_X_VALUES_TO_T3
+    static constexpr uint8_t FORMAT_VERSION = 3;
+#else
+    static constexpr uint8_t FORMAT_VERSION = 1;
+#endif
+
+    struct Contents {
+        Data        data;
         ProofParams params;
-        // Offsets to each partition's data on disk; each partition contains
-        // t4_to_t3 back pointers followed immediately by t5_to_t4 back pointers.
+        // Offsets to each partition's data on disk.
         std::vector<uint64_t> partition_offsets;
 
-        // Provide a default ctor so PlotFileContents can be default-constructed.
-        // Construct params with an all-zero plot-id to satisfy ProofParams' ctor.
-        static inline constexpr std::array<uint8_t, 32> ZERO_PLOT_ID{}; 
-        PlotFileContents()
+        static inline constexpr std::array<uint8_t, 32> ZERO_PLOT_ID{};
+        Contents()
             : data()
             , params(ZERO_PLOT_ID.data(), 28, 2)
             , partition_offsets()
         {}
     };
 
-    // New: stateful constructors, inputs params, memo, and plot data
-    PlotFile(const ProofParams& params, std::span<uint8_t const, 32 + 48 + 32> const memo, const PlotData& data)
+    // Construct from in-memory data
+    PlotFileT(const ProofParams& params,
+              std::span<uint8_t const, 32 + 48 + 32> memo,
+              const Data& data)
+        : filename_()
     {
         contents_.params = params;
-        contents_.data = data;
-        // copy memo data
+        contents_.data   = data;
         std::memcpy(memo_.data(), memo.data(), memo.size());
     }
 
-    PlotFile(const std::string &filename)
+    // Load only headers and partition offsets from file (lazy body).
+    explicit PlotFileT(const std::string& filename)
+        : filename_(filename)
     {
-        std::cout << "Plot file init: " << filename << std::endl;
-        std::array<uint8_t, 32> ZERO_PLOT_ID{}; // all-zero plot ID
-        contents_.params = ProofParams(ZERO_PLOT_ID.data(), 28, 2); // dummy init
-        memo_.fill(0); // initialize memo to zeros
-        readHeadersFromFile(filename);
+        memo_.fill(0);
+        readHeadersFromFile();
     }
 
-    void readHeadersFromFile(const std::string &filename)
+    // Optionally read non-partition body (global t3 / ranges / xs etc).
+    // For PartitionedLayout this will just size the vectors.
+    void loadNonPartitionBody()
     {
-        std::cout << "PlotFile:: readHeadersFromFile " << filename << std::endl;
-        std::ifstream in(filename, std::ios::binary);
-        readHeadersFromFile(in);
+        if (filename_.empty()) return;
+
+        std::ifstream in(filename_, std::ios::binary);
+        if (!in)
+            throw std::runtime_error("Failed to open " + filename_);
+
+        // Re-read header to position stream correctly.
+        readHeadersFromStream(in);
+
+        LayoutPolicy::readNonPartitionBody(
+            in,
+            contents_.data,
+            contents_.params,
+            contents_.partition_offsets
+        );
 
         if (!in)
-            throw std::runtime_error("Failed to read plot file headers from " + filename);
+            throw std::runtime_error("Failed to read non-partition body from "
+                                     + filename_);
     }
 
-    void readHeadersFromFile(std::ifstream &in)
-    {
-        if (!in)
-            throw std::runtime_error("Failed to open plot file");
-
-        char magic[4] = {};
-        in.read(magic, sizeof(magic));
-        if (memcmp(magic, "pos2", 4) != 0)
-            throw std::runtime_error("Plot file invalid magic bytes, not a plot file");
-
-        uint8_t version;
-        in.read(reinterpret_cast<char*>(&version), sizeof(version));
-        if (version != FORMAT_VERSION) {
-            throw std::runtime_error("Plot file format version " + std::to_string(version) + " is not supported.");
-        }
-
-        uint8_t plot_id_bytes[32];
-        in.read(reinterpret_cast<char*>(plot_id_bytes), 32);
-
-        uint8_t k;
-        in.read(reinterpret_cast<char*>(&k), sizeof(k));
-
-        uint8_t strength;
-        in.read(reinterpret_cast<char*>(&strength), sizeof(strength));
-        std::cout << "READ STRENGTH: " << static_cast<int>(strength) << std::endl;
-        contents_.params = ProofParams(plot_id_bytes, k, strength);
-
-        // Read the memo into internal storage instead of skipping it
-        in.read(reinterpret_cast<char*>(memo_.data()), memo_.size());
-
-        uint64_t outer = 0;
-        in.read(reinterpret_cast<char*>(&outer), sizeof(outer));
-        #ifdef DEBUG_PLOT_FILE
-        std::cout << "Read outer partitions: " << outer << std::endl;
-        #endif
-        contents_.partition_offsets.assign(outer, 0);
-        for (uint64_t i = 0; i < outer; ++i)
-            in.read(reinterpret_cast<char*>(&contents_.partition_offsets[i]), sizeof(contents_.partition_offsets[i]));
-        #ifdef DEBUG_PLOT_FILE
-        std::cout << "Read partition offsets." << std::endl;
-        for (uint64_t i = 0; i < outer; ++i)
-            std::cout << "  offset[" << i << "] = " << contents_.partition_offsets[i] << std::endl;
-        #endif
-        if (!in)
-            throw std::runtime_error("Failed to read plot file headers");
-    }
-
-    // New: write using internal state (no external memo param)
-    void writeToFile(const std::string &filename) const
+    // Write out using current internal state.
+    void writeToFile(const std::string& filename) const
     {
         std::ofstream out(filename, std::ios::binary);
         if (!out)
             throw std::runtime_error("Failed to open " + filename);
 
-        // our headers
+        // Header
         out.write("pos2", 4);
-        out.write(reinterpret_cast<const char*>(&FORMAT_VERSION), 1);
+        out.write(reinterpret_cast<char const*>(&FORMAT_VERSION), 1);
 
-        // Write plot ID
-        out.write(reinterpret_cast<const char*>(contents_.params.get_plot_id_bytes()), 32);
+        out.write(reinterpret_cast<char const*>(
+                      contents_.params.get_plot_id_bytes()),
+                  32);
 
-        // Write k and strength (match_key_bits)
-        const uint8_t k = numeric_cast<uint8_t>(contents_.params.get_k());
-        const uint8_t match_key_bits = numeric_cast<uint8_t>(contents_.params.get_match_key_bits());
-        out.write(reinterpret_cast<const char*>(&k), 1);
-        out.write(reinterpret_cast<const char*>(&match_key_bits), 1);
+        const uint8_t k =
+            numeric_cast<uint8_t>(contents_.params.get_k());
+        const uint8_t match_key_bits =
+            numeric_cast<uint8_t>(contents_.params.get_match_key_bits());
+        out.write(reinterpret_cast<char const*>(&k), 1);
+        out.write(reinterpret_cast<char const*>(&match_key_bits), 1);
 
-        // Write memo (from internal storage)
-        out.write(reinterpret_cast<char const*>(memo_.data()), memo_.size());
+        out.write(reinterpret_cast<char const*>(memo_.data()),
+                  memo_.size());
 
-        // Use a single outer count for partition pairs (t4,t5) and placeholders
-        // for their offsets. Each partition region will hold t4 vector then t5 vector.
-        uint64_t outer = contents_.data.t4_to_t3_back_pointers.size();
-        if (outer != contents_.params.get_num_partitions()*2) {
-            throw std::runtime_error("Partition count mismatch when writing plot file");
-        }
-        if (contents_.data.t5_to_t4_back_pointers.size() != outer)
-            throw std::runtime_error("Mismatched partition outer sizes for t4/t5");
-
-        #ifdef DEBUG_PLOT_FILE
-        std::cout << "Writing partitions (outer): " << outer << std::endl;
-        #endif
-
+        // outer = number of partitions for this layout
+        // TODO: replace with params count.
+        const uint64_t outer =
+            LayoutPolicy::computeOuter(contents_.data, contents_.params);
         out.write(reinterpret_cast<char const*>(&outer), sizeof(outer));
-        uint64_t zero = 0;
-        std::streampos offsets_pos = out.tellp();
-        for (uint64_t i = 0; i < outer; ++i)
-            out.write(reinterpret_cast<char const*>(&zero), sizeof(zero));
-        
-        // Write plot data (non-partitioned)
-        writeVector(out, contents_.data.t3_proof_fragments);
-        writeRanges(out, contents_.data.t4_to_t3_lateral_ranges);
 
-        // Now write each partition's t4 then t5 vectors and remember file offsets
-        std::vector<uint64_t> offsets;
-        offsets.reserve(outer);
-        for (uint64_t i = 0; i < outer; ++i)
-        {
-            uint64_t offset = static_cast<uint64_t>(out.tellp());
-            offsets.push_back(offset);
-            writeVector(out, contents_.data.t4_to_t3_back_pointers[i]);
-            writeVector(out, contents_.data.t5_to_t4_back_pointers[i]);
+        // Reserve space for offsets (all zeros for now)
+        const std::streampos offsets_pos = out.tellp();
+        uint64_t zero = 0;
+        for (uint64_t i = 0; i < outer; ++i) {
+            out.write(reinterpret_cast<char const*>(&zero), sizeof(zero));
         }
 
-        #ifdef RETAIN_X_VALUES_TO_T3
-        writeVector(out, contents_.data.xs_correlating_to_proof_fragments);
-        #endif
+        // Body write (non-partition + per-partition data)
+        std::vector<uint64_t> offsets;
+        LayoutPolicy::writeBody(out, contents_.data, contents_.params, offsets);
+
+        if (offsets.size() != outer) {
+            throw std::runtime_error("LayoutPolicy::writeBody produced "
+                                     "offset count mismatch");
+        }
 
         // Backfill offsets
-        if (outer)
-        {
+        if (outer) {
             out.seekp(offsets_pos);
-            for (auto off : offsets)
+            for (auto off : offsets) {
                 out.write(reinterpret_cast<char const*>(&off), sizeof(off));
+            }
+            out.seekp(0, std::ios::end);
         }
-
-        // Seek to end for finalization
-        out.seekp(0, std::ios::end);
 
         if (!out)
             throw std::runtime_error("Failed to write " + filename);
     }
 
-    // New: load into this PlotFile from disk (reads memo into internal storage)
-    void readEntireT3FromFile(const std::string &filename)
+    // Lazy-load a specific partition from disk.
+    void ensurePartitionLoaded(size_t partition_index)
     {
-        std::ifstream in(filename, std::ios::binary);
-        if (!in)
-            throw std::runtime_error("Failed to open " + filename);
-
-        // TODO: if headers already read, then need to seek to data start.
-        readHeadersFromFile(in);
-
-        // Read plot data (non-partitioned parts)
-        contents_.data = PlotData{};
-        contents_.data.t3_proof_fragments = readVector<uint64_t>(in);
-        contents_.data.t4_to_t3_lateral_ranges = readRanges(in);
-
-        // Initialize empty outer vectors sized to the partition counts
-        size_t outer = contents_.params.get_num_partitions()*2;
-        contents_.data.t4_to_t3_back_pointers = std::vector<std::vector<T4PlotBackPointers>>(outer);
-        contents_.data.t5_to_t4_back_pointers = std::vector<std::vector<T5PlotBackPointers>>(outer);
-
-        #ifdef RETAIN_X_VALUES_TO_T3
-        contents_.data.xs_correlating_to_proof_fragments = readVector<std::array<uint32_t,8>>(in);
-        #endif
-
-        if (!in)
-            throw std::runtime_error("Failed to read plot file" + filename);
-    }
-
-    // New: Read both t4 and t5 back-pointer vectors for a specific partition.
-    void ensurePartitionT4T5BackPointersLoaded(const std::string &filename, size_t partition_index)
-    {
-        #ifdef DEBUG_PLOT_FILE
-        std::cout << "PlotFile::ensurePartitionT4T5BackPointersLoaded requested: file='" << filename << "' partition=" << partition_index << std::endl;
-        std::cout << "  partition_offsets.size() = " << contents_.partition_offsets.size() << std::endl;
-        #endif
         if (partition_index >= contents_.partition_offsets.size())
             throw std::out_of_range("Partition index out of range");
-        // If either vector is non-empty assume the partition is loaded.
-        if (!contents_.data.t4_to_t3_back_pointers[partition_index].empty() ||
-            !contents_.data.t5_to_t4_back_pointers[partition_index].empty())
-            return; // already loaded
 
-        std::ifstream in(filename, std::ios::binary);
-        #ifdef DEBUG_PLOT_FILE
-        std::cout << "  file exists: " << std::boolalpha << std::filesystem::exists(filename) << std::noboolalpha << std::endl;
-        #endif
-        if (!in) {
-            std::cerr << "  Failed to open file '" << filename << "' for partition read." << std::endl;
-            throw std::runtime_error("Failed to open " + filename);
-        }
+        if (LayoutPolicy::isPartitionLoaded(contents_.data, partition_index))
+            return;
 
-        uint64_t offset = contents_.partition_offsets[partition_index];
-        in.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+        if (filename_.empty())
+            throw std::runtime_error("No filename associated with PlotFileT");
 
-        contents_.data.t4_to_t3_back_pointers[partition_index] = readVector<T4PlotBackPointers>(in);
-        contents_.data.t5_to_t4_back_pointers[partition_index] = readVector<T5PlotBackPointers>(in);
-        #ifdef DEBUG_PLOT_FILE
-        std::cout << "  loaded t4 vector size: " << contents_.data.t4_to_t3_back_pointers[partition_index].size() << std::endl;
-        std::cout << "  loaded t5 vector size: " << contents_.data.t5_to_t4_back_pointers[partition_index].size() << std::endl;
-        #endif
+        std::ifstream in(filename_, std::ios::binary);
+        if (!in)
+            throw std::runtime_error("Failed to open " + filename_);
+
+        // We already know offsets; no need to re-read header.
+        LayoutPolicy::ensurePartitionLoaded(
+            contents_.data,
+            in,
+            partition_index,
+            contents_.partition_offsets
+        );
 
         if (!in)
-        {
-            std::cerr << "  stream error after reading partition " << partition_index << ", failbit=" << in.fail() << " eofbit=" << in.eof() << std::endl;
-            throw std::runtime_error("Failed to read partition " + std::to_string(partition_index));
-        }
+            throw std::runtime_error("Failed to read partition "
+                                     + std::to_string(partition_index)
+                                     + " from " + filename_);
     }
 
-    // New: accessors
-    void setPlotData(const PlotData &data) { contents_.data = data; }
-    const PlotFileContents& getContents() const { return contents_; }
-    PlotFileContents& getContents() { return contents_; }
-    const ProofParams& getParams() const { return contents_.params; }
+    // Accessors
+    const Contents&    getContents() const { return contents_; }
+    // If you need non-const access, uncomment below:
+    // Contents&          getContents()       { return contents_; }
+    const ProofParams& getProofParams()  const  { return contents_.params; }
 
-    // New: memo accessors
-    void setMemo(std::span<uint8_t const, 32 + 48 + 32> const memo) {
+    void setMemo(std::span<uint8_t const, 32 + 48 + 32> memo)
+    {
         std::memcpy(memo_.data(), memo.data(), memo.size());
     }
-    const std::array<uint8_t, 32 + 48 + 32>& getMemo() const { return memo_; }
+    const auto& getMemo() const { return memo_; }
 
-    // New: testing helper to inject contents
-    void setContents(const PlotFileContents& contents) { contents_ = contents; }
+    const std::string& getFilename() const { return filename_; }
 
 private:
-    PlotFileContents contents_;
-    std::array<uint8_t, 32 + 48 + 32> memo_{}; // internal memo storage
+    std::string filename_;
+    Contents    contents_;
+    std::array<uint8_t, 32 + 48 + 32> memo_{};
 
-    // Helper: construct a minimal valid ProofParams without needing a default ctor
-    static ProofParams makeDummyParams()
+    void readHeadersFromFile()
     {
-        uint8_t zeros[32] = {};
-        return ProofParams(zeros, 0, 0);
+        std::ifstream in(filename_, std::ios::binary);
+        if (!in)
+            throw std::runtime_error("Failed to open plot file '" + filename_ + "'");
+        readHeadersFromStream(in);
+
+        // Just headers + partition offsets here; body is loaded via
+        // loadNonPartitionBody() / ensurePartitionLoaded().
     }
 
-    template <typename T>
-    static void writeVector(std::ofstream &out, std::vector<T> const &v)
+    void readHeadersFromStream(std::ifstream& in)
     {
-        static_assert(std::is_trivially_copyable_v<T>);
-        uint64_t n = v.size();
-        out.write((char *)&n, sizeof(n));
-        if (n)
-            out.write((char *)v.data(), n * sizeof(T));
-    }
-
-    template <typename T>
-    static std::vector<T> readVector(std::ifstream &in)
-    {
-        static_assert(std::is_trivially_copyable_v<T>);
-        uint64_t n;
-        in.read((char *)&n, sizeof(n));
-        std::vector<T> v(n);
-        if (n)
-            in.read((char *)v.data(), n * sizeof(T));
-        return v;
-    }
-
-    template <typename T>
-    static void writeArray(std::ofstream &out, std::array<T, 8> const &a)
-    {
-        static_assert(std::is_trivially_copyable_v<T>);
-        out.write((char *)a.data(), sizeof(T) * 8);
-    }
-
-    template <typename T>
-    static void writeNestedVector(std::ofstream &out, std::vector<std::vector<T>> const &nested)
-    {
-        uint64_t outer = nested.size();
-        out.write((char *)&outer, sizeof(outer));
-        for (auto const &inner : nested)
-            writeVector(out, inner);
-    }
-
-    template <typename T>
-    static std::vector<std::vector<T>> readNestedVector(std::ifstream &in)
-    {
-        uint64_t outer;
-        in.read((char *)&outer, sizeof(outer));
-        std::vector<std::vector<T>> nested(outer);
-        for (size_t i = 0; i < outer; ++i)
-            nested[i] = readVector<T>(in);
-        return nested;
-    }
-
-    static void writeRanges(std::ofstream &out, T4ToT3LateralPartitionRanges const &r)
-    {
-        uint64_t n = r.size();
-        out.write((char *)&n, sizeof(n));
-        for (auto const &e : r)
-        {
-            out.write((char *)&e.start, sizeof(e.start));
-            out.write((char *)&e.end, sizeof(e.end));
+        std::cout << "PlotFile:: readHeadersFromStream " << filename_ << std::endl;
+        char magic[4] = {};
+        in.read(magic, sizeof(magic));
+        if (std::memcmp(magic, "pos2", 4) != 0) {
+            throw std::runtime_error("Plot file invalid magic bytes, not a plot file");
         }
-    }
 
-    static T4ToT3LateralPartitionRanges readRanges(std::ifstream &in)
-    {
-        uint64_t n;
-        in.read((char *)&n, sizeof(n));
-        T4ToT3LateralPartitionRanges r(n);
-        for (size_t i = 0; i < n; ++i)
-        {
-            in.read((char *)&r[i].start, sizeof(r[i].start));
-            in.read((char *)&r[i].end, sizeof(r[i].end));
+        uint8_t version = 0;
+        in.read(reinterpret_cast<char*>(&version), sizeof(version));
+        if (version != FORMAT_VERSION) {
+            throw std::runtime_error(
+                "Plot file format version "
+                + std::to_string(version)
+                + " is not supported (expected "
+                + std::to_string(FORMAT_VERSION) + ")"
+            );
         }
-        return r;
+
+        uint8_t plot_id_bytes[32];
+        in.read(reinterpret_cast<char*>(plot_id_bytes), 32);
+
+        uint8_t k = 0;
+        in.read(reinterpret_cast<char*>(&k), sizeof(k));
+
+        uint8_t strength = 0;
+        in.read(reinterpret_cast<char*>(&strength), sizeof(strength));
+
+        contents_.params = ProofParams(plot_id_bytes, k, strength);
+
+        in.read(reinterpret_cast<char*>(memo_.data()), memo_.size());
+
+        uint64_t outer = 0;
+        in.read(reinterpret_cast<char*>(&outer), sizeof(outer));
+        contents_.partition_offsets.assign(static_cast<size_t>(outer), 0);
+
+        for (uint64_t i = 0; i < outer; ++i) {
+            in.read(reinterpret_cast<char*>(&contents_.partition_offsets[i]),
+                    sizeof(contents_.partition_offsets[i]));
+        }
+
+        if (!in)
+            throw std::runtime_error("Failed to read plot file headers");
     }
 };
+
+// Convenient aliases for your two formats:
+
+using FlatPlotFile        = PlotFileT<FlatLayout>;
+using PartitionedPlotFile = PlotFileT<PartitionedLayout>;

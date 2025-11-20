@@ -83,13 +83,13 @@ TEST_CASE("quality-chain-distribution")
 
     // a little "hacky", we setup a bogus file name and then override the plot file contents directly for testing
     // so this won't need to create or read a plot file.
-    PlotFile::PlotFileContents empty;
+    FlatPlotFile::Contents empty;
     std::array<uint8_t, 32 + 48 + 32> empty_memo{};
 
     // initalize plotfile with params, empty memo, and empty data
     // will only be using prover for chaining functions on synthetic data
-    PlotFile bogus(params, empty_memo, empty.data);
-    Prover prover(challenge, bogus);
+    FlatPlotFile bogus(params, empty_memo, empty.data);
+    Prover prover(challenge);
 
     // create random quality links
     std::vector<QualityLink> links;
@@ -166,7 +166,7 @@ Maximum chains found in a single trial: 122
 
         BlakeHash::Result256 next_challenge = proof_core.hashing.challengeWithPlotIdHash(challenge.data());
         QualityLink firstLink = links[0];
-        std::vector<QualityChain> qualityChains = prover.createQualityChains(firstLink, links, next_challenge);
+        std::vector<QualityChain> qualityChains = prover.createQualityChains(params, firstLink, links, next_challenge);
 
         if (qualityChains.size() > 0)
         {

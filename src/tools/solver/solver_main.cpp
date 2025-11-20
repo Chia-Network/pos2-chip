@@ -7,7 +7,7 @@
 #include "pos/ProofValidator.hpp"
 #include "common/Utils.hpp"
 
-int exhaustive_test(PlotFile::PlotFileContents &plot)
+int exhaustive_test(FlatPlotFile::Contents &plot)
 {
     // This function not currently used but can be useful for debugging / exhaustive testing with RETAIN_X_VALUES_TO_T3
     ProofFragmentCodec fragment_codec(plot.params);

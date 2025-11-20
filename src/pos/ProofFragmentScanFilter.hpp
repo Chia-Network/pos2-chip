@@ -55,6 +55,14 @@ public:
         ScanRange range = getScanRangeForFilter();
         auto in_range = collectFragmentsInRange(fragments, range);
 
+        // output fragments in range
+        for (const auto &r : in_range)
+        {
+            size_t fragment_l_partition = proof_core_.fragment_codec.get_lateral_to_t4_partition(r.fragment);
+            size_t fragment_r_partition = proof_core_.fragment_codec.get_r_t4_partition(r.fragment);
+            std::cout << "  In-range fragment: " << std::hex << r.fragment << std::dec << " l_partition: " << fragment_l_partition << " r_partition: " << fragment_r_partition << std::endl;
+        }
+
         return filterFragmentsByHash(in_range);
     }
 
@@ -129,7 +137,7 @@ public:
         ScanRange range;
         range.start = scan_span * scan_range_id;
         range.end = scan_span * (scan_range_id + 1) - 1;
-        
+
         return range;
     }
 
@@ -147,6 +155,30 @@ private:
     uint32_t filter_32bit_hash_threshold_;
 
     // 1) Gather all fragments in the scan range
+    std::vector<ScanResult> collectFragmentsInRange2(
+        const std::vector<uint64_t> &fragments,
+        const ScanRange &range)
+    {
+        std::vector<ScanResult> result;
+
+        // simple version: linear scan find first by scanning from front, then last by continuing scan until end of range
+        size_t pos = 0;
+        while (pos < fragments.size() && fragments[pos] < range.start)
+        {
+            ++pos;
+        }
+        while (pos < fragments.size() && fragments[pos] < range.end)
+        {
+            uint64_t fragment = fragments[pos];
+            if (fragment >= range.start && fragment < range.end)
+            {
+                result.push_back({fragment, pos});
+            }
+            ++pos;
+        }
+        return result;
+    }
+
     std::vector<ScanResult> collectFragmentsInRange(
         const std::vector<uint64_t> &fragments,
         const ScanRange &range)

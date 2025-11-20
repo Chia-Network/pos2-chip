@@ -1,12 +1,11 @@
 #include "test_util.h"
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
-#include "plot/PlotFormat.hpp"
 #include "prove/Prover.hpp"
 #include "common/Utils.hpp"
 #include "solve/Solver.hpp"
 
-TEST_SUITE_BEGIN("partitioned-plot-challenge-solve-verify");
+TEST_SUITE_BEGIN("plot-challenge-solve-verify");
 
 TEST_CASE("plot-k18-strength2-4-5")
 {
@@ -68,18 +67,19 @@ TEST_CASE("plot-k18-strength2-4-5")
         timer.start("Writing plot file: " + plot_file_name);
         {
             std::array<uint8_t, 32 + 48 + 32> memo{};
-            PlotFile pf(plotter.getProofParams(), memo, plot);
+            FlatPlotFile pf(plotter.getProofParams(), memo, plot);
             pf.writeToFile(plot_file_name);
         }
         timer.stop();
 
         // convert to PlotFormat
-        PartitionedPlotData partitioned_data = PlotFormat::convertFromPlotData(plot, plotter.getProofParams());
-        std::string plot_format_file_name = (std::string("plot_format_") + "k") + std::to_string(k) + "_" + std::to_string(plot_strength) + "_" + plot_id_hex + ".pf";
-        timer.start("Writing plot format file: " + plot_format_file_name);
+        PartitionedPlotData partitioned_data = PartitionedPlotData::convertFromPlotData(plot, plotter.getProofParams());
+        std::string partitioned_plot_file_name = (std::string("partitioned_plot_") + "k") + std::to_string(k) + "_" + std::to_string(plot_strength) + "_" + plot_id_hex + ".ppf";
+        timer.start("Writing plot format file: " + partitioned_plot_file_name);
         {
             std::array<uint8_t, 32 + 48 + 32> memo{};
-            PlotFormat::writeData(plot_format_file_name, partitioned_data, plotter.getProofParams(), memo);
+            PartitionedPlotFile ppf(plotter.getProofParams(), memo, partitioned_data);
+            ppf.writeToFile(partitioned_plot_file_name);
         }
 
         // timer.start("Reading plot file: " + plot_file_name);
@@ -92,15 +92,16 @@ TEST_CASE("plot-k18-strength2-4-5")
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
         
         // TODO: should be able to give prover headers so doesn't have to read headers each time.
-        Prover prover(challenge, plot_file_name);
-        prover.readHeadersFromFile();
+        FlatPlotFile plot_file(plot_file_name);
+        Prover prover(challenge);//, plot_file_name);
+        //prover.readHeadersFromFile();
         
-        ProofParams proof_params_prover = prover.getProofParams();
-        ENSURE(prover.getProofParams() == plotter.getProofParams());
+        ProofParams proof_params_prover = plot_file.getProofParams();
+        ENSURE(plot_file.getProofParams() == plotter.getProofParams());
 
         int proof_fragment_filter_bits = 1; // 1 bit means 50% of fragments are filtered out
 
-        std::vector<QualityChain> quality_chains = prover.prove(proof_fragment_filter_bits);
+        std::vector<QualityChain> quality_chains = prover.prove(proof_fragment_filter_bits, plot_file);
         printfln("Found %d quality chains.", (int)quality_chains.size());
         ENSURE(!quality_chains.empty());
         if (quality_chains.empty())
@@ -116,12 +117,12 @@ TEST_CASE("plot-k18-strength2-4-5")
             std::vector<uint32_t> check_proof_xs;
 
             // at this point should have at least one quality chain, so get the proof fragments for the first one
-            std::vector<ProofFragment> proof_fragments = prover.getAllProofFragmentsForProof(quality_chains[nChain]);
+            std::vector<ProofFragment> proof_fragments = prover.getAllProofFragmentsForProof(quality_chains[nChain], plot_file);
             // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
             // get x bits list from proof fragments
             std::vector<uint32_t> x_bits_list;
-            ProofFragmentCodec fragment_codec(prover.getProofParams());
+            ProofFragmentCodec fragment_codec(plot_file.getProofParams());
             for (const auto &fragment : proof_fragments)
             {
                 std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(fragment);
@@ -154,7 +155,7 @@ TEST_CASE("plot-k18-strength2-4-5")
 #endif
 
             // now solve using the x bits list
-            Solver solver(prover.getProofParams());
+            Solver solver(plot_file.getProofParams());
             std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t const, 256>(x_bits_list));
 
             ENSURE(!all_proofs.empty());
@@ -204,7 +205,7 @@ TEST_CASE("plot-k18-strength2-4-5")
             // std::cout << std::endl;
 
             // now verify the proof
-            ProofValidator proof_validator(prover.getProofParams());
+            ProofValidator proof_validator(plot_file.getProofParams());
             std::optional<QualityChainLinks> res = proof_validator.validate_full_proof(proof, challenge, proof_fragment_filter_bits);
             ENSURE(res.has_value());
 

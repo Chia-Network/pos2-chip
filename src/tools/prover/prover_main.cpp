@@ -182,10 +182,12 @@ try
 
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
 
-        Prover prover(challenge, plotfile);
+        Prover prover(challenge);//, plotfile);
+        FlatPlotFile plot_reader(plotfile);
+        ProofParams proof_params = plot_reader.getProofParams();
 
         prover.setChallenge(challenge);
-        std::vector<QualityChain> chains = prover.prove(proof_fragment_scan_filter_bits);
+        std::vector<QualityChain> chains = prover.prove(proof_fragment_scan_filter_bits, plot_reader);
 
         if (chains.size() == 0)
         {
@@ -198,16 +200,15 @@ try
         for (size_t nChain = 0; nChain < chains.size(); nChain++)
         {
             std::cout << "Chain: " << nChain << std::endl;
-            std::string hex = chainLinksToHex(prover.getProofParams().get_k(), chains[nChain].chain_links);
+            std::string hex = chainLinksToHex(proof_params.get_k(), chains[nChain].chain_links);
             std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
             std::cout << "QualityChain: " << hex << std::endl;
             
 
-            std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chains[nChain]);
+            std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chains[nChain], plot_reader);
             // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
-            ProofParams params = prover.getProofParams();
-            ProofFragmentCodec fragment_codec(params);
+            ProofFragmentCodec fragment_codec(proof_params);
             // convert proof fragments to xbits hex
             std::string xbits_hex;
             std::vector<uint32_t> xbits_list;
@@ -224,16 +225,16 @@ try
                 }
                 // std::cout << std::endl;
             }
-            std::string xbits_hex_compressed = Utils::kValuesToCompressedHex(params.get_k() / 2, xbits_list);
+            std::string xbits_hex_compressed = Utils::kValuesToCompressedHex(proof_params.get_k() / 2, xbits_list);
             std::cout << "Partial Proof: " << xbits_hex_compressed << std::endl;
-            std::cout << "Plot Strength: " << (int)params.get_strength() << std::endl;
+            std::cout << "Plot Strength: " << (int)proof_params.get_strength() << std::endl;
 
             std::array<uint8_t, 32> plot_id_arr;
-            std::memcpy(plot_id_arr.data(), params.get_plot_id_bytes(), 32);
+            std::memcpy(plot_id_arr.data(), proof_params.get_plot_id_bytes(), 32);
             std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
 
             // std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << " " << (int)params.get_strength() << std::endl;
-            std::cout << "To find proof run: " << std::endl << " solver xbits " << plot_id_hex << " " << xbits_hex_compressed << " " << (int)params.get_strength() << std::endl;
+            std::cout << "To find proof run: " << std::endl << " solver xbits " << plot_id_hex << " " << xbits_hex_compressed << " " << (int)proof_params.get_strength() << std::endl;
 
             
         }
@@ -243,7 +244,7 @@ try
     {
 
         std::array<uint8_t, 32> challenge = {0};
-        Prover prover(challenge, plotfile);
+        Prover prover(challenge);
         // set random seed
         srand(static_cast<unsigned int>(time(nullptr)));
         size_t num_chains_found = 0;
@@ -263,8 +264,9 @@ try
             //     challenge[i] = randseed;
             // }
 
+            FlatPlotFile plotfile_reader(plotfile);
             prover.setChallenge(challenge);
-            std::vector<QualityChain> chains = prover.prove(proof_fragment_scan_filter_bits);
+            std::vector<QualityChain> chains = prover.prove(proof_fragment_scan_filter_bits, plotfile_reader);
             if (chains.size() > 0)
             {
                 std::cout << "Found " << chains.size() << " chains." << std::endl;
@@ -274,10 +276,10 @@ try
                 for (auto const &chain : chains)
                 {
 
-                    std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chain);
+                    std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chain, plotfile_reader);
                     // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
-                    ProofParams params = prover.getProofParams();
+                    ProofParams params = plotfile_reader.getProofParams();
                     ProofFragmentCodec fragment_codec(params);
                     // convert proof fragments to xbits hex
                     // std::string xbits_hex;
