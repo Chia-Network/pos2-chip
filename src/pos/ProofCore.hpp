@@ -138,13 +138,6 @@ struct T2Pairing
 struct T3Pairing
 {
     ProofFragment proof_fragment;  // 2k-bit encrypted x-values.
-    uint64_t meta_lower_partition; // 2k-bit meta.
-    uint64_t meta_upper_partition;
-    uint32_t match_info_lower_partition; // sub_k bits (from lower partition).
-    uint32_t match_info_upper_partition; // sub_k bits (from upper partition).
-    uint32_t lower_partition;            // (k - sub_k) bits.
-    uint32_t upper_partition;            // (k - sub_k) bits.
-    uint32_t order_bits;                 // 2-bit order field.
 #ifdef RETAIN_X_VALUES_TO_T3
     uint32_t xs[8];
 #endif
@@ -344,7 +337,7 @@ public:
         T3Pairing result;
 
         result.proof_fragment = proof_fragment;
-        result.order_bits = order_bits;
+        /*result.order_bits = order_bits;
 
         result.lower_partition = lower_partition;
         result.meta_lower_partition = lower_partition_pair.meta_result;
@@ -352,7 +345,7 @@ public:
 
         result.upper_partition = upper_partition;
         result.meta_upper_partition = upper_partition_pair.meta_result;
-        result.match_info_upper_partition = ((1 - top_order_bit) << (params_.get_sub_k() - 1)) | upper_partition_pair.match_info_result;
+        result.match_info_upper_partition = ((1 - top_order_bit) << (params_.get_sub_k() - 1)) | upper_partition_pair.match_info_result;*/
         return result;
     }
 

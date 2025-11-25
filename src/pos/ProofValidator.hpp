@@ -124,6 +124,7 @@ public:
     validate_table_4_pairs(const uint32_t *x_values)
     {
         std::vector<T4Pairing> t4_pairs;
+        /*return t4_pairs;
 
         const uint32_t *l_xs = x_values;
         const uint32_t *r_xs = x_values + 8;
@@ -199,7 +200,7 @@ public:
         //     result_l->upper_partition == result_r->upper_partition) {
         //         std::cout << "Validation had both partitions match" << std::endl;
         //     }
-
+        */
         return t4_pairs;
     }
 
@@ -211,7 +212,7 @@ public:
     bool
     validate_table_5_pairs(const uint32_t *x_values)
     {
-        std::vector<T4Pairing> result_l = validate_table_4_pairs(x_values + 0);
+        /*std::vector<T4Pairing> result_l = validate_table_4_pairs(x_values + 0);
         if (result_l.empty())
         {
             return false;
@@ -236,7 +237,7 @@ public:
                 }
             }
         }
-
+        */
         return false;
     }
 

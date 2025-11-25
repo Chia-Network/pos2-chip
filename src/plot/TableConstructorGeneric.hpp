@@ -415,7 +415,7 @@ struct T3_Partitions_Results
 #endif
 };
 
-class Table3Constructor : public TableConstructorGeneric<T2Pairing, T3Pairing, T3_Partitions_Results>
+class Table3Constructor : public TableConstructorGeneric<T2Pairing, T3Pairing, std::vector<T3Pairing>>
 {
 public:
     Table3Constructor(const ProofParams &proof_params)
@@ -463,7 +463,7 @@ public:
         }
     }
 
-    T3_Partitions_Results post_construct(std::vector<T3Pairing> &pairings) const override
+    std::vector<T3Pairing> post_construct(std::vector<T3Pairing> &pairings) const override
     {
         // do a radix sort on fragments
         RadixSort<T3Pairing, uint64_t, decltype(&T3Pairing::proof_fragment)> radix_sort(&T3Pairing::proof_fragment);
@@ -474,85 +474,7 @@ public:
         std::span<T3Pairing> buffer(temp_buffer.data(), temp_buffer.size());
         radix_sort.sort(pairings, buffer, params_.get_k() * 2); // don't forget to sort full 2k bits
 
-        return splitIntoPartitions(pairings);
-    }
-
-private:
-    T3_Partitions_Results splitIntoPartitions(const std::vector<T3Pairing> &pairings) const
-    {
-        // after sorting by encx's we split data
-        // into list of encx's and partitioned pairs.
-
-        // 1) extract the proof fragments and split index and data into partitioned t3
-        std::vector<ProofFragment> proof_fragments(pairings.size());
-        size_t num_partitions = numeric_cast<size_t>(params_.get_num_partitions() * 2); // two sets of partitions, upper and lower
-        std::vector<std::vector<T3PartitionedPairing>> partitioned_pairs(num_partitions);
-
-#ifdef RETAIN_X_VALUES_TO_T3
-        std::vector<std::array<uint32_t, 8>> xs_correlating_to_proof_fragments(pairings.size());
-#endif
-
-        for (uint64_t fragment_index = 0; fragment_index < pairings.size(); fragment_index++)
-        {
-            const T3Pairing &pairing = pairings.at(fragment_index);
-
-            // fragments are pre-allocated, so set directly in the vector
-            proof_fragments[fragment_index] = pairing.proof_fragment;
-#ifdef RETAIN_X_VALUES_TO_T3
-            xs_correlating_to_proof_fragments[fragment_index] = {
-                pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
-                pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7]};
-#endif
-
-            partitioned_pairs[pairing.lower_partition].push_back(T3PartitionedPairing{
-                .meta = pairing.meta_lower_partition,
-                .fragment_index = fragment_index,
-                .match_info = pairing.match_info_lower_partition,
-                .order_bits = pairing.order_bits,
-#ifdef RETAIN_X_VALUES
-                .xs = {pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
-                       pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7]}
-#endif
-            });
-            partitioned_pairs[pairing.upper_partition].push_back(T3PartitionedPairing{
-                .meta = pairing.meta_upper_partition,
-                .fragment_index = fragment_index,
-                .match_info = pairing.match_info_upper_partition,
-                .order_bits = pairing.order_bits,
-#ifdef RETAIN_X_VALUES
-                .xs = {pairing.xs[0], pairing.xs[1], pairing.xs[2], pairing.xs[3],
-                       pairing.xs[4], pairing.xs[5], pairing.xs[6], pairing.xs[7]}
-#endif
-            });
-        }
-
-        // get maximum count of all partitioned pairs
-        uint64_t max_partitioned_pairs = 0;
-        for (size_t partition_id = 0; partition_id < num_partitions; partition_id++)
-        {
-            if (partitioned_pairs[partition_id].size() > max_partitioned_pairs)
-                max_partitioned_pairs = partitioned_pairs[partition_id].size();
-        }
-        // set vector buffer to largest of all the partitioned pair lists
-        std::vector<T3PartitionedPairing> temp_buffer(max_partitioned_pairs);
-
-        // 3) sort by partitioned pairs by match_info
-        for (size_t partition_id = 0; partition_id < num_partitions; partition_id++)
-        {
-            // sort by match_info
-            RadixSort<T3PartitionedPairing, uint32_t> radix_sort;
-            // Create a span over the temporary buffer (re-use from earlier)
-            std::span<T3PartitionedPairing> buffer(temp_buffer.data(), temp_buffer.size());
-            radix_sort.sort(partitioned_pairs[partition_id], buffer); // TODO: sort by sub_k bits only.
-        }
-
-        return T3_Partitions_Results{
-            .partitioned_pairs = partitioned_pairs,
-            .proof_fragments = proof_fragments,
-#ifdef RETAIN_X_VALUES_TO_T3
-            .xs_correlating_to_proof_fragments = xs_correlating_to_proof_fragments
-#endif
-        };
+        return pairings;
     }
 };
 
