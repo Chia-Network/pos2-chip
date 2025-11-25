@@ -82,8 +82,6 @@ public:
         // 3) For each passing fragment, get their Quality Links (if any) that seed the initial entries in the Quality Chains.
         // 4) For each Quality Chain, grow and expand the number of chains link by link until we reach the chain length limit (NUM_CHAIN_LINKS).
 
-        plot_file.loadNonPartitionBody();
-        std::cout << "Prover get Contents from plot." << std::endl;
         auto &plot = plot_file.getContents();
 
         ProofCore proof_core(plot.params);
@@ -130,6 +128,67 @@ public:
         // 3) For each passing fragment, get their Quality Links (if any) that seed the initial entries in the Quality Chains.
         // hand off to helper that builds and returns all quality chains
         return processFilteredFragments(plot_file, filtered_fragments, next_challenge);
+    }
+
+    std::vector<QualityChain> prove(int proof_fragment_scan_filter_bits, PartitionedPlotFile &plot_file)
+    {
+        // Proving works as follows:
+        // 1) Read plot file and get plot data and specific parameters.
+        // 2) Scan the plot data for fragments that pass the Proof Fragment Scan Filter.
+        // 3) For each passing fragment, get their Quality Links (if any) that seed the initial entries in the Quality Chains.
+        // 4) For each Quality Chain, grow and expand the number of chains link by link until we reach the chain length limit (NUM_CHAIN_LINKS).
+
+        //plot_file.loadNonPartitionBody();
+        std::cout << "Prover get Contents from plot." << std::endl;
+        auto &plot = plot_file.getContents();
+
+        ProofCore proof_core(plot.params);
+
+        BlakeHash::Result256 next_challenge = proof_core.hashing.challengeWithPlotIdHash(challenge_.data());
+
+        // 2) Scan the plot data for fragments that pass the Proof Fragment Scan Filter
+        ProofFragmentScanFilter scan_filter(plot.params, next_challenge, proof_fragment_scan_filter_bits);
+        ProofFragmentScanFilter::ScanRange range = scan_filter.getScanRangeForFilter();
+        size_t fragment_l_partition = proof_core.fragment_codec.get_lateral_to_t4_partition(range.start);
+        plot_file.ensurePartitionLoaded(fragment_l_partition);
+        std::vector<ProofFragment> t3_fragments_partition = plot.data.t3_proof_fragments[fragment_l_partition];
+
+        std::cout << "First t3 proof fragment in partition " << fragment_l_partition << ": " << t3_fragments_partition[0] << std::endl;
+        std::cout << "Scan Range start fragment: " << range.start << " l_partition: " << fragment_l_partition << std::endl;
+        std::cout << "Prover: Scan range for filter: [" << range.start << ", " << range.end << "]" << std::endl;
+        exit(23);
+        
+        //std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.scan(plot.data.t3_proof_fragments);
+        /*size_t fragment_l_partition = proof_core.fragment_codec.get_lateral_to_t4_partition(range.start);
+        std::vector<ProofFragment> t3_fragments_partition = plot.data.getT3ProofFragments(fragment_l_partition);
+        std::cout << "Scan Range start fragment: " << range.start << " l_partition: " << fragment_l_partition << std::endl;
+        std::cout << "Prover: Scan range for filter: [" << range.start << ", " << range.end << "]" << std::endl;
+        //exit(23);
+        std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments_check = scan_filter.scan(plot.data.t3_proof_fragments);
+        std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.scan(t3_fragments_partition);
+        std::cout << "Prover: Number of fragments passing scan filter: " << filtered_fragments.size() << std::endl;
+        std::cout << "Prover: Number of fragments passing scan filter (check): " << filtered_fragments_check.size() << std::endl;
+        
+        for (size_t i=0; i<filtered_fragments.size(); i++) {
+            size_t fragment_l_partition = proof_core.fragment_codec.get_lateral_to_t4_partition(filtered_fragments[i].fragment);
+            size_t fragment_r_partition = proof_core.fragment_codec.get_r_t4_partition(filtered_fragments[i].fragment);
+            std::cout << "  Fragment " << i << ": " << std::hex << filtered_fragments[i].fragment << std::dec << " index: " << filtered_fragments[i].index << " l_partition: " << fragment_l_partition << " r_partition: " << fragment_r_partition << std::endl;
+        }
+        for (size_t i=0; i<filtered_fragments_check.size(); i++) {
+            size_t fragment_l_partition = proof_core.fragment_codec.get_lateral_to_t4_partition(filtered_fragments_check[i].fragment);
+            size_t fragment_r_partition = proof_core.fragment_codec.get_r_t4_partition(filtered_fragments_check[i].fragment);
+            std::cout << "  Fragment Check " << i << ": " << std::hex << filtered_fragments_check[i].fragment << std::dec << " index: " << filtered_fragments_check[i].index << " l_partition: " << fragment_l_partition << " r_partition: " << fragment_r_partition << std::endl;
+        }
+        //exit(23);
+        stats_.num_scan_filter_passed++;
+        stats_.num_fragments_passed_scan_filter += filtered_fragments.size();
+
+        // 3) For each passing fragment, get their Quality Links (if any) that seed the initial entries in the Quality Chains.
+        // hand off to helper that builds and returns all quality chains
+        // return empty
+        */
+        return {};
+        //return processFilteredFragments(plot_file, filtered_fragments, next_challenge);
     }
 
     // Build quality chains from the filtered fragments

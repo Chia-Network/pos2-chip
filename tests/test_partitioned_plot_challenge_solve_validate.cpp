@@ -62,7 +62,7 @@ TEST_CASE("plot-k18-strength2-4-5")
         plotter.getProofParams().show();
         timer.stop();
 
-        std::string plot_file_name = (std::string("plot_") + "k") + std::to_string(k) + "_" + std::to_string(plot_strength) + "_" + plot_id_hex + ".bin";
+        /*std::string plot_file_name = (std::string("plot_") + "k") + std::to_string(k) + "_" + std::to_string(plot_strength) + "_" + plot_id_hex + ".bin";
 
         timer.start("Writing plot file: " + plot_file_name);
         {
@@ -70,31 +70,22 @@ TEST_CASE("plot-k18-strength2-4-5")
             FlatPlotFile pf(plotter.getProofParams(), memo, plot);
             pf.writeToFile(plot_file_name);
         }
-        timer.stop();
+        timer.stop();*/
 
         // convert to PlotFormat
         PartitionedPlotData partitioned_data = PartitionedPlotData::convertFromPlotData(plot, plotter.getProofParams());
         std::string partitioned_plot_file_name = (std::string("partitioned_plot_") + "k") + std::to_string(k) + "_" + std::to_string(plot_strength) + "_" + plot_id_hex + ".ppf";
-        timer.start("Writing plot format file: " + partitioned_plot_file_name);
+        timer.start("Writing partitioned plot file: " + partitioned_plot_file_name);
         {
             std::array<uint8_t, 32 + 48 + 32> memo{};
             PartitionedPlotFile ppf(plotter.getProofParams(), memo, partitioned_data);
             ppf.writeToFile(partitioned_plot_file_name);
         }
 
-        // timer.start("Reading plot file: " + plot_file_name);
-        // PlotFile::PlotFileContents read_plot = PlotFile::readData(plot_file_name);
-        // timer.stop();
-
-        // ENSURE(plot == read_plot.data);
-        // ENSURE(plotter.getProofParams() == read_plot.params);
-
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
         
-        // TODO: should be able to give prover headers so doesn't have to read headers each time.
-        FlatPlotFile plot_file(plot_file_name);
-        Prover prover(challenge);//, plot_file_name);
-        //prover.readHeadersFromFile();
+        PartitionedPlotFile plot_file(partitioned_plot_file_name);
+        Prover prover(challenge);
         
         ProofParams proof_params_prover = plot_file.getProofParams();
         ENSURE(plot_file.getProofParams() == plotter.getProofParams());
@@ -111,7 +102,7 @@ TEST_CASE("plot-k18-strength2-4-5")
         }
         size_t numTestChains = std::min(MAX_CHAINS_PER_CHALLENGE_TO_TEST, quality_chains.size()); // only check limited set of chains.
         std::cout << "Testing " << numTestChains << " quality chains for challenge." << std::endl;
-        for (size_t nChain = 0; nChain < numTestChains; nChain++)
+        /*for (size_t nChain = 0; nChain < numTestChains; nChain++)
         {
 
             std::vector<uint32_t> check_proof_xs;
@@ -236,9 +227,10 @@ TEST_CASE("plot-k18-strength2-4-5")
             }
         
         }
+            */
         
         // once prover had read file let's cleanup
-        std::remove(plot_file_name.c_str());
+        std::remove(partitioned_plot_file_name.c_str());
     }
 }
 

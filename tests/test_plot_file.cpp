@@ -69,7 +69,6 @@ TEST_CASE("plot-read-write")
     //PlotFile::PlotFileContents read_plot = pf_loaded.getContents();
 
     FlatPlotFile pf_loaded(file_name);
-    pf_loaded.loadNonPartitionBody();
     const FlatPlotFile::Contents &read_plot = pf_loaded.getContents();
     PlotData const &read_plot_data = read_plot.data;
     timer.stop();
@@ -262,7 +261,6 @@ TEST_CASE("plot-read-write")
     {
         timer.start("Reading partitioned plot format file: " + partitioned_plot_file_name);
         PartitionedPlotFile read_ppf(partitioned_plot_file_name);
-        read_ppf.loadNonPartitionBody();
         for (size_t partition_id = 0; partition_id < read_plot.params.get_num_partitions() * 2; ++partition_id)
         {  
             std::cout << "Reading partition " << partition_id << std::endl;

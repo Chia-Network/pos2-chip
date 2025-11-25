@@ -169,11 +169,28 @@ struct PartitionedLayout
         // are deferred to ensurePartitionLoaded().
     }
 
+    static void ensureT3PartitionLoaded(Data& data,
+                                      std::ifstream& in,
+                                      size_t partition_index,
+                                      std::vector<uint64_t> const& offsets)
+    {
+        if (PartitionedLayout::isT3PartitionLoaded(data, partition_index)) {
+            return;
+        }
+        in.seekg(static_cast<std::streamoff>(offsets[partition_index]),
+                 std::ios::beg);
+        data.t3_proof_fragments[partition_index] =
+            readVector<ProofFragment>(in);
+    }
+
     static void ensurePartitionLoaded(Data& data,
                                       std::ifstream& in,
                                       size_t partition_index,
                                       std::vector<uint64_t> const& offsets)
     {
+        if (PartitionedLayout::isPartitionLoaded(data, partition_index)) {
+            return;
+        }
         in.seekg(static_cast<std::streamoff>(offsets[partition_index]),
                  std::ios::beg);
         data.t3_proof_fragments[partition_index] =
@@ -182,6 +199,11 @@ struct PartitionedLayout
             readVector<PartitionedBackPointer>(in);
         data.t5_to_t4_back_pointers[partition_index] =
             readVector<T5PlotBackPointers>(in);
+    }
+
+    static bool isT3PartitionLoaded(Data const& data, size_t idx)
+    {
+        return !data.t3_proof_fragments[idx].empty();
     }
 
     static bool isPartitionLoaded(Data const& data, size_t idx)
@@ -246,31 +268,6 @@ public:
     {
         memo_.fill(0);
         readHeadersFromFile();
-    }
-
-    // Optionally read non-partition body (global t3 / ranges / xs etc).
-    // For PartitionedLayout this will just size the vectors.
-    void loadNonPartitionBody()
-    {
-        if (filename_.empty()) return;
-
-        std::ifstream in(filename_, std::ios::binary);
-        if (!in)
-            throw std::runtime_error("Failed to open " + filename_);
-
-        // Re-read header to position stream correctly.
-        readHeadersFromStream(in);
-
-        LayoutPolicy::readNonPartitionBody(
-            in,
-            contents_.data,
-            contents_.params,
-            contents_.partition_offsets
-        );
-
-        if (!in)
-            throw std::runtime_error("Failed to read non-partition body from "
-                                     + filename_);
     }
 
     // Write out using current internal state.
@@ -389,8 +386,34 @@ private:
             throw std::runtime_error("Failed to open plot file '" + filename_ + "'");
         readHeadersFromStream(in);
 
+        loadNonPartitionBody();
         // Just headers + partition offsets here; body is loaded via
         // loadNonPartitionBody() / ensurePartitionLoaded().
+    }
+
+    // Optionally read non-partition body (global t3 / ranges / xs etc).
+    // For PartitionedLayout this will just size the vectors.
+    void loadNonPartitionBody()
+    {
+        if (filename_.empty()) return;
+
+        std::ifstream in(filename_, std::ios::binary);
+        if (!in)
+            throw std::runtime_error("Failed to open " + filename_);
+
+        // Re-read header to position stream correctly.
+        readHeadersFromStream(in);
+
+        LayoutPolicy::readNonPartitionBody(
+            in,
+            contents_.data,
+            contents_.params,
+            contents_.partition_offsets
+        );
+
+        if (!in)
+            throw std::runtime_error("Failed to read non-partition body from "
+                                     + filename_);
     }
 
     void readHeadersFromStream(std::ifstream& in)
