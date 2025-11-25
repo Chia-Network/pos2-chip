@@ -6,6 +6,5 @@ target_include_directories(prover PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../..
 )
   
-#target_link_libraries(prover PRIVATE
-#    fse
-#)
+# Prover needs FSE headers (via PlotFile.hpp). Link the fse target so includes and link are available.
+target_link_libraries(prover PRIVATE fse)

@@ -70,7 +70,7 @@ public:
             #ifdef DEBUG_PROOF_VALIDATOR
             std::cout << "Reading plot file: " << plot_file_name_ << std::endl;
             #endif
-            plot_ = PlotFile::readData(plot_file_name_);
+            //plot_ = PlotFile::readData(plot_file_name_);
             #ifdef DEBUG_PROOF_VALIDATOR
             std::cout << "Plot file read successfully: " << plot_file_name_ << std::endl;
             plot_.value().params.debugPrint();
@@ -113,7 +113,7 @@ public:
 
         // 2) Scan the plot data for fragments that pass the Proof Fragment Scan Filter
         ProofFragmentScanFilter scan_filter(plot.params, next_challenge, proof_fragment_scan_filter_bits);
-        std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments = scan_filter.scan(plot.data.t3_proof_fragments);
+        std::vector<ProofFragmentScanFilter::ScanResult> filtered_fragments;// = scan_filter.scan(plot.data.t3_proof_fragments);
         stats_.num_scan_filter_passed++;
         stats_.num_fragments_passed_scan_filter += filtered_fragments.size();
 

@@ -19,3 +19,6 @@ target_include_directories(solver PRIVATE
 #target_link_libraries(solver PRIVATE
 #  atomic
 #)
+
+# Ensure solver can include and link FSE (PlotFile.hpp includes fse.h)
+target_link_libraries(solver PRIVATE fse)

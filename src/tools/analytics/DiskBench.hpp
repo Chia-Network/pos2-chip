@@ -126,7 +126,7 @@ public:
 
         // a little "hacky", we setup a bogus file name and then override the plot file contents directly for testing
         // so this won't need to create or read a plot file.
-        PlotData empty;
+        ChunkedProofFragments empty;
         PlotFile::PlotFileContents plot{empty, proof_params_};
         plot.params = proof_params_;
         Prover prover(challenge, "test_plot_file.dat");

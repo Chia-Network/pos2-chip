@@ -220,27 +220,6 @@ int benchmark(uint8_t k, uint8_t plot_strength)
     return 0;
 }
 
-int do_exhaustive_test(const std::string &plot_file)
-{
-    // read plot file
-    PlotFile::PlotFileContents plot = PlotFile::readData(plot_file);
-    if (plot.data == PlotData())
-    {
-        std::cerr << "Error: plot file is empty or invalid." << std::endl;
-        return 1;
-    }
-
-    std::cout << "Plot file read successfully: " << plot_file << std::endl;
-    plot.params.debugPrint();
-
-    // for exhaustive testing, requires plot and compilation with RETAIN_X_VALUES_TO_T3
-#ifdef RETAIN_X_VALUES_TO_T3
-    exhaustive_test(plot);
-#endif
-
-    return 0;
-}
-
 int xbits(const std::string &plot_id_hex, const std::vector<uint32_t> &x_bits_list, uint8_t k, uint8_t strength)
 {
     // convert plot_id_hex to bytes

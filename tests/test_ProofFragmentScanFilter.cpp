@@ -22,7 +22,7 @@ TEST_CASE("scan-range")
         
 
         uint64_t base_scan_range = (1ULL << (k + PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS));
-        std::cout << "base scan range: " << base_scan_range << std::endl;
+        std::cout << "base scan range: #" << std::hex << base_scan_range << std::dec << std::endl;
 
         ProofFragmentScanFilter filter(params, challenge, 5);
         uint64_t num_scan_ranges = filter.numScanRanges();
@@ -36,9 +36,8 @@ TEST_CASE("scan-range")
         //int scan_range_filter_bits = k - PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS;
         uint64_t scan_range_id = (challenge.r[3] >> (32 - scan_range_filter_bits - 1)) & ((1U << scan_range_filter_bits) - 1);
 
-        
-        std::cout << "scan range (" << scan_range_id << ") for challenge 0: " << range.start << " - " << range.end << std::endl;
-        std::cout << "expected range            : " << 0 << " - " << (base_scan_range * 1 - 1) << std::endl;
+        std::cout << "scan range (" << scan_range_id << ") for challenge 0: #" << std::hex << range.start << " - #" << range.end << std::dec << std::endl;
+        std::cout << "expected range            : #" << 0 << " - #" << std::hex << (base_scan_range * 1 - 1) << std::dec << std::endl;
 
         //uint64_t total_ranges = 1ULL << scan_range_filter_bits;
         REQUIRE(scan_range_id == 0);
@@ -52,8 +51,8 @@ TEST_CASE("scan-range")
         scan_range_id = (challenge.r[3] >> (32 - scan_range_filter_bits - 1)) & ((1U << scan_range_filter_bits) - 1);
 
 
-        std::cout << "scan range (" << scan_range_id << ") for challenge 1: " << range.start << " - " << range.end << std::endl;
-        std::cout << "expected range            : " << (base_scan_range * 1) << " - " << (base_scan_range * 2 - 1) << std::endl;
+        std::cout << "scan range (" << scan_range_id << ") for challenge 1: #" << std::hex << range.start << " - #" << range.end << std::dec << std::endl;
+        std::cout << "expected range            : #" << std::hex << (base_scan_range * 1) << " - #" << (base_scan_range * 2 - 1) << std::dec << std::endl;
 
         // With challenge of 1, scan_range_id should be 1
         REQUIRE(scan_range_id == 1);
@@ -65,8 +64,8 @@ TEST_CASE("scan-range")
         range = filter.getScanRangeForFilter();
         scan_range_id = (challenge.r[3] >> (32 - scan_range_filter_bits - 1)) & ((1U << scan_range_filter_bits) - 1);
 
-        std::cout << "scan range (" << scan_range_id << ") for challenge 2: " << range.start << " - " << range.end << std::endl;
-        std::cout << "expected range            : " << (base_scan_range * 2) << " - " << (base_scan_range * 3 - 1) << std::endl;
+        std::cout << "scan range (" << scan_range_id << ") for challenge 2: #" << std::hex << range.start << " - #" << range.end << std::dec << std::endl;
+        std::cout << "expected range            : #" << std::hex << (base_scan_range * 2) << " - #" << (base_scan_range * 3 - 1) << std::dec << std::endl;
 
         // With challenge of 2, scan_range_id should be 2
         REQUIRE(scan_range_id == 2);
@@ -80,8 +79,8 @@ TEST_CASE("scan-range")
             range = filter.getScanRangeForFilter();
             scan_range_id = (challenge.r[3] >> (32 - scan_range_filter_bits - 1)) & ((1U << scan_range_filter_bits) - 1);
 
-            std::cout << "scan range (" << scan_range_id << ") for challenge 255: " << range.start << " - " << range.end << std::endl;
-            std::cout << "expected range              : " << (base_scan_range * 255) << " - " << (base_scan_range * 256 - 1) << std::endl;
+            std::cout << "scan range (" << scan_range_id << ") for challenge 255: #" << std::hex << range.start << " - #" << range.end << std::dec << std::endl;
+            std::cout << "expected range              : #" << std::hex << (base_scan_range * 255) << " - #" << (base_scan_range * 256 - 1) << std::dec << std::endl;
             // With challenge of 255, scan_range_id should be 255
             REQUIRE(scan_range_id == 255);
             REQUIRE(range.start == (base_scan_range * 255));
@@ -96,8 +95,8 @@ TEST_CASE("scan-range")
         range = filter.getScanRangeForFilter();
 
         // with all bits set, scan range should be last range
-        std::cout << "** scan range for challenge all bits set: " << range.start << " - " << range.end << std::endl;
-        std::cout << "** expected range                    : " << (base_scan_range * ((1ULL << scan_range_filter_bits) - 1)) << " - " << (base_scan_range * (1ULL << scan_range_filter_bits) - 1) << std::endl;
+        std::cout << "** scan range for challenge all bits set: #" << std::hex << range.start << " - #" << range.end << std::dec << std::endl;
+        std::cout << "** expected range                    : #" << std::hex << (base_scan_range * ((1ULL << scan_range_filter_bits) - 1)) << " - #" << (base_scan_range * (1ULL << scan_range_filter_bits) - 1) << std::dec << std::endl;
         REQUIRE(range.start == (base_scan_range * ((1ULL << scan_range_filter_bits) - 1)));
         REQUIRE(range.end == (base_scan_range * (1ULL << scan_range_filter_bits) - 1));
         

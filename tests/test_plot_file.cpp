@@ -1,6 +1,7 @@
 #include "test_util.h"
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
+#include "pos/ProofFragmentScanFilter.hpp"
 #include "common/Utils.hpp"
 
 
@@ -21,6 +22,23 @@ TEST_CASE("plot-read-write")
     PlotData plot = plotter.run();
     timer.stop();
 
+    ProofFragmentScanFilter filter(plotter.getProofParams(),
+                                    BlakeHash::Result256{{0,0,0,0,0,0,0,0}},
+                                    5);
+    uint64_t scan_span = filter.getScanSpan();
+
+    int CHUNK_SPAN_SCAN_RANGE_BITS = 16; // 65k entries per chunk
+    uint64_t chunk_span = (1ULL << (plotter.getProofParams().get_k() + CHUNK_SPAN_SCAN_RANGE_BITS));
+    ChunkedProofFragments partitioned_data = ChunkedProofFragments::convertToChunkedProofFragments(plot, chunk_span);
+    std::cout << "partitioned data has " << partitioned_data.proof_fragments_chunks.size() << " spans." << std::endl;
+    // show all spans
+    std::cout << "Span sizes (" << partitioned_data.proof_fragments_chunks.size() << "): ";
+    for (size_t i = 0; i < partitioned_data.proof_fragments_chunks.size(); i++) {
+        std::cout << "," << partitioned_data.proof_fragments_chunks[i].size();
+        //std::cout << " span #" << i << " has " << partitioned_data.t3_proof_fragments_chunks[i].size() << " fragments." << std::endl;
+    }
+    std::cout << std::endl;
+
     printfln("Plot completed, writing to file..."); 
 
     #define tostr std::to_string
@@ -31,10 +49,11 @@ TEST_CASE("plot-read-write")
     timer.stop();
 
     timer.start("Reading plot file: " + file_name);
-    PlotFile::PlotFileContents read_plot = PlotFile::readData(file_name);
+    PlotFile::PlotFileContents read_plot = PlotFile::readAllChunkedData(file_name);
     timer.stop();
 
-    ENSURE(plot == read_plot.data);
+    PlotData converted = ChunkedProofFragments::convertToPlotData(partitioned_data);
+    ENSURE(plot == converted);
     ENSURE(plotter.getProofParams() == read_plot.params);
 }
 

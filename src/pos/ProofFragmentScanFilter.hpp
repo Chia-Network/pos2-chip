@@ -5,7 +5,9 @@
 #include "BlakeHash.hpp"
 #include <vector>
 
-const int PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS = 13; // 2^13 = 8192
+// Number of bits used to define the range for proof fragment scan filters
+// This is set to 11, meaning each scan range covers on average 2048 entries.
+const int PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS = 13; // 2^11 = 2048
 
 class ProofFragmentScanFilter
 {

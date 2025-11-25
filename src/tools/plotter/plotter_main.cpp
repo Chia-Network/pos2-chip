@@ -169,7 +169,7 @@ int main(int argc, char *argv[]) try
 
         // test read
         // if we have x values the comparison function won't be valid since plot does not store x values.
-        std::cout << "Reading plot file: " << filename << std::endl;
+        /*std::cout << "Reading plot file: " << filename << std::endl;
         PlotFile::PlotFileContents read_plot = PlotFile::readData(filename);
        
         if ((read_plot.data == plot) && (read_plot.params == plotter.getProofParams()))
@@ -179,7 +179,7 @@ int main(int argc, char *argv[]) try
         else
         {
             std::cerr << "Read plot does not match original." << std::endl;
-        }
+        }*/
     }
 
     return 0;
