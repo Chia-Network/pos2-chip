@@ -274,7 +274,7 @@ public:
     std::vector<QualityLink> getFirstQualityLinks(FragmentsParent /*parent*/, FragmentsPattern required_pattern, uint64_t t3_fragment_index, uint32_t t4_partition)
     {
         std::vector<QualityLink> links;
-        std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
+        /*std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
         std::vector<T4BackPointers> t4_to_t3_back_pointers = plot_.value().data.t4_to_t3_back_pointers[t4_partition];
         std::vector<T5Pairing> t5_to_t4_back_pointers = plot_.value().data.t5_to_t4_back_pointers[t4_partition];
         // find the T4 entry that matches the t3_index
@@ -316,48 +316,9 @@ public:
 
                         links.push_back(link);
                     }
-
-                    /*if (t5_entry.t4_index_l == t4_index || t5_entry.t4_index_r == t4_index)
-                    {
-
-                        if (t5_entry.t4_index_l == t4_index)
-                        {
-                            QualityLink link;
-                            // LR link
-                            link.fragments[0] = t3_proof_fragments[entry.fragment_index_l]; // LL
-                            link.fragments[1] = t3_proof_fragments[entry.fragment_index_r]; // LR
-                            T4BackPointers other_entry = t4_to_t3_back_pointers[t5_entry.t4_index_r];
-                            link.fragments[2] = t3_proof_fragments[other_entry.fragment_index_l]; // RL
-                            link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;              // this is an LR link, so outside index is RR
-                            link.outside_t3_index = other_entry.fragment_index_r;                 // RR
-
-                            if (required_pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
-                            {
-                                // we only add links that match the required pattern
-                                links.push_back(link);
-                            }
-                        }
-                        else
-                        {
-                            // RR link
-                            QualityLink link;
-                            T4BackPointers other_entry = t4_to_t3_back_pointers[t5_entry.t4_index_l];
-                            link.fragments[0] = t3_proof_fragments[other_entry.fragment_index_l]; // LL
-                            link.fragments[1] = t3_proof_fragments[entry.fragment_index_l];       // RL
-                            link.fragments[2] = t3_proof_fragments[entry.fragment_index_r];       // RR
-                            link.pattern = FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;              // this is an RR link, so outside index is LR
-                            link.outside_t3_index = other_entry.fragment_index_r;                 // LR
-
-                            if (required_pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
-                            {
-                                // we only add links that match the required pattern
-                                links.push_back(link);
-                            }
-                        }
-                    }*/
                 }
             }
-        }
+        }*/
         return links;
     }
 
@@ -366,9 +327,7 @@ public:
 
         std::vector<QualityLink> links;
 
-        // std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
-
-        std::vector<QualityLink> other_partition_links = getQualityLinksFromT4PartitionToT3Partition(partition_B, partition_A, FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION);
+        /*std::vector<QualityLink> other_partition_links = getQualityLinksFromT4PartitionToT3Partition(partition_B, partition_A, FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION);
         
         #ifdef DEBUG_CHAINING
         std::cout << "Found " << other_partition_links.size() << " links from partition B to A." << std::endl;
@@ -388,10 +347,11 @@ public:
         #ifdef DEBUG_CHAINING
         std::cout << "Total links found: " << links.size() << std::endl;
         #endif
+        */
         return links;
     }
 
-    std::vector<QualityLink> getQualityLinksFromT4PartitionToT3Partition(uint32_t partition_parent_t4, uint32_t partition_t3, FragmentsParent /*parent*/)
+    /*std::vector<QualityLink> getQualityLinksFromT4PartitionToT3Partition(uint32_t partition_parent_t4, uint32_t partition_t3, FragmentsParent parent)
     {
         std::vector<QualityLink> links;
 
@@ -466,12 +426,10 @@ public:
         #endif
 
         return links;
-    }
+    }*/
 
     std::vector<uint64_t> getAllProofFragmentsForProof(QualityChain const& chain)
     {
-        readPlotFileIfNeeded();
-
         std::vector<uint64_t> proof_fragments;
         #ifdef DEBUG_CHAINING
         std::cout << "Getting all proof fragments for chain with " << chain.chain_links.size() << " links." << std::endl;
@@ -482,10 +440,10 @@ public:
             if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
             {
                 proof_fragments.push_back(link.fragments[0]);                                             // LL
-                uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
-                proof_fragments.push_back(outside_fragment);                                              // LR
+                //uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
+                //proof_fragments.push_back(outside_fragment);                                              // LR
                 proof_fragments.push_back(link.fragments[1]);                                             // RL
-                proof_fragments.push_back(link.fragments[2]);                                             // RR
+                //proof_fragments.push_back(link.fragments[2]);                                             // RR
 
                 #ifdef DEBUG_CHAINING
                 std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_LR " << outside_fragment << "]" << std::dec << std::endl;
@@ -495,9 +453,9 @@ public:
             {
                 proof_fragments.push_back(link.fragments[0]);                                             // LL
                 proof_fragments.push_back(link.fragments[1]);                                             // LR
-                proof_fragments.push_back(link.fragments[2]);                                             // RL
-                uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
-                proof_fragments.push_back(outside_fragment);                                              // RR
+                //proof_fragments.push_back(link.fragments[2]);                                             // RL
+                //uint64_t outside_fragment = plot_.value().data.t3_proof_fragments[link.outside_t3_index]; // RR
+                //proof_fragments.push_back(outside_fragment);                                              // RR
 
                 #ifdef DEBUG_CHAINING
                 std::cout << "Link " << link_id << " : " << std::hex << link.fragments[0] << " " << link.fragments[1] << " " << link.fragments[2] << " [OUTSIDE_FRAGMENT_IS_RR " << outside_fragment << "]" << std::dec << std::endl;

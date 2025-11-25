@@ -496,14 +496,9 @@ public:
                                                  groupB[k].x_values[2], groupB[k].x_values[3],
                                                  groupB[k].x_values[4], groupB[k].x_values[5],
                                                  groupB[k].x_values[6], groupB[k].x_values[7]};
-                        std::vector<T4Pairing> t4_pairings = validator.validate_table_4_pairs(x_values);
-                        if (t4_pairings.size() > 0)
+                        bool is_valid = validator.validate_table_4_pairs(x_values);
+                        if (is_valid)
                         {
-                            // the validator may return more than one valid T4 pairing for the same x_values
-                            // this could happen when the upper and lower partitions of the L and R sides coincide and each produce a valid pairing
-                            // e.g. when L has lower/upper partition [4, 11] and R has [11, 4] and both pass tests.
-                            // In either case, the x-values are the same for both pairings, so the Solver just needs to pair the x-values once.
-                            // Later, validate_t5_pairings used by the solver will re-validate the full T5 proof and check both pairings again.
                             T4_match t4;
                             t4.x_values = {groupA[j].x_values[0], groupA[j].x_values[1],
                                                groupA[j].x_values[2], groupA[j].x_values[3],
@@ -520,60 +515,6 @@ public:
             }
         }
 
-        // T5 matching.
-        {
-            ProofValidator validator(params_);
-            for (size_t i = 0; i < t4_matches.size(); i += 2)
-            {
-                size_t t5_group = i / 2;
-                const std::vector<T4_match> &groupA = t4_matches[i];
-                const std::vector<T4_match> &groupB = t4_matches[i + 1];
-                for (size_t j = 0; j < groupA.size(); j++)
-                {
-                    for (size_t k = 0; k < groupB.size(); k++)
-                    {
-                        uint32_t x_values[32] = {groupA[j].x_values[0], groupA[j].x_values[1],
-                                                 groupA[j].x_values[2], groupA[j].x_values[3],
-                                                 groupA[j].x_values[4], groupA[j].x_values[5],
-                                                 groupA[j].x_values[6], groupA[j].x_values[7],
-                                                 groupA[j].x_values[8], groupA[j].x_values[9],
-                                                 groupA[j].x_values[10], groupA[j].x_values[11],
-                                                 groupA[j].x_values[12], groupA[j].x_values[13],
-                                                 groupA[j].x_values[14], groupA[j].x_values[15],
-                                                 groupB[k].x_values[0], groupB[k].x_values[1],
-                                                 groupB[k].x_values[2], groupB[k].x_values[3],
-                                                 groupB[k].x_values[4], groupB[k].x_values[5],
-                                                 groupB[k].x_values[6], groupB[k].x_values[7],
-                                                 groupB[k].x_values[8], groupB[k].x_values[9],
-                                                 groupB[k].x_values[10], groupB[k].x_values[11],
-                                                 groupB[k].x_values[12], groupB[k].x_values[13],
-                                                 groupB[k].x_values[14], groupB[k].x_values[15]};
-                        bool is_valid = validator.validate_table_5_pairs(x_values);
-                        if (is_valid)
-                        {
-                            T5_match t5;
-                            t5.x_values = {groupA[j].x_values[0], groupA[j].x_values[1],
-                                           groupA[j].x_values[2], groupA[j].x_values[3],
-                                           groupA[j].x_values[4], groupA[j].x_values[5],
-                                           groupA[j].x_values[6], groupA[j].x_values[7],
-                                           groupA[j].x_values[8], groupA[j].x_values[9],
-                                           groupA[j].x_values[10], groupA[j].x_values[11],
-                                           groupA[j].x_values[12], groupA[j].x_values[13],
-                                           groupA[j].x_values[14], groupA[j].x_values[15],
-                                           groupB[k].x_values[0], groupB[k].x_values[1],
-                                           groupB[k].x_values[2], groupB[k].x_values[3],
-                                           groupB[k].x_values[4], groupB[k].x_values[5],
-                                           groupB[k].x_values[6], groupB[k].x_values[7],
-                                           groupB[k].x_values[8], groupB[k].x_values[9],
-                                           groupB[k].x_values[10], groupB[k].x_values[11],
-                                           groupB[k].x_values[12], groupB[k].x_values[13],
-                                           groupB[k].x_values[14], groupB[k].x_values[15]};
-                            t5_matches[t5_group].push_back(t5);
-                        }
-                    }
-                }
-            }
-        }
         timings_.misc += timer.stop();
     }
 

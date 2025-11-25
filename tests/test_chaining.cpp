@@ -10,8 +10,9 @@
 double num_expected_pruned_entries_for_t3(int k)
 {
     double k_entries = (double)(1UL << k);
-    double t3_entries = (FINAL_TABLE_FILTER_D * 4) * k_entries;
-    return t3_entries;
+    //double t3_entries = (FINAL_TABLE_FILTER_D * 4) * k_entries;
+    //return t3_entries;
+    return k_entries;
 }
 
 double entries_per_partition(const ProofParams &params)

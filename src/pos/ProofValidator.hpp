@@ -18,12 +18,9 @@ class ProofValidator
 public:
     ProofValidator(const ProofParams &proof_params)
         : params_(proof_params), 
-          proof_core_(proof_params),
-          sub_proof_core_(ProofParams(proof_params.get_plot_id_bytes(),
-              numeric_cast<uint8_t>(proof_params.get_sub_k()),
-              proof_params.get_strength()))
+          proof_core_(proof_params)
     {
-        // sub params are used in T4/5
+
     }
 
     /**
@@ -120,124 +117,9 @@ public:
      *     first 8 => left half, next 8 => right half
      */
     // will return 0, 1, or 2 pairs (rare)
-    std::vector<T4Pairing>
+    bool
     validate_table_4_pairs(const uint32_t *x_values)
     {
-        std::vector<T4Pairing> t4_pairs;
-        /*return t4_pairs;
-
-        const uint32_t *l_xs = x_values;
-        const uint32_t *r_xs = x_values + 8;
-
-        // Validate each side as table 3
-        std::optional<T3Pairing> result_l = validate_table_3_pairs(l_xs);
-        if (!result_l.has_value())
-        {
-            return t4_pairs; // will be empty
-        }
-        std::optional<T3Pairing> result_r = validate_table_3_pairs(r_xs);
-        if (!result_r.has_value())
-        {
-            return t4_pairs; // will be empty
-        }
-
-        if (!proof_core_.fragment_codec.validate_proof_fragment(result_l->proof_fragment, l_xs))
-        {
-            std::cerr << "Validation failed for left proof_fragment: ["
-                      << result_l->proof_fragment << "] vs ["
-                      << show_xs(l_xs, 8) << "]\n";
-            return t4_pairs; // std::nullopt;
-        }
-
-        if (!proof_core_.fragment_codec.validate_proof_fragment(result_r->proof_fragment, r_xs))
-        {
-            std::cerr << "Validation failed for right proof_fragment: ["
-                      << result_r->proof_fragment << "] vs ["
-                      << show_xs(r_xs, 8) << "]\n";
-            return t4_pairs; // std::nullopt;
-        }
-
-        // at least one of the lower and upper partitions must be the same
-        if (result_l->lower_partition != result_r->lower_partition &&
-            result_l->upper_partition != result_r->upper_partition)
-        {
-            std::cerr << "Validation failed for partition mismatch: ["
-                      << result_l->lower_partition << ", " << result_l->upper_partition << "] vs ["
-                      << result_r->lower_partition << ", " << result_r->upper_partition << "]\n";
-            return t4_pairs; // std::nullopt;
-        }
-
-        // get partitioned pairing vector and add it if it's match. could be a false positive so want to return 1 or 2 of these
-        // note challenge might specify the partition to use, not sure if relevant here.
-        if (result_l->lower_partition == result_r->lower_partition)
-        {
-            // Validate table 4 pairing
-            if (sub_proof_core_.validate_match_info_pairing(
-                    4, result_l->meta_lower_partition, result_l->match_info_lower_partition, result_r->match_info_lower_partition))
-            {
-                std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_lower_partition, result_r->meta_lower_partition, result_l->order_bits);
-                if (result.has_value())
-                {
-                    t4_pairs.push_back(result.value());
-                }
-            }
-        }
-        if (result_l->upper_partition == result_r->upper_partition)
-        {
-            // Validate table 4 pairing
-            if (sub_proof_core_.validate_match_info_pairing(
-                    4, result_l->meta_upper_partition, result_l->match_info_upper_partition, result_r->match_info_upper_partition))
-            {
-                std::optional<T4Pairing> result = sub_proof_core_.pairing_t4(result_l->meta_upper_partition, result_r->meta_upper_partition, result_l->order_bits);
-                if (result.has_value())
-                {
-                    t4_pairs.push_back(result.value());
-                }
-            }
-        }
-
-        // if (result_l->lower_partition == result_r->lower_partition &&
-        //     result_l->upper_partition == result_r->upper_partition) {
-        //         std::cout << "Validation had both partitions match" << std::endl;
-        //     }
-        */
-        return t4_pairs;
-    }
-
-    /**
-     * validate_table_5_pairs(x_values):
-     *   - We expect 32 x-values:
-     *     first 16 => left half, next 16 => right half
-     */
-    bool
-    validate_table_5_pairs(const uint32_t *x_values)
-    {
-        /*std::vector<T4Pairing> result_l = validate_table_4_pairs(x_values + 0);
-        if (result_l.empty())
-        {
-            return false;
-        }
-        auto result_r = validate_table_4_pairs(x_values + 16);
-        if (result_r.empty())
-        {
-            return false;
-        }
-
-        // infrequent, but possible to have multiple valid table 4 pairs
-        // so we need to check all combinations
-        // and only if all fail is it invalid.
-        for (size_t l_index = 0; l_index < result_l.size(); l_index++)
-        {
-            for (size_t r_index = 0; r_index < result_r.size(); r_index++)
-            {
-                if (sub_proof_core_.validate_match_info_pairing(
-                        5, result_l[l_index].meta, result_l[l_index].match_info, result_r[r_index].match_info))
-                {
-                    return true;
-                }
-            }
-        }
-        */
         return false;
     }
 
@@ -268,7 +150,7 @@ public:
             }
 
             // validate the x-values
-            if (!validate_table_5_pairs(x_values))
+            //if (!validate_table_5_pairs(x_values))
             {
                 #ifdef DEBUG_PROOF_VALIDATOR
                 std::cerr << "Validation failed for sub-proof " << i << std::endl;
@@ -511,7 +393,6 @@ public:
 private:
     ProofParams params_;
     ProofCore proof_core_;
-    ProofCore sub_proof_core_;
 
     // Utility function to print a list of xs in the style [x0, x1, x2, ...].
     static std::string show_xs(const uint32_t *v, int length)

@@ -29,12 +29,6 @@
 // NOTE: when chip goes into review should remove this macro and use the final chosen branched code.
 #define NON_BIPARTITE_BEFORE_T3 true
 
-// use to reduce T4/T5 relative to T3, T4 and T5 will be approx same size.
-// #define T3_FACTOR_T4_T5_EVEN 1
-
-const uint32_t FINAL_TABLE_FILTER = 855570511; // out of 2^32
-const double FINAL_TABLE_FILTER_D = 0.19920303275;
-
 constexpr int NUM_CHAIN_LINKS = 16;
 
 // first chain link is always passed in from passing fragment scan filter
@@ -143,61 +137,6 @@ struct T3Pairing
 #endif
 };
 
-// Split from T3Pairing, 2 for 1
-struct T3PartitionedPairing
-{
-    uint64_t meta;
-    uint64_t fragment_index;
-    uint32_t match_info; // sub_k bits
-    uint32_t order_bits;
-#ifdef RETAIN_X_VALUES
-    uint32_t xs[8];
-#endif
-};
-
-struct T4Pairing
-{
-    uint64_t meta; // 2k-bit meta value.
-    uint64_t fragment_index_l;
-    uint64_t fragment_index_r;
-    uint32_t match_info; // sub_k-bit match info.
-#ifdef RETAIN_X_VALUES
-    uint32_t xs[16];
-#endif
-};
-
-struct T4BackPointers
-{
-    uint64_t fragment_index_l;
-    uint64_t fragment_index_r;
-#ifdef RETAIN_X_VALUES
-    uint32_t xs[16];
-#endif
-
-    bool operator==(T4BackPointers const &o) const = default;
-};
-
-struct T4PairingPropagation
-{
-    uint64_t meta;       // 2k-bit meta value.
-    uint32_t match_info; // sub_k-bit match info.
-    uint32_t t4_back_pointer_index;
-#ifdef RETAIN_X_VALUES
-    uint32_t xs[16];
-#endif
-};
-
-struct T5Pairing
-{
-    uint32_t t4_index_l;
-    uint32_t t4_index_r;
-#ifdef RETAIN_X_VALUES
-    uint32_t xs[32];
-#endif
-
-    bool operator==(T5Pairing const &o) const = default;
-};
-
 //------------------------------------------------------------------------------
 // ProofCore Class
 //------------------------------------------------------------------------------
@@ -301,114 +240,22 @@ public:
             return std::nullopt;
         */
 
-        PairingResult lower_partition_pair = hashing.pairing(3, meta_l, meta_r,
+        PairingResult pair = hashing.pairing(3, meta_l, meta_r,
                                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                                             static_cast<int>(params_.get_sub_k()) - 1,
-                                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
+                                                             0,
+                                                             0,
                                                              num_test_bits);
 
         // pairing filter test
-        if (lower_partition_pair.test_result != 0)
+        if (pair.test_result != 0)
             return std::nullopt;
 
         uint64_t all_x_bits = (static_cast<uint64_t>(x_bits_l) << params_.get_k()) | x_bits_r;
         ProofFragment proof_fragment = fragment_codec.encode(all_x_bits);
-        uint32_t order_bits = fragment_codec.extract_t3_order_bits(proof_fragment);
-        uint32_t top_order_bit = order_bits >> 1;
-        uint32_t lower_partition, upper_partition;
-
-        if (top_order_bit == 0)
-        {
-            lower_partition = fragment_codec.extract_t3_l_partition_bits(proof_fragment);
-            upper_partition = fragment_codec.extract_t3_r_partition_bits(proof_fragment) + params_.get_num_partitions();
-        }
-        else
-        {
-            lower_partition = fragment_codec.extract_t3_r_partition_bits(proof_fragment);
-            upper_partition = fragment_codec.extract_t3_l_partition_bits(proof_fragment) + params_.get_num_partitions();
-        }
-
-        PairingResult upper_partition_pair = hashing.pairing(~3, meta_l, meta_r,
-                                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                                             static_cast<int>(params_.get_sub_k()) - 1,
-                                                             static_cast<int>(params_.get_num_pairing_meta_bits()));
-
-        // TODO: this can be bitpacked much better
+        
         T3Pairing result;
-
         result.proof_fragment = proof_fragment;
-        /*result.order_bits = order_bits;
-
-        result.lower_partition = lower_partition;
-        result.meta_lower_partition = lower_partition_pair.meta_result;
-        result.match_info_lower_partition = (top_order_bit << (params_.get_sub_k() - 1)) | lower_partition_pair.match_info_result;
-
-        result.upper_partition = upper_partition;
-        result.meta_upper_partition = upper_partition_pair.meta_result;
-        result.match_info_upper_partition = ((1 - top_order_bit) << (params_.get_sub_k() - 1)) | upper_partition_pair.match_info_result;*/
         return result;
-    }
-
-    // pairing_t4:
-    // Input: meta_l, meta_r (each 2k bits), order_bits_l (2 bits).
-    // Returns: a T4Pairing with match_info (sub_k bits) and meta (2k bits).
-    std::optional<T4Pairing>
-    pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l)
-    {
-#if defined(T3_FACTOR_T4_T5_EVEN)
-        int num_test_bits = 32;
-#else
-        // shrink output by 50% by using 1 bit larger than num match bits.
-        int num_test_bits = params_.get_num_match_key_bits(4) + 1;
-#endif
-        PairingResult pair = hashing.pairing(4, meta_l, meta_r,
-                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                             static_cast<int>(params_.get_k()) - 1,
-                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                             num_test_bits);
-
-#if defined(T3_FACTOR_T4_T5_EVEN)
-        double threshold_double = (4294967296 / 8) * T3_FACTOR_T4_T5_EVEN;
-        unsigned long threshold = static_cast<unsigned long>(threshold_double);
-        if (pair.test_result > threshold)
-            return std::nullopt;
-#else
-        if (pair.test_result > 0)
-            return std::nullopt;
-#endif
-        T4Pairing result;
-        result.match_info = pair.match_info_result;
-        result.meta = pair.meta_result;
-        uint32_t top_bit = order_bits_l & 1;
-        result.match_info = (top_bit << (params_.get_k() - 1)) | result.match_info;
-        return result;
-    }
-
-    // pairing_t5:
-    // Input: meta_l and meta_r (each 2k bits).
-    // Returns true if the pairing filter passes (i.e. test bits are zero), false otherwise.
-    bool pairing_t5(uint64_t meta_l, uint64_t meta_r)
-    {
-        // filter_test_bits is 32 bits of hash, the chance of passing is 0.1992030328 or 855570511 out of 2^32
-        // this will result in T3 onwards being at same sizes after pruning.
-        int num_test_bits = 32;
-        PairingResult pair = hashing.pairing(5, meta_l, meta_r,
-                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                             0, 0, num_test_bits);
-
-        // adjust the final table so that T3/4/5 will prune to the same # of entries each.
-        if (pair.test_result >= (FINAL_TABLE_FILTER << 1))
-            return false;
-        return true;
-
-        /*
-        // below does parity matching, T5 will have more entries than T4/3.
-        int num_test_bits = params_.get_num_match_key_bits(5) - 1;
-        PairingResult pair = hashing.pairing(5, meta_l, meta_r,
-                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                             0, 0, num_test_bits);
-
-        return (pair.test_result == 0);*/
     }
 
     // validate_match_info_pairing:

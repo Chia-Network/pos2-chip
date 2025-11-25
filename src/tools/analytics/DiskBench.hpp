@@ -442,52 +442,32 @@ public:
     // static helpers for partition sizes
     size_t t3_partition_bytes() const
     {
+        return 0;
 
-        double elements_in_sub_k = FINAL_TABLE_FILTER_D * 4.0 * static_cast<double>(1ULL << (proof_params_.get_sub_k() - 1));
-        double partition_bytes_t3 = elements_in_sub_k * (static_cast<double>(proof_params_.get_k()) + 1.43) / 8.0;
-        std::cout << "t3_partition_bytes calculation: elements_in_sub_k=" << elements_in_sub_k << ", partition_bytes_t3=" << (int)partition_bytes_t3 << std::endl;
-        // exit(23);
-        return static_cast<size_t>(partition_bytes_t3);
-        /*switch (k)
-        {
-        case 28:
-            return 1536831; // sub_k 20
-        case 30:
-            return 6565083; // sub_k 22
-        case 32:
-            return 13965385; // sub_k 23
-        default:
-            throw std::invalid_argument("t3_partition_bytes: k must be even integer between 28 and 32.");
-        }*/
+        //double elements_in_sub_k = FINAL_TABLE_FILTER_D * 4.0 * static_cast<double>(1ULL << (proof_params_.get_sub_k() - 1));
+        //double partition_bytes_t3 = elements_in_sub_k * (static_cast<double>(proof_params_.get_k()) + 1.43) / 8.0;
+        //std::cout << "t3_partition_bytes calculation: elements_in_sub_k=" << elements_in_sub_k << ", partition_bytes_t3=" << (int)partition_bytes_t3 << std::endl;
+        //return static_cast<size_t>(partition_bytes_t3);
     }
 
     size_t t4t5_partition_bytes() const
     {
+        return 0;
         // N log2 N - (1.43 + 2.04)N, where N is elements in sub_k
-        double elements_in_sub_k = FINAL_TABLE_FILTER_D * 4.0 * static_cast<double>(1ULL << (proof_params_.get_sub_k() - 1));
+        /*double elements_in_sub_k = FINAL_TABLE_FILTER_D * 4.0 * static_cast<double>(1ULL << (proof_params_.get_sub_k() - 1));
         double N_log2_N = elements_in_sub_k * log2(elements_in_sub_k);
         double partition_bits_t4 = N_log2_N - (1.43 - 2.04) * elements_in_sub_k;
         double partition_bytes_t4t5 = partition_bits_t4 * 2 / 8.0;
         std::cout << "t4t5_partition_bytes calculation: elements_in_sub_k=" << elements_in_sub_k << ", N_log2_N =" << N_log2_N << ", partition_bits_t4=" << partition_bits_t4 << ", partition_bytes_t4t5=" << (int)partition_bytes_t4t5 << std::endl;
-        return static_cast<size_t>(partition_bytes_t4t5);
-        /*switch (k)
-        {
-        case 28:
-            return 1006920 * 2; // sub k 20
-        case 30:
-            return 4445439 * 2; // sub k 22
-        case 32:
-            return 9308637 * 2; // for sub k 23
-        default:
-            throw std::invalid_argument("t4_partition_bytes: k must be even integer between 28 and 32, sub_k must be 20/22/23.");
-        }*/
+        return static_cast<size_t>(partition_bytes_t4t5);*/
     }
 
     double num_expected_pruned_entries_for_t3() const
     {
         double k_entries = (double)(1UL << proof_params_.get_k());
-        double t3_entries = (FINAL_TABLE_FILTER_D * 4) * k_entries;
-        return t3_entries;
+        return k_entries;
+        //double t3_entries = (FINAL_TABLE_FILTER_D * 4) * k_entries;
+        //return t3_entries;
     }
 
     double entries_per_partition() const

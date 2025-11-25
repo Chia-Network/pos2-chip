@@ -64,29 +64,7 @@ int main(int argc, char *argv[]) try
     std::cout << "Plotting completed.\n";
     std::cout << "----------------------" << std::endl;
 
-    // show final plot results
-    uint64_t t4_to_t3_count = 0;
-    uint64_t t5_to_t4_count = 0;
-    for (const auto &t4_partition : plot.t4_to_t3_back_pointers)
-    {
-        t4_to_t3_count += t4_partition.size();
-    }
-    for (const auto &t5_partition : plot.t5_to_t4_back_pointers)
-    {
-        t5_to_t4_count += t5_partition.size();
-    }
-    if (false)
-    {
-        for (size_t partition_id = 0; partition_id < plot.t4_to_t3_back_pointers.size(); ++partition_id)
-        {
-            std::cout << "  Partition " << partition_id << ": " << std::endl
-                      << "     T4 entries: " << plot.t4_to_t3_back_pointers[partition_id].size() << std::endl
-                      << "     T5 entries: " << plot.t5_to_t4_back_pointers[partition_id].size() << std::endl;
-        }
-    }
     std::cout << "Total T3 entries: " << plot.t3_proof_fragments.size() << "\n";
-    std::cout << "Total T4 entries: " << t4_to_t3_count << "\n";
-    std::cout << "Total T5 entries: " << t5_to_t4_count << "\n";
     std::cout << "----------------------" << std::endl;
 
 #ifdef RETAIN_X_VALUES

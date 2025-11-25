@@ -34,7 +34,7 @@ public:
         
         // above reduces to:
         uint64_t filter_numerator = 1ULL << (62 - PROOF_FRAGMENT_SCAN_FILTER_RANGE_BITS - proof_fragment_scan_filter_bits);
-        uint64_t filter_denominator = FINAL_TABLE_FILTER;
+        uint64_t filter_denominator = 1;//FINAL_TABLE_FILTER;
         filter_32bit_hash_threshold_ = numeric_cast<uint32_t>(
             (filter_numerator + filter_denominator / 2) / filter_denominator
         );

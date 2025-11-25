@@ -55,9 +55,6 @@ public:
 
         // Write plot data
         writeVector(out, data.t3_proof_fragments);
-        writeRanges(out, data.t4_to_t3_lateral_ranges);
-        writeNestedVector(out, data.t4_to_t3_back_pointers);
-        writeNestedVector(out, data.t5_to_t4_back_pointers);
         #ifdef RETAIN_X_VALUES_TO_T3
         writeVector(out, data.xs_correlating_to_proof_fragments);
         #endif
@@ -99,9 +96,6 @@ public:
         // 5) Read plot data
         PlotData data;
         data.t3_proof_fragments = readVector<uint64_t>(in);
-        data.t4_to_t3_lateral_ranges = readRanges(in);
-        data.t4_to_t3_back_pointers = readNestedVector<T4BackPointers>(in);
-        data.t5_to_t4_back_pointers = readNestedVector<T5Pairing>(in);
         #ifdef RETAIN_X_VALUES_TO_T3
         data.xs_correlating_to_proof_fragments    = readVector<std::array<uint32_t,8>>(in);
         #endif
@@ -163,30 +157,5 @@ private:
         for (size_t i = 0; i < outer; ++i)
             nested[i] = readVector<T>(in);
         return nested;
-    }
-
-    // Ranges serialization
-    static void writeRanges(std::ofstream &out, T4ToT3LateralPartitionRanges const &r)
-    {
-        uint64_t n = r.size();
-        out.write((char *)&n, sizeof(n));
-        for (auto const &e : r)
-        {
-            out.write((char *)&e.start, sizeof(e.start));
-            out.write((char *)&e.end, sizeof(e.end));
-        }
-    }
-
-    static T4ToT3LateralPartitionRanges readRanges(std::ifstream &in)
-    {
-        uint64_t n;
-        in.read((char *)&n, sizeof(n));
-        T4ToT3LateralPartitionRanges r(n);
-        for (size_t i = 0; i < n; ++i)
-        {
-            in.read((char *)&r[i].start, sizeof(r[i].start));
-            in.read((char *)&r[i].end, sizeof(r[i].end));
-        }
-        return r;
     }
 };

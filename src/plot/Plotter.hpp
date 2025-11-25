@@ -11,8 +11,6 @@
 #include "PlotData.hpp"
 
 #include "TableConstructorGeneric.hpp"
-#include "TablePruner.hpp"
-// #include "TableCompressor.hpp"
 
 namespace {
     template <typename T, size_t N>
