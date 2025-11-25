@@ -4,6 +4,34 @@
 #include <vector>
 #include <cstring>
 
+TEST_CASE("compress_proof_fragments")
+{
+    std::vector<ProofFragment> proof_fragments = {
+        1000, 2000, 3005, 4007, 5001, 6003, 6999, 8002, 9006, 10010
+    };
+    uint64_t start_proof_fragment_range = 1000;
+    int stub_bits = 8;
+
+    // Compress the proof fragments
+    std::vector<uint8_t> compressed_data = ChunkCompressor::compressProofFragments(start_proof_fragment_range, proof_fragments, stub_bits);
+
+    // Decompress the proof fragments
+    std::vector<ProofFragment> decompressed_fragments = ChunkCompressor::decompressProofFragments(compressed_data, start_proof_fragment_range, stub_bits);
+
+    // Verify that the decompressed fragments match the original
+    ENSURE(decompressed_fragments.size() == proof_fragments.size());
+    for (size_t i = 0; i < proof_fragments.size(); ++i) {
+        ENSURE(decompressed_fragments[i] == proof_fragments[i]);
+    }
+
+    // output the compressed size, and % of original size
+    size_t original_size = proof_fragments.size() * sizeof(ProofFragment);
+    size_t compressed_size = compressed_data.size();
+    double compression_ratio = static_cast<double>(compressed_size) / static_cast<double>(original_size);
+    printfln("Original size: %zu bytes, Compressed size: %zu bytes, Compression ratio: %.2f%%",
+             original_size, compressed_size, compression_ratio * 100.0);
+}
+
 TEST_CASE("compress_indexes")
 {
     std::vector<int> indexes = { 

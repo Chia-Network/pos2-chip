@@ -11,7 +11,7 @@
 #include "pos/ProofParams.hpp"
 #include "pos/ProofFragmentScanFilter.hpp"
 #include "PlotIO.hpp"
-#include "fse.h"
+#include "ChunkCompressor.hpp"
 
 class PlotFile
 {

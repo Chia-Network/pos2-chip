@@ -4,10 +4,133 @@
 #include <cstdint>
 #include <stdexcept>
 #include <limits>
+#include "pos/ProofCore.hpp"
 #include "fse.h"  // adjust include path as needed
+
+//#define DEBUG_CHUNK_COMPRESSOR false
 
 class ChunkCompressor {
 public:
+
+    static std::vector<uint8_t> compressProofFragments(uint64_t start_proof_fragment_range,
+                                                       const std::vector<ProofFragment>& proof_fragments,
+                                                       int stub_bits)
+    {
+        #ifdef DEBUG_CHUNK_COMPRESSOR
+        {
+            std::cout << "ChunkCompressor::compressProofFragments: start_proof_fragment_range = "
+                      << start_proof_fragment_range << ", number of proof fragments = "
+                      << proof_fragments.size() << ", stub_bits = " << stub_bits << std::endl;
+            if (proof_fragments.size() < 100) {
+                // output all proof fragments
+                std::cout << "Proof fragments: ";
+                for (const auto& fragment : proof_fragments) {
+                    std::cout << fragment << " ";
+                }
+                std::cout << std::endl;
+            }
+        }
+        #endif
+        auto [deltas, stubs] = deltifyAndStubProofFragments(start_proof_fragment_range, proof_fragments, stub_bits);
+        #ifdef DEBUG_CHUNK_COMPRESSOR
+        if (proof_fragments.size() < 100) {
+            std::cout << "Deltas:\n";
+            for (const auto& value : deltas) {
+                std::cout << static_cast<int>(value) << " ";
+            }
+            std::cout << "\nStubs:\n";
+            for (const auto& value : stubs) {
+                std::cout << value << " ";
+            }
+            std::cout << "\n";
+        }
+        #endif
+        return compress(deltas, stubs, static_cast<uint8_t>(stub_bits));
+    }
+
+    static std::vector<ProofFragment> decompressProofFragments(const std::vector<uint8_t>& compressed_data,
+                                                       uint64_t start_proof_fragment_range,
+                                                       int stub_bits)
+    {
+        std::vector<uint8_t> deltas;
+        std::vector<uint64_t> stubs;
+        decompress(compressed_data, static_cast<uint8_t>(stub_bits), deltas, stubs);
+
+        #ifdef DEBUG_CHUNK_COMPRESSOR
+        if (deltas.size() < 100) {
+            std::cout << "Decompressed Deltas:\n";
+            for (const auto& value : deltas) {
+                std::cout << static_cast<int>(value) << " ";
+            }
+            std::cout << "\nDecompressed Stubs:\n";
+            for (const auto& value : stubs) {
+                std::cout << value << " ";
+            }
+            std::cout << "\n";
+        }
+        #endif
+
+        if (deltas.size() != stubs.size()) {
+            throw std::runtime_error("ChunkCompressor::decompressProofFragments: size mismatch between deltas and stubs");
+        }
+
+        std::vector<ProofFragment> proof_fragments;
+        proof_fragments.reserve(deltas.size());
+
+        ProofFragment previous = start_proof_fragment_range;
+        for (size_t i = 0; i < deltas.size(); ++i) {
+            uint64_t delta = (static_cast<uint64_t>(deltas[i]) << stub_bits) | stubs[i];
+            ProofFragment fragment = previous + delta;
+            proof_fragments.push_back(fragment);
+            previous = fragment;
+        }
+
+        #ifdef DEBUG_CHUNK_COMPRESSOR
+        if (proof_fragments.size() < 100) {
+            std::cout << "Reconstructed Proof Fragments:\n";
+            for (const auto& fragment : proof_fragments) {
+                std::cout << fragment << " ";
+            }
+            std::cout << "\n";
+        }
+        #endif
+
+        return proof_fragments;
+    }
+
+    static std::pair<std::vector<uint8_t>, std::vector<uint64_t>> deltifyAndStubProofFragments(uint64_t start_proof_fragment_range, std::vector<ProofFragment> const& proof_fragments, int stub_bits)
+    {
+        if (stub_bits == 0 || stub_bits >= 64) {
+            throw std::invalid_argument("ChunkCompressor::deltifyAndStubProofFragments: stub_bits must be in [1, 63]");
+        }
+
+        std::vector<uint8_t> deltas;
+        std::vector<uint64_t> stubs;
+
+        deltas.reserve(proof_fragments.size());
+        stubs.reserve(proof_fragments.size());
+
+        ProofFragment previous = start_proof_fragment_range;
+        for (ProofFragment fragment : proof_fragments) {
+            if (fragment < previous) {
+                throw std::invalid_argument("ChunkCompressor::deltifyAndStubProofFragments: proof fragments must be non-decreasing");
+            }
+            uint64_t delta = fragment - previous;
+            uint64_t stub = delta & ((1ULL << stub_bits) - 1);
+            int delta_byte = static_cast<int>(delta >> stub_bits);
+            if (delta_byte > std::numeric_limits<uint8_t>::max()) {
+                throw std::invalid_argument("ChunkCompressor::deltifyAndStubProofFragments: delta too large to fit in one byte");
+            }
+
+            deltas.push_back(static_cast<uint8_t>(delta_byte));
+            stubs.push_back(stub);
+
+            previous = fragment;
+        }
+
+        return { deltas, stubs };
+    }
+
     // Compress a single chunk (block)
     // - deltas: 1-byte per value (already computed)
     // - stubs: low bits for each value (uint64_t, but only stub_bits used)
