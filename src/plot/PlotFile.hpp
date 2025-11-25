@@ -6,6 +6,7 @@
 #include <type_traits>
 #include "PlotData.hpp"
 #include "pos/ProofParams.hpp"
+#include "PlotIO.hpp"
 
 class PlotFile
 {
@@ -107,55 +108,5 @@ public:
             .data = data,
             .params = params
         };
-    }
-
-private:
-    template <typename T>
-    static void writeVector(std::ofstream &out, std::vector<T> const &v)
-    {
-        static_assert(std::is_trivially_copyable_v<T>);
-        uint64_t n = v.size();
-        out.write((char *)&n, sizeof(n));
-        if (n)
-            out.write((char *)v.data(), n * sizeof(T));
-    }
-
-    template <typename T>
-    static std::vector<T> readVector(std::ifstream &in)
-    {
-        static_assert(std::is_trivially_copyable_v<T>);
-        uint64_t n;
-        in.read((char *)&n, sizeof(n));
-        std::vector<T> v(n);
-        if (n)
-            in.read((char *)v.data(), n * sizeof(T));
-        return v;
-    }
-
-    template <typename T>
-    static void writeArray(std::ofstream &out, std::array<T, 8> const &a)
-    {
-        static_assert(std::is_trivially_copyable_v<T>);
-        out.write((char *)a.data(), sizeof(T) * 8);
-    }
-
-    template <typename T>
-    static void writeNestedVector(std::ofstream &out, std::vector<std::vector<T>> const &nested)
-    {
-        uint64_t outer = nested.size();
-        out.write((char *)&outer, sizeof(outer));
-        for (auto const &inner : nested)
-            writeVector(out, inner);
-    }
-
-    template <typename T>
-    static std::vector<std::vector<T>> readNestedVector(std::ifstream &in)
-    {
-        uint64_t outer;
-        in.read((char *)&outer, sizeof(outer));
-        std::vector<std::vector<T>> nested(outer);
-        for (size_t i = 0; i < outer; ++i)
-            nested[i] = readVector<T>(in);
-        return nested;
     }
 };

@@ -133,7 +133,7 @@ TEST_CASE("plot-k18-strength2-4-5")
 
             // now solve using the x bits list
             Solver solver(prover.getProofParams());
-            std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t const, 256>(x_bits_list));
+            std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> all_proofs = solver.solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF/2>(x_bits_list));
 
             solver.timings().printSummary();
 
@@ -159,7 +159,7 @@ TEST_CASE("plot-k18-strength2-4-5")
                 }
                 std::cout << std::endl;
             
-                std::array<uint32_t, 512> const& proof = all_proofs[0];
+                std::array<uint32_t, TOTAL_XS_IN_PROOF> const& proof = all_proofs[0];
                 std::cout << "Proof size: " << proof.size() << std::endl;
 
                 ENSURE(proof.size() == NUM_CHAIN_LINKS * 32); // should always have 32 x values per link

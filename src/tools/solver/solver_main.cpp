@@ -202,7 +202,7 @@ int benchmark(uint8_t k, uint8_t plot_strength)
         x_bits_list_vector.push_back(x_bits_list[i]);
     }
     const std::vector<uint32_t> x_solution;
-    std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t const, 256>(x_bits_list_vector), x_solution);
+    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> all_proofs = solver.solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF/2>(x_bits_list_vector), x_solution);
 
     solver.timings().printSummary();
 
@@ -260,7 +260,7 @@ int xbits(const std::string &plot_id_hex, const std::vector<uint32_t> &x_bits_li
 #endif
 
     const std::vector<uint32_t> x_solution;
-    std::vector<std::array<uint32_t, 512>> all_proofs = solver.solve(std::span<uint32_t const, 256>(x_bits_list), x_solution);
+    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> all_proofs = solver.solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF/2>(x_bits_list), x_solution);
 
     solver.timings().printSummary();
 

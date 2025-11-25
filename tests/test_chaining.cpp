@@ -17,13 +17,15 @@ double num_expected_pruned_entries_for_t3(int k)
 
 double entries_per_partition(const ProofParams &params)
 {
-    return num_expected_pruned_entries_for_t3(params.get_k()) / (double)params.get_num_partitions();
+    return 0;
+    //return num_expected_pruned_entries_for_t3(params.get_k()) / (double)params.get_num_partitions();
 }
 
 double expected_quality_links_set_size(const ProofParams &params)
 {
-    double num_entries_per_partition = entries_per_partition(params);
-    return 2.0 * num_entries_per_partition / (double)params.get_num_partitions();
+    return 1;
+    //double num_entries_per_partition = entries_per_partition(params);
+    //return 2.0 * num_entries_per_partition / (double)params.get_num_partitions();
 }
 
 static double expected_number_of_quality_chains_per_passing_fragment()

@@ -56,7 +56,6 @@ try
             std::cerr << "Usage: " << argv[0] << " challenge [challengehex] [plotfile] [proof_fragment_scan_filter_bits=5 (optional)] \n";
             return 1;
         }
-        std::cout << "challenge not implemented yet." << std::endl;
         challenge_hex = argv[2];
         plotfile = argv[3];
         if (argc == 5)
@@ -149,7 +148,7 @@ try
             return 1;
         }
 
-        std::optional<QualityChainLinks> chain = proof_validator.validate_full_proof(std::span<uint32_t, 512>(proof), challenge, proof_fragment_scan_filter_bits);
+        std::optional<QualityChainLinks> chain = proof_validator.validate_full_proof(std::span<uint32_t, TOTAL_XS_IN_PROOF>(proof), challenge, proof_fragment_scan_filter_bits);
 
         // get all sub-proofs, which are collections of 32 x-values
         if (chain.has_value())

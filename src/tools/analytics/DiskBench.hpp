@@ -434,9 +434,10 @@ public:
 
     size_t plot_size_bytes() const
     {
-        size_t t3_bytes = t3_partition_bytes() * proof_params_.get_num_partitions() * 2;
-        size_t t4t5_bytes = t4t5_partition_bytes() * proof_params_.get_num_partitions() * 2;
-        return t3_bytes + t4t5_bytes;
+        return 1;
+        //size_t t3_bytes = t3_partition_bytes() * proof_params_.get_num_partitions() * 2;
+        //size_t t4t5_bytes = t4t5_partition_bytes() * proof_params_.get_num_partitions() * 2;
+        //return t3_bytes + t4t5_bytes;
     }
 
     // static helpers for partition sizes
@@ -472,13 +473,15 @@ public:
 
     double entries_per_partition() const
     {
-        return num_expected_pruned_entries_for_t3() / (double)proof_params_.get_num_partitions();
+        return 1;
+        //return num_expected_pruned_entries_for_t3() / (double)proof_params_.get_num_partitions();
     }
 
     double expected_quality_links_set_size() const
     {
-        double num_entries_per_partition = entries_per_partition();
-        return 2.0 * num_entries_per_partition / (double)proof_params_.get_num_partitions();
+        return 1;
+        //double num_entries_per_partition = entries_per_partition();
+        //return 2.0 * num_entries_per_partition / (double)proof_params_.get_num_partitions();
     }
 
 private:

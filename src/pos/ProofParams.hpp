@@ -31,9 +31,6 @@ public:
         if (strength_ > k + get_num_section_bits()) {
             throw std::invalid_argument("ProofParams: strength must be less than k - section_bits");
         }
-        if (get_sub_k() > k) {
-            throw std::invalid_argument("ProofParams: k must be at least 12");
-        }
         // Copy the 32-byte plot ID.
         for (int i = 0; i < 32; ++i)
             plot_id_bytes_[i] = plot_id_bytes[i];
@@ -126,8 +123,7 @@ public:
     // Displays the plot parameters and a hexadecimal representation of the plot ID.
     void show() const
     {
-        std::cout << "Plot parameters: k=" << k_
-                  << ", sub_k=" << get_sub_k();
+        std::cout << "Plot parameters: k=" << k_;
         std::cout << " | Plot ID: ";
         for (int i = 0; i < 32; ++i)
         {
@@ -149,27 +145,9 @@ public:
         return numeric_cast<int>(k_);
     }
 
-    int get_num_partition_bits() const
-    {
-        return numeric_cast<int>(k_ - get_sub_k());
-    }
-
     int get_num_pairing_meta_bits() const
     {
         return 2 * k_;
-    }
-
-    int get_num_partitions() const
-    {
-        return 1ULL << get_num_partition_bits();
-    }
-
-    int get_sub_k() const
-    {
-        // k32/k30/k28/26...18 use sub_k of 23/22/20/19...15
-        if (k_ == 30) return 22;
-        if (k_ == 32) return 23;
-        return numeric_cast<int>(k_ / 2 + 6);
     }
 
     // Returns the number of match key bits for table 3
@@ -190,9 +168,6 @@ public:
 
         std::cout << "k: " << (int) k_ << std::endl;
         std::cout << "num_pairing_meta_bits: " << get_num_pairing_meta_bits() << std::endl;
-        std::cout << "num_partition_bits: " << get_num_partition_bits() << std::endl;
-        std::cout << "num_partitions: " << get_num_partitions() << std::endl;
-        std::cout << "sub_k: " << get_sub_k() << std::endl;
         std::cout << "num sections: " << get_num_sections() << std::endl;
         std::cout << "strength: " << (int) strength_ << std::endl;
     }

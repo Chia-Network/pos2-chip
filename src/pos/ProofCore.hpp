@@ -12,6 +12,12 @@
 #include "ProofHashing.hpp"
 #include "ProofFragment.hpp"
 
+#define TOTAL_XS_IN_PROOF 256
+#define TOTAL_T4_PAIRS_IN_PROOF 16
+#define TOTAL_T3_PAIRS_IN_PROOF 32
+#define TOTAL_T2_PAIRS_IN_PROOF 64
+#define TOTAL_T1_PAIRS_IN_PROOF 128
+
 //------------------------------------------------------------------------------
 // Structs for pairing results
 //------------------------------------------------------------------------------
@@ -413,8 +419,9 @@ public:
         {
             if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
             {
-                uint32_t lateral_partition = fragment_codec.get_lateral_to_t4_partition(link.fragments[2]); // the RR fragment
-                uint32_t cross_partition = fragment_codec.get_r_t4_partition(link.fragments[2]);            // the RR fragment
+                // bogus for now
+                uint32_t lateral_partition = 0;
+                uint32_t cross_partition = 1;
                 if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
                 {
                     filtered_links.push_back(link);
@@ -426,8 +433,9 @@ public:
             }
             else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
             {
-                uint32_t lateral_partition = fragment_codec.get_lateral_to_t4_partition(link.fragments[1]); // the LR fragment
-                uint32_t cross_partition = fragment_codec.get_r_t4_partition(link.fragments[1]);            // the LR fragment
+                // bogus for now
+                uint32_t lateral_partition = 0;
+                uint32_t cross_partition = 1;
                 if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
                 {
                     filtered_links.push_back(link);

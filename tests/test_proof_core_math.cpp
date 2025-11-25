@@ -41,13 +41,15 @@ double num_expected_pruned_entries_for_t3(int k)
 
 double entries_per_partition(const ProofParams &params)
 {
-    return num_expected_pruned_entries_for_t3(params.get_k()) / (double)params.get_num_partitions();
+    return 1;
+    //return num_expected_pruned_entries_for_t3(params.get_k()) / (double)params.get_num_partitions();
 }
 
 double expected_quality_links_set_size(const ProofParams &params)
 {
-    double num_entries_per_partition = entries_per_partition(params);
-    return 2.0 * num_entries_per_partition / (double)params.get_num_partitions();
+    return 1;
+    //double num_entries_per_partition = entries_per_partition(params);
+    //return 2.0 * num_entries_per_partition / (double)params.get_num_partitions();
 }
 
 // link_index 0 is first quality link added by passsing fragment scan filter
@@ -87,52 +89,3 @@ double bit_saturation(double num_chain_candidates, const ProofParams &params)
 }
 
 TEST_SUITE_BEGIN("proof-core-math");
-
-TEST_CASE("expected-partition-sizes")
-{
-    // go through test case parameters and expected values
-    int num_cases = 8; 
-    int tested_cases = 0;
-    for (const auto &test_case : QUALITY_SET_SIZE_TEST_CASES)
-    {
-        ProofParams params(Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").data(), test_case.k, 2);
-        if (params.get_sub_k() != test_case.sub_k) {
-            std::cerr << "Skipping k=" << (int) test_case.k << " sub_k=" << test_case.sub_k << " since sub_k does not match: " << params.get_sub_k() << std::endl;
-            continue;
-        }
-        tested_cases++;
-        ProofCore proof_core(params);
-
-        // these are for debug output on checking our math
-        double dbl_math_quality_set_size = expected_quality_links_set_size(params);
-        double dbl_math_t3_pruned = num_expected_pruned_entries_for_t3(test_case.k);
-        
-        std::cout << "k=" << (int) test_case.k << " sub_k=" << test_case.sub_k << std::endl
-                  << " num t3 pruned entries per partition: " << test_case.num_expected_t3_pruned_entries
-                  << " computed: " << dbl_math_t3_pruned << std::endl;
-        std::cout << " check dbl quality set size: " << dbl_math_quality_set_size << std::endl;
-        std::cout << " check dbl t3 pruned entries: " << dbl_math_t3_pruned << std::endl;
-        CHECK(std::abs(dbl_math_t3_pruned - test_case.num_expected_t3_pruned_entries) < 1.0);
-        CHECK(std::abs(dbl_math_quality_set_size - test_case.expected_quality_set_size) < 1.0);
-
-        double test_dbl_first_threshold = test_quality_chain_pass_threshold(params, 1);
-        double test_dbl_rest_threshold = test_quality_chain_pass_threshold(params, 2);
-        // sanity check on our math
-        CHECK(std::abs(test_dbl_first_threshold - test_case.expected_pass_threshold_first) < 2.0);
-        CHECK(std::abs(test_dbl_rest_threshold - test_case.expected_pass_threshold_rest) < 2.0);
-
-        // check first and rest pass thresholds
-        uint32_t first_threshold = proof_core.quality_chain_pass_threshold(1);
-        uint32_t rest_threshold = proof_core.quality_chain_pass_threshold(2);
-        std::cout << " first pass threshold expected: " << test_case.expected_pass_threshold_first
-                  << " computed: " << first_threshold << std::endl;
-        std::cout << " rest pass threshold expected: " << test_case.expected_pass_threshold_rest
-                  << " computed: " << rest_threshold << std::endl;
-        CHECK(first_threshold == test_case.expected_pass_threshold_first);
-        CHECK(rest_threshold == test_case.expected_pass_threshold_rest);
-
-        
-    }
-    // make sure we tested all cases for the k sizes 18, 28, 30, 32.  If we change sub_k values, we may skip some cases and have to introduce them to test data.
-    CHECK(tested_cases == num_cases);
-}

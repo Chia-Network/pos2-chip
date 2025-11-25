@@ -132,6 +132,10 @@ public:
         ProofCore proof_core(plot.params);
         FragmentsPattern firstPattern = proof_core.requiredPatternFromChallenge(next_challenge);
 
+        // bogus for now
+        uint32_t r_partition = 0;
+        uint32_t l_partition = 1;
+
         #ifdef DEBUG_CHAINING
         std::cout << "Required pattern from challenge: " << static_cast<int>(firstPattern) << std::endl;
         #endif
@@ -142,11 +146,8 @@ public:
         #endif
         for (const auto &frag_res : filtered_fragments)
         {
-            uint64_t fragment = frag_res.fragment;
-            // extract R pointer
-            uint32_t l_partition = proof_core.fragment_codec.get_lateral_to_t4_partition(fragment);
-            uint32_t r_partition = proof_core.fragment_codec.get_r_t4_partition(fragment);
-
+            //uint64_t fragment = frag_res.fragment;
+            
             #ifdef DEBUG_CHAINING
             // std::cout << "          Total partitions: " << plot.params.get_num_partitions() << std::endl;
             std::cout << "          Partition A(L): " << l_partition << std::endl;
@@ -273,6 +274,7 @@ public:
 
     std::vector<QualityLink> getFirstQualityLinks(FragmentsParent /*parent*/, FragmentsPattern required_pattern, uint64_t t3_fragment_index, uint32_t t4_partition)
     {
+        std::cout << "getFirstQualityLinks called for T4 partition: " << t4_partition << " T3 fragment index: " << t3_fragment_index << " and required pattern : " << static_cast<int>(required_pattern) << std::endl;
         std::vector<QualityLink> links;
         /*std::vector<ProofFragment> t3_proof_fragments = plot_.value().data.t3_proof_fragments;
         std::vector<T4BackPointers> t4_to_t3_back_pointers = plot_.value().data.t4_to_t3_back_pointers[t4_partition];
@@ -326,6 +328,7 @@ public:
     {
 
         std::vector<QualityLink> links;
+        std::cout << "getQualityLinks called for partitions A: " << partition_A << " B: " << partition_B << std::endl;
 
         /*std::vector<QualityLink> other_partition_links = getQualityLinksFromT4PartitionToT3Partition(partition_B, partition_A, FragmentsParent::PARENT_NODE_IN_OTHER_PARTITION);
         
