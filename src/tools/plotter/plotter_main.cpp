@@ -164,8 +164,12 @@ int main(int argc, char *argv[]) try
         #endif
         filename += '_' + plot_id_hex + ".bin";
         timer.start("Writing plot file: " + filename);
-        PlotFile::writeData(filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
+        size_t bytes_written = PlotFile::writeData(filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
         timer.stop();
+
+        double bits_per_entry = (static_cast<double>(bytes_written) * 8.0) / static_cast<double>(plot.t3_proof_fragments.size());
+        std::cout << "Wrote plot file: " << filename << " (" << bytes_written << " bytes) "
+                  << "[" << bits_per_entry << " bits/entry]" << std::endl;
 
         // test read
         // if we have x values the comparison function won't be valid since plot does not store x values.

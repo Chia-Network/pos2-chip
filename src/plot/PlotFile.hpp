@@ -17,6 +17,7 @@ class PlotFile
 {
 public:
     static constexpr int CHUNK_SPAN_RANGE_BITS = 16; // 65k entries per chunk
+    static constexpr int MINUS_STUB_BITS = 2; // proof fragments get k stub bits minus this many extra bits
     // Current on-disk format version, update this when the format changes.
     #ifdef RETAIN_X_VALUES_TO_T3
     static constexpr uint8_t FORMAT_VERSION = 3;
@@ -40,17 +41,21 @@ public:
     // 48 bytes: farmer public key
     // 32 bytes: local secret key
     // Write PlotData to a binary file.
-    static void writeData(const std::string &filename, PlotData const &data, ProofParams const &params, std::span<uint8_t const, 32 + 48 + 32> const memo)
+    static size_t writeData(const std::string &filename, PlotData const &data, ProofParams const &params, std::span<uint8_t const, 32 + 48 + 32> const memo)
     {
-        ChunkedProofFragments partitioned_data = ChunkedProofFragments::convertToChunkedProofFragments(
+        uint64_t range_per_chunk = (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS));
+        ChunkedProofFragments chunked_data = ChunkedProofFragments::convertToChunkedProofFragments(
             data,
-            (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS))
+            range_per_chunk
         );
-        writeData(filename, partitioned_data, params, memo);
+        return writeData(filename, chunked_data, params, memo);
     }
 
-    static void writeData(const std::string &filename, ChunkedProofFragments const &data, ProofParams const &params, std::span<uint8_t const, 32 + 48 + 32> const memo)
+    // returns bytes written
+    static size_t writeData(const std::string &filename, ChunkedProofFragments const &data, ProofParams const &params, std::span<uint8_t const, 32 + 48 + 32> const memo)
     {
+        size_t bytes_written = 0;
+
         std::ofstream out(filename, std::ios::binary);
         if (!out)
             throw std::runtime_error("Failed to open " + filename);
@@ -107,9 +112,15 @@ public:
                 offsets[i] = static_cast<uint64_t>(pos);
 
                 // write the chunk (assumes writeVector can serialize each chunk container)
-                writeVector(out, data.proof_fragments_chunks[i]);
+                int stub_bits = params.get_k() - MINUS_STUB_BITS;
+                uint64_t range_per_chunk = (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS));
+                uint64_t start_proof_fragment_range = i * range_per_chunk;
+                std::vector<uint8_t> compressed_chunk = ChunkCompressor::compressProofFragments(data.proof_fragments_chunks[i], start_proof_fragment_range, stub_bits);
+                writeVector(out, compressed_chunk);
                 if (!out) throw std::runtime_error("Failed to write chunk " + std::to_string(i) + " to " + filename);
             }
+
+            bytes_written = static_cast<size_t>(out.tellp());
 
             // Seek back and overwrite placeholders with actual offsets
             out.seekp(offsets_start_pos);
@@ -126,6 +137,8 @@ public:
 
         if (!out)
             throw std::runtime_error("Failed to write " + filename);
+
+        return bytes_written;
     }
 
     static PlotFileContents readAllChunkedData(const std::string &filename)
@@ -189,7 +202,11 @@ public:
             in.seekg(static_cast<std::streamoff>(offsets[i]), std::ios::beg);
             if (!in) throw std::runtime_error("Failed to seek to chunk " + std::to_string(i) + " in " + filename);
             // each chunk was written with writeVector( out, data.proof_fragments_chunks[i] )
-            chunked.proof_fragments_chunks[i] = readVector<uint64_t>(in);
+
+            int stub_bits = params.get_k() - MINUS_STUB_BITS;
+            uint64_t range_per_chunk = (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS));
+            uint64_t start_proof_fragment_range = i * range_per_chunk;
+            chunked.proof_fragments_chunks[i] = ChunkCompressor::decompressProofFragments(readVector<uint8_t>(in), start_proof_fragment_range, stub_bits);
             if (!in) throw std::runtime_error("Failed to read chunk " + std::to_string(i) + " from " + filename);
         }
 

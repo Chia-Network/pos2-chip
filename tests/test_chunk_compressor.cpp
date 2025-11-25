@@ -13,7 +13,7 @@ TEST_CASE("compress_proof_fragments")
     int stub_bits = 8;
 
     // Compress the proof fragments
-    std::vector<uint8_t> compressed_data = ChunkCompressor::compressProofFragments(start_proof_fragment_range, proof_fragments, stub_bits);
+    std::vector<uint8_t> compressed_data = ChunkCompressor::compressProofFragments(proof_fragments, start_proof_fragment_range, stub_bits);
 
     // Decompress the proof fragments
     std::vector<ProofFragment> decompressed_fragments = ChunkCompressor::decompressProofFragments(compressed_data, start_proof_fragment_range, stub_bits);

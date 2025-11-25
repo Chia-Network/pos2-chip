@@ -7,14 +7,13 @@
 #include "pos/ProofCore.hpp"
 #include "fse.h"  // adjust include path as needed
 
-//#define DEBUG_CHUNK_COMPRESSOR false
+// #define DEBUG_CHUNK_COMPRESSOR false
 
 class ChunkCompressor {
 public:
 
-    static std::vector<uint8_t> compressProofFragments(uint64_t start_proof_fragment_range,
-                                                       const std::vector<ProofFragment>& proof_fragments,
-                                                       int stub_bits)
+    static std::vector<uint8_t> compressProofFragments(const std::vector<ProofFragment>& proof_fragments,
+                                                        uint64_t start_proof_fragment_range, int stub_bits)
     {
         #ifdef DEBUG_CHUNK_COMPRESSOR
         {
@@ -49,8 +48,7 @@ public:
     }
 
     static std::vector<ProofFragment> decompressProofFragments(const std::vector<uint8_t>& compressed_data,
-                                                       uint64_t start_proof_fragment_range,
-                                                       int stub_bits)
+                                                       uint64_t start_proof_fragment_range, int stub_bits)
     {
         std::vector<uint8_t> deltas;
         std::vector<uint64_t> stubs;
@@ -119,6 +117,12 @@ public:
             uint64_t stub = delta & ((1ULL << stub_bits) - 1);
             int delta_byte = static_cast<int>(delta >> stub_bits);
             if (delta_byte > std::numeric_limits<uint8_t>::max()) {
+                std::cerr << "Delta too large: fragment=" << fragment
+                          << ", previous=" << previous
+                          << ", delta=" << delta
+                          << ", stub_bits=" << stub_bits
+                          << ", delta_byte=" << delta_byte
+                          << std::endl;
                 throw std::invalid_argument("ChunkCompressor::deltifyAndStubProofFragments: delta too large to fit in one byte");
             }
 

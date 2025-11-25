@@ -47,37 +47,37 @@ struct ChunkedProofFragments {
 
     // Static factory: computes num_spans automatically from data + scan_span.
     static ChunkedProofFragments convertToChunkedProofFragments(PlotData const& plot_data,
-                                                    uint64_t avg_elements_per_partition)
+                                                    uint64_t range_per_chunk)
     {
-        if (avg_elements_per_partition == 0) {
-            throw std::invalid_argument("avg_elements_per_partition must be > 0");
+        if (range_per_chunk == 0) {
+            throw std::invalid_argument("range_per_chunk must be > 0");
         }
 
-        ChunkedProofFragments partitioned_data;
+        ChunkedProofFragments chunked_data;
 
         if (plot_data.t3_proof_fragments.empty()) {
             // nothing to do
-            return partitioned_data;
+            return chunked_data;
         }
 
         // Because t3_proof_fragments are sorted, we can just look at the last one
         uint64_t max_value = plot_data.t3_proof_fragments.back();
-        uint64_t num_spans = max_value / avg_elements_per_partition + 1;
+        uint64_t num_spans = max_value / range_per_chunk + 1;
         std::cout << "Max value was: " << max_value << ", num_spans: " << num_spans << std::endl;
 
-        partitioned_data.proof_fragments_chunks.resize(
+        chunked_data.proof_fragments_chunks.resize(
             static_cast<std::size_t>(num_spans)
         );
 
         std::size_t current_span = 0;
-        uint64_t current_span_end = avg_elements_per_partition;
+        uint64_t current_span_end = range_per_chunk;
 
         for (const ProofFragment& fragment : plot_data.t3_proof_fragments) {
     
             // advance span until fragment fits in [current_span * scan_span, current_span_end)
             while (fragment >= current_span_end) {
                 ++current_span;
-                current_span_end += avg_elements_per_partition;
+                current_span_end += range_per_chunk;
 
                 // safety: this should never trigger if num_spans was computed correctly
                 if (current_span >= num_spans) {
@@ -85,10 +85,10 @@ struct ChunkedProofFragments {
                 }
             }
 
-            partitioned_data.proof_fragments_chunks[current_span].push_back(fragment);
+            chunked_data.proof_fragments_chunks[current_span].push_back(fragment);
         }
 
-        return partitioned_data;
+        return chunked_data;
     }
 
 
