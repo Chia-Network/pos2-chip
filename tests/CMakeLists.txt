@@ -26,8 +26,10 @@ new_test(parallel test_parallel_for_range.cpp)
 new_test(blake_hash test_blake.cpp)
 # new_test(proof_core_math test_proof_core_math.cpp)
 new_test(chunk_compressor test_chunk_compressor.cpp)
+new_test(chainer test_chainer.cpp)
 
 # Link the fse test executable with the fse library target so FSE symbols are
 # resolved at link time.
 target_link_libraries(plot_file PRIVATE fse)
 target_link_libraries(chunk_compressor PRIVATE fse)
+target_link_libraries(chainer PRIVATE fse)

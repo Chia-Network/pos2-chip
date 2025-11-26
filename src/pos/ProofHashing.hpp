@@ -55,7 +55,7 @@ public:
     // Prepares Blake hash data for pairing.
     void set_data_for_pairing(uint32_t salt, uint64_t meta_l, uint64_t meta_r, int num_meta_bits);
 
-    BlakeHash::Result256 challengeWithPlotIdHash(const uint8_t *challenge_32_bytes)
+    BlakeHash::Result256 challengeWithPlotIdHash(const uint8_t *challenge_32_bytes) const
     {   
         uint32_t block_words[16];
         const uint8_t *plot_id_bytes = params_.get_plot_id_bytes();
@@ -94,6 +94,25 @@ public:
         block_words[12] = static_cast<uint32_t>(link_fragments[2] & 0xFFFFFFFF);
         block_words[13] = static_cast<uint32_t>(link_fragments[2] >> 32);
         block_words[14] = 0; // Zero out the last two words.
+        block_words[15] = 0;
+
+        return BlakeHash::hash_block_256(block_words);
+    }
+
+    static BlakeHash::Result256 linkHash(BlakeHash::Result256 challenge, uint64_t proof_fragment, uint32_t iteration)
+    {
+        uint32_t block_words[16];
+        for (int i = 0; i < 8; i++) {
+            block_words[i] = challenge.r[i];
+        }
+        block_words[8] = static_cast<uint32_t>(proof_fragment & 0xFFFFFFFF);
+        block_words[9] = static_cast<uint32_t>(proof_fragment >> 32);
+        block_words[9] = iteration;
+        block_words[10] = 0;
+        block_words[11] = 0;
+        block_words[12] = 0;
+        block_words[13] = 0;
+        block_words[14] = 0;
         block_words[15] = 0;
 
         return BlakeHash::hash_block_256(block_words);

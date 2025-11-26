@@ -4,18 +4,6 @@
 #include <array>
 #include "pos/ProofCore.hpp"
 
-struct Range {
-    uint64_t start;
-    uint64_t end;
-
-    // ranges are INCLUSIVE
-    bool isInRange(uint64_t value) const {
-        return value >= start && value <= end;
-    }
-
-    bool operator==(const Range& other) const = default;
-};
-
 // plot structure with absolute indexed back pointers into t3 (i.e. the actual fragment_index_l/r values into t3)
 struct PlotData {
     std::vector<ProofFragment> t3_proof_fragments;

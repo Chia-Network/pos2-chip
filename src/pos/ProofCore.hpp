@@ -36,12 +36,13 @@
 #define NON_BIPARTITE_BEFORE_T3 true
 
 constexpr int NUM_CHAIN_LINKS = 16;
+constexpr int AVERAGE_PROOFS_PER_CHALLENGE_BITS = 5; // expected proofs per challenge is 1/2^5 = 1/32.
 
 // first chain link is always passed in from passing fragment scan filter
 // while not used in ProofCore due to pre-computed constants, this is the chaining factors used in quality chain math
 // and referenced in testing.
 constexpr uint64_t CHAINING_FACTORS[NUM_CHAIN_LINKS - 1] = {
-    4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    4, 1, 1, 1, 1, 1, 1};//, 1, 1, 1, 1, 1, 1, 1, 1};
 
 // for k sizes 18 to 32 even.
 constexpr uint32_t QUALITY_LINK_FIRST_CHAIN_PASS_THRESHOLD[8] = {

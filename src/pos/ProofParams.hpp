@@ -9,6 +9,18 @@
 #include <array>
 #include <cassert>
 
+struct Range {
+    uint64_t start;
+    uint64_t end;
+
+    // ranges are INCLUSIVE
+    bool isInRange(uint64_t value) const {
+        return value >= start && value <= end;
+    }
+
+    bool operator==(const Range& other) const = default;
+};
+
 class ProofParams
 {
 public:
@@ -143,6 +155,32 @@ public:
     int get_k() const
     {
         return numeric_cast<int>(k_);
+    }
+
+    int get_chaining_set_bits() const
+    {
+        // this achieves bit saturation on T2 pairs.
+        return (get_k() >> 1) - 4;
+    }
+
+    uint32_t get_chaining_set_size() const
+    {
+        return 1 << get_chaining_set_bits();
+    }
+
+    uint32_t get_num_chaining_sets() const
+    {
+        return (1 << (2*k_ - get_chaining_set_bits()));
+    }
+
+    Range get_chaining_set_range(size_t chaining_set_index) const
+    {
+        //uint32_t num_sets = get_num_chaining_sets();
+        //assert(chaining_set_index < num_sets);
+        uint64_t range = (uint64_t) 1 << (k_ + get_chaining_set_bits());
+        uint64_t start = chaining_set_index * range;
+        uint64_t end = start + range - 1;
+        return Range{start, end};
     }
 
     int get_num_pairing_meta_bits() const
