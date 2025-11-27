@@ -155,6 +155,8 @@ public:
     std::array<uint8_t, 32> get_grouped_plot_id() const
     {
         // grouped plot id is the normal plot id with the two bytes zeroed out
+        // this allows up to 65536 grouped plots (or 60TB)
+        // may want to bump this up another level and leave the farmer to handle grouping
 
         std::array<uint8_t, 32> grouped_plot_id_bytes;
         std::memcpy(grouped_plot_id_bytes.data(), plot_id_bytes_, 32);

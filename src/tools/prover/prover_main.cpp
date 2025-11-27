@@ -28,54 +28,40 @@ try
 
     std::string challenge_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
     std::string plotfile;
-    int proof_fragment_scan_filter_bits = 5; // default 5 bits
 
-    int total_trials = 1000; // default 1000 trials
+    int total_trials = 1000; // default 1000 trials for check mode
 
     if (mode == "challenge")
     {
-        if ((argc < 4) || (argc > 5))
+        if ((argc < 4) || (argc > 4))
         {
-            std::cerr << "Usage: " << argv[0] << " challenge [challengehex] [plotfile] [proof_fragment_scan_filter_bits=5 (optional)] \n";
+            std::cerr << "Usage: " << argv[0] << " challenge [challengehex] [plotfile]\n";
             return 1;
         }
         challenge_hex = argv[2];
         plotfile = argv[3];
-        if (argc == 5)
-        {
-            proof_fragment_scan_filter_bits = std::stoi(argv[4]);
-        }
     }
     // support: prover check [plotfile] [n_trials=1000]
     else if (mode == "check")
     {
-        if (argc != 3 && argc != 4 && argc != 5)
+        if (argc != 3 && argc != 4)
         {
-            std::cerr << "Usage: " << argv[0] << " check [plotfile] [proof_fragment_scan_filter_bits=5 (optional)] [total_trials=1000 (optional)]\n";
+            std::cerr << "Usage: " << argv[0] << " check [plotfile] [total_trials=1000 (optional)]\n";
             return 1;
         }
         plotfile = argv[2];
 
         if (argc >= 4)
         {
-            proof_fragment_scan_filter_bits = std::stoi(argv[3]);
+            total_trials = std::stoi(argv[3]);
         }
-        if (proof_fragment_scan_filter_bits < 1 || proof_fragment_scan_filter_bits > 16)
-        {
-            std::cerr << "Error: scan_filter_bits must be between 1 and 16." << std::endl;
-            return 1;
-        }
-        if (argc >= 5)
-        {
-            total_trials = std::stoi(argv[4]);
-        }
-        std::cout << "Check mode: plot file = " << plotfile << ", proof_fragment_scan_filter_bit = " << proof_fragment_scan_filter_bits << ", total_trials = " << total_trials << std::endl;
+        std::cout << "Check mode: plot file = " << plotfile << ", total_trials = " << total_trials << std::endl;
     }
     else if (mode == "verify")
     {
-        if (argc != 7)
+        if (argc != 6)
         {
-            std::cerr << "Usage: " << argv[0] << " [k] [hexPlotId] [hexProof] [hexChallenge] [plotStrength] [proofFragmentScanFilterBits]\n";
+            std::cerr << "Usage: " << argv[0] << " [hexPlotId] [hexProof] [hexChallenge] [plotStrength]\n";
             return 1;
         }
         int k = 0;
@@ -87,7 +73,7 @@ try
         }
         std::string proof_hex = argv[3];
         int proof_hex_len = numeric_cast<int>(proof_hex.length());
-        k = proof_hex_len * 4 / 512; // each uint32_t is 4 hex characters, and each proof fragment has 8 uint32_t = 32 hex characters
+        k = proof_hex_len * 4 / TOTAL_XS_IN_PROOF; // each uint32_t is 4 hex characters, and each proof fragment has 8 uint32_t = 32 hex characters
         
         std::cout << "proof length: " << proof_hex_len << std::endl;
         std::cout << "k derived from proof length: " << k << std::endl;
@@ -110,19 +96,11 @@ try
             return 1;
         }
 
-        proof_fragment_scan_filter_bits = std::stoi(argv[6]);
-        if (proof_fragment_scan_filter_bits < 0 || proof_fragment_scan_filter_bits > 16)
-        {
-            std::cerr << "Error: proofFragmentScanFilterBits must be between 0 and 16." << std::endl;
-            return 1;
-        }
-
-        std::cout << "Verifying proof for k=" << k << ", plot ID=" << plot_id_hex << ", challenge=" << challenge_hex << ", proof=" << proof_hex << ", plot_strength=" << plot_strength << ", proofFragmentScanFilterBits=" << proof_fragment_scan_filter_bits << std::endl;
+        std::cout << "Verifying proof for k=" << k << ", plot ID=" << plot_id_hex << ", challenge=" << challenge_hex << ", proof=" << proof_hex << ", plot_strength=" << plot_strength << std::endl;
         std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
         ProofParams params(plot_id.data(), numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(plot_strength));
         ProofValidator proof_validator(params);
-        // ProofCore proof_core(params);
 
         std::vector<uint32_t> proof = Utils::compressedHexToKValues(k, proof_hex);
         if (proof.size() != 512)
@@ -184,8 +162,7 @@ try
             //std::cout << "QualityChain: " << hex << std::endl;
             
 
-            QualityChainLinks proof_fragments = chains[nChain].chain_links;//prover.getAllProofFragmentsForProof(chains[nChain]);
-            // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
+            QualityChainLinks proof_fragments = chains[nChain].chain_links;
 
             ProofParams params = prover.getProofParams();
             ProofFragmentCodec fragment_codec(params);
@@ -214,15 +191,12 @@ try
             std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
 
             // std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << " " << (int)params.get_strength() << std::endl;
-            std::cout << "To find proof run: " << std::endl << " solver xbits " << plot_id_hex << " " << xbits_hex_compressed << " " << (int)params.get_strength() << std::endl;
-
-            
+            std::cout << "To complete proof run: " << std::endl << " solver xbits " << plot_id_hex << " " << xbits_hex_compressed << " " << (int)params.get_strength() << std::endl;
         }
     }
 
     if (mode == "check")
     {
-
         std::array<uint8_t, 32> challenge = {0};
         Prover prover(plotfile);
         // set random seed
@@ -254,8 +228,7 @@ try
                 for (auto const &chain : chains)
                 {
 
-                    std::vector<uint64_t> proof_fragments;// = prover.getAllProofFragmentsForProof(chain);
-                    // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
+                    QualityChainLinks proof_fragments = chain.chain_links;
 
                     ProofParams params = prover.getProofParams();
                     ProofFragmentCodec fragment_codec(params);

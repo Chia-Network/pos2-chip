@@ -12,15 +12,6 @@
 
 #include "TableConstructorGeneric.hpp"
 
-namespace {
-    template <typename T, size_t N>
-    std::array<T, N> to_array(std::span<T const, N> input) {
-        std::array<T, N> ret;
-        std::copy(input.begin(), input.end(), ret.begin());
-        return ret;
-    }
-}
-
 class Plotter {
 public:
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
@@ -120,10 +111,6 @@ public:
 
     ProofParams getProofParams() const {
         return proof_params_;
-    }
-
-    ProofFragmentCodec getProofFragment() const {
-        return fragment_codec_;
     }
 
     void setValidate(bool validate) {

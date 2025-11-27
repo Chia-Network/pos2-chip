@@ -70,8 +70,10 @@ public:
 
     // Run a simulation of disk reads for a given number of plots.
     // Outputs: total time in ms and total data read in MB.
-    void simulateChallengeDiskReads(size_t plot_id_filter_bits, size_t proof_fragment_scan_filter_bits, size_t diskTB, double diskSeekMs, double diskReadMBs) const
+    void simulateChallengeDiskReads(size_t plot_id_filter_bits, size_t diskTB, double diskSeekMs, double diskReadMBs) const
     {
+        std::cout << "Simulating disk reads with plot ID filter bits: " << plot_id_filter_bits
+                  << ", Disk size: " << diskTB << " TB, Seek time: " << diskSeekMs << " ms, Read speed: " << diskReadMBs << " MB/s\n";
         /*size_t plot_bytes = plot_size_bytes();
         size_t t3_part_bytes = t3_partition_bytes();
         size_t t4t5_part_bytes = t4t5_partition_bytes();

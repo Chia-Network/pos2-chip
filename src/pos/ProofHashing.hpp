@@ -107,24 +107,6 @@ public:
         return BlakeHash::hash_block_256(block_words);
     }
 
-    BlakeHash::Result256 chainHash(BlakeHash::Result256 prev_chain_hash, std::span<uint64_t const, 3> const link_fragments)
-    {
-        uint32_t block_words[16];
-        for (int i = 0; i < 8; i++) {
-            block_words[i] = prev_chain_hash.r[i];
-        }
-        block_words[8] = static_cast<uint32_t>(link_fragments[0] & 0xFFFFFFFF);
-        block_words[9] = static_cast<uint32_t>(link_fragments[0] >> 32);
-        block_words[10] = static_cast<uint32_t>(link_fragments[1] & 0xFFFFFFFF);
-        block_words[11] = static_cast<uint32_t>(link_fragments[1] >> 32);
-        block_words[12] = static_cast<uint32_t>(link_fragments[2] & 0xFFFFFFFF);
-        block_words[13] = static_cast<uint32_t>(link_fragments[2] >> 32);
-        block_words[14] = 0; // Zero out the last two words.
-        block_words[15] = 0;
-
-        return BlakeHash::hash_block_256(block_words);
-    }
-
     static BlakeHash::Result256 linkHash(BlakeHash::Result256 challenge, uint64_t proof_fragment, uint32_t iteration)
     {
         uint32_t block_words[16];

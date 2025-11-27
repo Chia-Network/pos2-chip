@@ -1,7 +1,6 @@
 #include "test_util.h"
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
-#include "pos/ProofFragmentScanFilter.hpp"
 #include "common/Utils.hpp"
 
 

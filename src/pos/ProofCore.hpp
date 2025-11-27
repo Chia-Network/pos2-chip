@@ -38,79 +38,6 @@
 constexpr int NUM_CHAIN_LINKS = 16;
 constexpr int AVERAGE_PROOFS_PER_CHALLENGE_BITS = 5; // expected proofs per challenge is 1/2^5 = 1/32.
 
-// first chain link is always passed in from passing fragment scan filter
-// while not used in ProofCore due to pre-computed constants, this is the chaining factors used in quality chain math
-// and referenced in testing.
-constexpr uint64_t CHAINING_FACTORS[NUM_CHAIN_LINKS - 1] = {
-    4, 1, 1, 1, 1, 1, 1};//, 1, 1, 1, 1, 1, 1, 1, 1};
-
-// for k sizes 18 to 32 even.
-constexpr uint32_t QUALITY_LINK_FIRST_CHAIN_PASS_THRESHOLD[8] = {
-    5263856, // k=18, sub_k=15
-    5263856, // k=20, sub_k=16
-    5263856, // k=22, sub_k=17
-    5263856, // k=24, sub_k=18
-    5263856, // k=26, sub_k=19
-    5263856, // k=28, sub_k=20
-    1315964, // k=30, sub_k=22
-    1315964  // k=32, sub_k=23
-};
-
-constexpr uint32_t QUALITY_LINK_REST_CHAIN_PASS_THRESHOLD[8] = {
-    1315964, // k=18, sub_k=15
-    1315964, // k=20, sub_k=16
-    1315964, // k=22, sub_k=17
-    1315964, // k=24, sub_k=18
-    1315964, // k=26, sub_k=19
-    1315964, // k=28, sub_k=20
-    328991,  // k=30, sub_k=22
-    328991   // k=32, sub_k=23
-};
-
-// constexpr double PROOF_FRAGMENT_SCAN_FILTER = 2.0; // 1 / expected number of fragments to pass scan filter.
-
-enum class FragmentsPattern : uint8_t
-{
-    OUTSIDE_FRAGMENT_IS_LR = 0, // outside t3 index is RL
-    OUTSIDE_FRAGMENT_IS_RR = 1  // outside t3 index is RR
-};
-
-// Utility function to convert FragmentsPattern to string
-inline std::string FragmentsPatternToString(FragmentsPattern pattern)
-{
-    switch (pattern)
-    {
-    case FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR:
-        return "OUTSIDE_FRAGMENT_IS_LR";
-    case FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR:
-        return "OUTSIDE_FRAGMENT_IS_RR";
-    default:
-        return "UNKNOWN_PATTERN";
-    }
-}
-
-enum class FragmentsParent : uint8_t
-{
-    PARENT_NODE_IN_CHALLENGE_PARTITION = 0, // challenge partition is the partition in t3 for proof fragment scan filter
-    PARENT_NODE_IN_OTHER_PARTITION = 1      // other partition, is the r-side partition of the proof fragment passing the scan filter
-};
-
-enum QualityLinkProofFragmentPositions : size_t
-{
-    LL = 0, // left left
-    LR = 1, // left right
-    RL = 2, // right left
-    RR = 3  // right right
-};
-
-struct QualityLink
-{
-    // there are 2 patterns: either LR or RR is included in the fragment, but never both.
-    std::array<ProofFragment, 3> fragments; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
-    FragmentsPattern pattern;
-    uint64_t outside_t3_index;
-};
-
 using QualityChainLinks = std::array<ProofFragment, NUM_CHAIN_LINKS>;
 
 struct QualityChain
@@ -383,18 +310,6 @@ public:
         return (((r >> 2) + r) & 3U) == 2;
     }
 
-    uint32_t quality_chain_pass_threshold(size_t link_index)
-    {
-        // referencing the constants. The root math works out to:
-        // chance = 2 * CHAINING_FACTORS[link_index - 1] / expected_quality_links_set_size();
-        // mapped to 32 bits range.
-        if (link_index == 1) {
-            return QUALITY_LINK_FIRST_CHAIN_PASS_THRESHOLD[(params_.get_k() - 18) / 2];
-        }
-        return QUALITY_LINK_REST_CHAIN_PASS_THRESHOLD[(params_.get_k() - 18) / 2];
-        
-    }
-
     struct SelectedChallengeSets 
     {
         uint32_t fragment_set_A_index;
@@ -420,98 +335,6 @@ public:
         Range fragment_set_B_range = params_.get_chaining_set_range(fragment_set_B_index);
         
         return {fragment_set_A_index, fragment_set_B_index, fragment_set_A_range, fragment_set_B_range};
-    }
-
-    // Determines the required fragments pattern based on the challenge.
-    FragmentsPattern requiredPatternFromChallenge(BlakeHash::Result256 challenge)
-    {
-        // if the highest order bit is 0, return RL else return RR
-        uint32_t highest_order_bits = challenge.r[3];
-        uint32_t highest_order_bit = highest_order_bits >> 31; // get the highest order bit
-        if (highest_order_bit == 0)
-        {
-            return FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;
-        }
-        return FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;
-    }
-
-    // Quality Chaining functions
-    BlakeHash::Result256 firstLinkHash(const QualityLink &link, const BlakeHash::Result256 &next_challenge) // const std::array<uint8_t, 32> &challenge)
-    {
-        // BlakeHash::Result256 challenge_plotid_hash = hashing.challengeWithPlotIdHash(challenge.data());
-        return hashing.chainHash(next_challenge, link.fragments);
-    }
-
-    struct NewLinksResult
-    {
-        QualityLink link;
-        BlakeHash::Result256 new_hash;
-    };
-
-    std::vector<QualityLink> filterLinkSetToPartitions(const std::vector<QualityLink> &link_set, uint32_t lower_partition, uint32_t upper_partition)
-    {
-        std::vector<QualityLink> filtered_links;
-        for (const auto &link : link_set)
-        {
-            if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
-            {
-                // bogus for now
-                uint32_t lateral_partition = 0;
-                uint32_t cross_partition = 1;
-                if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
-                {
-                    filtered_links.push_back(link);
-                }
-                else if ((lateral_partition == upper_partition) && (cross_partition == lower_partition))
-                {
-                    filtered_links.push_back(link);
-                }
-            }
-            else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
-            {
-                // bogus for now
-                uint32_t lateral_partition = 0;
-                uint32_t cross_partition = 1;
-                if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
-                {
-                    filtered_links.push_back(link);
-                }
-                else if ((lateral_partition == upper_partition) && (cross_partition == lower_partition))
-                {
-                    filtered_links.push_back(link);
-                }
-            }
-            else
-            {
-                throw std::runtime_error("Unknown fragments pattern in filterLinkSetToPartitions");
-            }
-        }
-        return filtered_links;
-    }
-
-    std::vector<NewLinksResult> getNewLinksForChain(BlakeHash::Result256 current_challenge, const std::vector<QualityLink> &link_set, size_t link_index) // , uint32_t lower_partition, uint32_t upper_partition)
-    {
-        uint32_t qc_pass_threshold = quality_chain_pass_threshold(link_index);
-
-        FragmentsPattern pattern = requiredPatternFromChallenge(current_challenge);
-
-        std::vector<NewLinksResult> new_links;
-        for (QualityLink const &link : link_set)
-        {
-            if (link.pattern != pattern)
-            {
-                // skip links that do not match the required pattern
-                continue;
-            }
-
-            // test the hash
-            BlakeHash::Result256 next_challenge = hashing.chainHash(current_challenge, link.fragments);
-            if (next_challenge.r[0] < qc_pass_threshold)
-            {
-                new_links.push_back({link, next_challenge});
-            }
-        }
-        return new_links;
     }
 
     ProofParams getProofParams() const

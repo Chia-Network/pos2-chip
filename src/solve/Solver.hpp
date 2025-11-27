@@ -29,7 +29,7 @@
 
 
 
-#define DEBUG_VERIFY true
+// #define DEBUG_VERIFY true
 
 // Needed for macOS
 typedef unsigned int uint;

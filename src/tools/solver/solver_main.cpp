@@ -7,161 +7,6 @@
 #include "pos/ProofValidator.hpp"
 #include "common/Utils.hpp"
 
-int exhaustive_test(PlotFile::PlotFileContents &plot)
-{
-    // This function not currently used but can be useful for debugging / exhaustive testing with RETAIN_X_VALUES_TO_T3
-    ProofFragmentCodec fragment_codec(plot.params);
-
-#ifdef RETAIN_X_VALUES_TO_T3
-    for (int partition = 0; partition < plot.data.t5_to_t4_back_pointers.size(); partition++)
-        // int partition = 0;
-        for (int test_slot = 0; test_slot < plot.data.t5_to_t4_back_pointers[partition].size(); test_slot++)
-        {
-            // wait for key press, show current test number
-            // std::cout << "Press enter to continue to test " << test_slot << " in partition " << partition << std::endl;
-            // std::cin.get();
-
-            T5Pairing t5_pairing = plot.data.t5_to_t4_back_pointers[partition][test_slot]; // now get t4 L and R pairings
-            T4BackPointers t4_to_t3_L = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_l];
-            T4BackPointers t4_to_t3_R = plot.data.t4_to_t3_back_pointers[partition][t5_pairing.t4_index_r];
-            ProofFragment fragment_LL = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_l];
-            ProofFragment fragment_LR = plot.data.t3_proof_fragments[t4_to_t3_L.fragment_index_r];
-            ProofFragment fragment_RL = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_l];
-            ProofFragment fragment_RR = plot.data.t3_proof_fragments[t4_to_t3_R.fragment_index_r];
-            std::cout << "Fragments LL: " << fragment_LL << std::endl;
-            // decode it to get x-bits
-
-            uint64_t decrypted_xs_LL = fragment_codec.decode(fragment_LL);
-            uint64_t decrypted_xs_LR = fragment_codec.decode(fragment_LR);
-            uint64_t decrypted_xs_RL = fragment_codec.decode(fragment_RL);
-            uint64_t decrypted_xs_RR = fragment_codec.decode(fragment_RR);
-
-            if (fragment_codec.validate_proof_fragment(fragment_LL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l].data()))
-            {
-                std::cout << "Fragments LL match x-bits." << std::endl;
-            }
-            else
-            {
-                std::cerr << "Fragments LL do not match x-bits." << std::endl;
-                return 1;
-            }
-            if (fragment_codec.validate_proof_fragment(fragment_LR, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r].data()))
-            {
-                std::cout << "Fragments LR match x-bits." << std::endl;
-            }
-            else
-            {
-                std::cerr << "Fragments LR do not match x-bits." << std::endl;
-                return 1;
-            }
-            if (fragment_codec.validate_proof_fragment(fragment_RL, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l].data()))
-            {
-                std::cout << "Fragments RL match x-bits." << std::endl;
-            }
-            else
-            {
-                std::cerr << "Fragments RL do not match x-bits." << std::endl;
-                return 1;
-            }
-            if (fragment_codec.validate_proof_fragment(fragment_RR, plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r].data()))
-            {
-                std::cout << "Fragments RR match x-bits." << std::endl;
-            }
-            else
-            {
-                std::cerr << "Fragments RR do not match x-bits." << std::endl;
-                return 1;
-            }
-            std::cout << "All fragments match x-bits." << std::endl;
-
-            // output full x's solution
-            std::cout << "Xs solution: ";
-            std::vector<uint32_t> xs_solution;
-            std::vector<uint32_t> x_bits_list;
-            int bit_drop = plot.params.get_k() / 2;
-            for (int i = 0; i < 8; i++)
-            {
-                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i]);
-                if (i % 2 == 0)
-                {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_l][i] >> bit_drop);
-                }
-            }
-            for (int i = 0; i < 8; i++)
-            {
-                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i]);
-                if (i % 2 == 0)
-                {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_L.fragment_index_r][i] >> bit_drop);
-                }
-            }
-            for (int i = 0; i < 8; i++)
-            {
-                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i]);
-                if (i % 2 == 0)
-                {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_l][i] >> bit_drop);
-                }
-            }
-            for (int i = 0; i < 8; i++)
-            {
-                std::cout << plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i] << " ";
-                xs_solution.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i]);
-                if (i % 2 == 0)
-                {
-                    x_bits_list.push_back(plot.data.xs_correlating_to_proof_fragments[t4_to_t3_R.fragment_index_r][i] >> bit_drop);
-                }
-            }
-            std::cout << std::endl;
-
-            // let's verify xs_solution is correct before we solve
-
-            ProofValidator proof_validator(plot.params);
-            if (proof_validator.validate_table_5_pairs(xs_solution.data()))
-            {
-                std::cout << "Xs solution is valid." << std::endl;
-            }
-            else
-            {
-                std::cerr << "Xs solution is invalid." << std::endl;
-                return 1;
-            }
-
-            Solver solver(plot.params);
-            std::vector<std::vector<uint32_t>> all_proofs = solver.solve(x_bits_list, xs_solution);
-
-            solver.timings().printSummary();
-
-            std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
-            for (size_t i = 0; i < all_proofs.size(); i++)
-            {
-                std::cout << "Proof " << i << ": ";
-                for (size_t j = 0; j < all_proofs[i].size(); j++)
-                {
-                    std::cout << all_proofs[i][j] << " ";
-                }
-                std::cout << std::endl;
-            }
-            if (all_proofs.size() == 0)
-            {
-                std::cerr << "ERROR: No proofs found." << std::endl;
-                return 1;
-            }
-            if (all_proofs.size() > 1)
-            {
-                std::cout << "Multiple proofs found! Chaining will resolve which is correct." << std::endl;
-            }
-        }
-    std::cout << "Done." << std::endl;
-#else
-    std::cerr << "RETAIN_X_VALUES_TO_T3 is not defined. Cannot run exhaustive test." << std::endl;
-#endif
-    return 0;
-}
-
 int benchmark(uint8_t k, uint8_t plot_strength)
 {
     const std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
@@ -266,7 +111,7 @@ try
         std::cerr << "Usage: " << argv[0] << " <mode> <arg>\n"
                   << "Modes:\n"
                   << "  benchmark <k-size> [strength (default 2)]   Run benchmark with the given k-size integer and optional plot strength\n"
-                  << "  prove     <plot file>  Run proof on the given plot file.\n";
+                  << "  xbits <plot_id_hex> <xbits_hex> <strength>   Solve for proofs given plot ID, partial x-bits, and plot strength\n";
         return 1;
     }
 
@@ -310,27 +155,6 @@ try
                       << "  strength: optional integer (default 2)\n";
             return 1;
         }
-        /*int k = 0;
-        try
-        {
-            k = std::stoi(argv[2]);
-            // k must be 18...32 even
-            if (k < 18 || k > 32 || (k % 2) != 0)
-            {
-                std::cerr << "Error: k-size must be an even integer between 18 and 32." << std::endl;
-                return 1;
-            }
-        }
-        catch (const std::invalid_argument &e)
-        {
-            std::cerr << "Error: k-size must be an integer." << std::endl;
-            return 1;
-        }
-        catch (const std::out_of_range &e)
-        {
-            std::cerr << "Error: k-size out of range." << std::endl;
-            return 1;
-        }*/
 
         // then get plot id hex string
         std::string plot_id_hex = argv[2];
@@ -344,7 +168,7 @@ try
         std::string xbits_hex = argv[3];
         size_t xbits_hex_len = xbits_hex.length();
         std::vector<uint32_t> x_bits_list;
-        size_t calculated_k = xbits_hex_len / 32; // each uint32_t is 4 hex characters
+        size_t calculated_k = xbits_hex_len / (TOTAL_XS_IN_PROOF / 16); // each uint32_t is 4 hex characters
         std::cout << "xbits_hex length: " << xbits_hex_len << ", calculated k: " << calculated_k << std::endl;
         if (calculated_k < 18 || calculated_k > 32 || (calculated_k % 2) != 0)
         {
@@ -353,9 +177,9 @@ try
         }
         // decompress each x value from k/2 bits.
         x_bits_list = Utils::compressedHexToKValues(numeric_cast<int>(calculated_k / 2), xbits_hex);
-        if (x_bits_list.size() != 256)
+        if (x_bits_list.size() != (TOTAL_XS_IN_PROOF / 2))
         {
-            std::cerr << "Error: xbits_hex does not decode to 256 uint32_t values. Has " << x_bits_list.size() << " instead." << std::endl;
+            std::cerr << "Error: xbits_hex does not decode to " << (TOTAL_XS_IN_PROOF / 2) << " uint32_t values. Has " << x_bits_list.size() << " instead." << std::endl;
             return 1;
         }
 

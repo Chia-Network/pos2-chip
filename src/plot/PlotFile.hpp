@@ -12,7 +12,6 @@
 
 #include "PlotData.hpp"
 #include "pos/ProofParams.hpp"
-#include "pos/ProofFragmentScanFilter.hpp"
 #include "PlotIO.hpp"
 #include "ChunkCompressor.hpp"
 

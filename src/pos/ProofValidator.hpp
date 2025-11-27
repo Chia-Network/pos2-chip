@@ -23,13 +23,6 @@ public:
 
     }
 
-    /**
-     * validate_table_1_pair(x_pair):
-     *   - x_pair has exactly 2 x-values: x_l, x_r
-     *
-     * @return std::optional<ProofCore::T1Result>
-     *         If valid, T1Result{ match_info, meta }, else nullopt.
-     */
     std::optional<T1Pairing>
     validate_table_1_pair(const uint32_t *x_pair)
     {
@@ -49,11 +42,6 @@ public:
         return proof_core_.pairing_t1(x_l, x_r);
     }
 
-    /**
-     * validate_table_2_pairs(x_values):
-     *   - We expect exactly 4 x-values: the first 2 are the "left" pair,
-     *     the next 2 are the "right" pair
-     */
     std::optional<T2Pairing>
     validate_table_2_pairs(const uint32_t *x_values)
     {
@@ -80,11 +68,6 @@ public:
         return proof_core_.pairing_t2(result_l->meta, result_r->meta);
     }
 
-    /**
-     * validate_table_3_pairs(x_values):
-     *   - We expect 8 x-values total:
-     *     first 4 => left half, next 4 => right half
-     */
     std::optional<T3Pairing>
     validate_table_3_pairs(const uint32_t *x_values)
     {
@@ -111,7 +94,7 @@ public:
         return proof_core_.pairing_t3(result_l->meta, result_r->meta, result_l->x_bits, result_r->x_bits);
     }
 
-    // validates a full proof consisting of 512 x-values of k-bits (in 32 bit element array)
+    // validates a full proof consisting of 128 x-values of k-bits (in 32 bit element array)
     // Note that harvester/farmer/node are responsible for checking plot id filter
     // returns QualityChainLinks if valid, else std::nullopt
     std::optional<QualityChainLinks> validate_full_proof(std::span<uint32_t const, TOTAL_XS_IN_PROOF> const full_proof, std::span<uint8_t const, 32> const challenge)
@@ -129,14 +112,10 @@ public:
             challenge_array[i] = challenge[i];
         }
 
-        // initial challenge is hash of plot id and challenge
-        BlakeHash::Result256 next_challenge = proof_core_.hashing.challengeWithPlotIdHash(challenge.data());
-
         // next we check all the single proofs. We verify if all the x-pairs pair,
         // and construct the two proof fragment sets needed to build and verify the Quality String.
         size_t num_proof_fragments = full_proof.size() / 8;
         Chain chain;
-        //std::vector<ProofFragment> proof_fragments;
         for (size_t i = 0; i < num_proof_fragments; ++i)
         {
             // extract the 8 x-values from the proof
@@ -176,6 +155,12 @@ public:
         // validate the chain of proof fragments.
         Chainer chainer(params_, challenge_array);
         bool valid = chainer.validate(chain, selected_sets.fragment_set_A_range, selected_sets.fragment_set_B_range);
+        if (!valid) {
+            #ifdef DEBUG_PROOF_VALIDATOR
+            std::cerr << "Full proof chain validation failed." << std::endl;
+            #endif
+            return std::nullopt;
+        }
         QualityChainLinks chain_links = chain.fragments;
         
         return chain_links;
@@ -185,19 +170,4 @@ public:
 private:
     ProofParams params_;
     ProofCore proof_core_;
-
-    // Utility function to print a list of xs in the style [x0, x1, x2, ...].
-    static std::string show_xs(const uint32_t *v, int length)
-    {
-        std::ostringstream oss;
-        oss << "[";
-        for (int i = 0; i < length; i++)
-        {
-            if (i > 0)
-                oss << ", ";
-            oss << v[i];
-        }
-        oss << "]";
-        return oss.str();
-    }
 };

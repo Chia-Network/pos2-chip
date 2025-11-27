@@ -2,7 +2,6 @@
 #include "pos/ProofCore.hpp"
 #include "plot/Plotter.hpp"
 #include "plot/PlotFile.hpp"
-#include "pos/ProofFragmentScanFilter.hpp"
 #include "common/Utils.hpp"
 #include "common/Timer.hpp"
 #include "pos/Chainer.hpp"

@@ -3,7 +3,6 @@
 #include "pos/ProofCore.hpp"
 #include "plot/PlotFile.hpp"
 #include "common/Utils.hpp"
-#include "pos/ProofFragmentScanFilter.hpp"
 #include "pos/ProofFragment.hpp"
 #include "pos/Chainer.hpp"
 #include <bitset>
