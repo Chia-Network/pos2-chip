@@ -6,16 +6,19 @@
 #include <cstdint>
 #include <iostream>
 
+#pragma once
+
 #define USE_FAST_CHALLENGE true
 
 // A chain: list of challenges and the corresponding chosen proof fragments.
 struct Chain
 {
-    //std::vector<BlakeHash::Result256> challenges; // new_challenge at each step
     std::vector<ProofFragment> fragments;      // the proof fragment used at each step
 };
 
 #ifdef USE_FAST_CHALLENGE
+// Original algorithm by Sebastiano Vigna.
+// See: http://xorshift.di.unimi.it/splitmix64.c
 uint64_t splitmix64(uint64_t x) {
     x += 0x9e3779b97f4a7c15ull;
     x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
@@ -154,7 +157,6 @@ public:
                 next.iteration = st.iteration + 1;
                 next.fragments = st.fragments;
 
-                //next.challenges.push_back(new_challenge);
                 next.fragments.push_back(fragment);
 
                 stack.push_back(std::move(next));
