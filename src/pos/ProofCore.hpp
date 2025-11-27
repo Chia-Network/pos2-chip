@@ -12,11 +12,11 @@
 #include "ProofHashing.hpp"
 #include "ProofFragment.hpp"
 
-#define TOTAL_XS_IN_PROOF 256
-#define TOTAL_T4_PAIRS_IN_PROOF 16
-#define TOTAL_T3_PAIRS_IN_PROOF 32
-#define TOTAL_T2_PAIRS_IN_PROOF 64
-#define TOTAL_T1_PAIRS_IN_PROOF 128
+#define TOTAL_XS_IN_PROOF 128
+#define TOTAL_T3_PAIRS_IN_PROOF 16
+#define TOTAL_T2_PAIRS_IN_PROOF 32
+#define TOTAL_T1_PAIRS_IN_PROOF 64
+#define PROOF_FRAGMENTS_IN_CHAIN 16
 
 //------------------------------------------------------------------------------
 // Structs for pairing results
@@ -111,14 +111,22 @@ struct QualityLink
     uint64_t outside_t3_index;
 };
 
-using QualityChainLinks = std::array<QualityLink, NUM_CHAIN_LINKS>;
+using QualityChainLinks = std::array<ProofFragment, NUM_CHAIN_LINKS>;
 
 struct QualityChain
 {
     QualityChainLinks chain_links;
-    BlakeHash::Result256 chain_hash;
     uint8_t strength;
 };
+
+// chaining
+// A chain: list of challenges and the corresponding chosen proof fragments.
+struct Chain
+{
+    std::array<ProofFragment, NUM_CHAIN_LINKS> fragments;      // the proof fragments used in the chain
+};
+
+// chaining end 
 
 struct T1Pairing
 {

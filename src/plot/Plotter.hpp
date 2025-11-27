@@ -24,9 +24,8 @@ namespace {
 class Plotter {
 public:
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
-    Plotter(const std::span<uint8_t const, 32> plot_id, uint8_t k, uint8_t strength)
-      : plot_id_(to_array(plot_id)), k_(k),
-        proof_params_(plot_id_.data(), k_, strength), fragment_codec_(proof_params_), validator_(proof_params_) {}
+    Plotter(const ProofParams& proof_params)
+      : proof_params_(proof_params), fragment_codec_(proof_params), validator_(proof_params) {}
 
     // Execute the plotting pipeline
     PlotData run() {
@@ -132,11 +131,6 @@ public:
     }
 
 private:
-    // Plot identifiers and parameters
-    std::array<uint8_t, 32> plot_id_;
-    uint8_t k_;
-
-    // Core PoSpace objects
     ProofParams proof_params_;
     ProofFragmentCodec fragment_codec_;
 

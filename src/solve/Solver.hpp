@@ -29,7 +29,7 @@
 
 
 
-// #define DEBUG_VERIFY true
+#define DEBUG_VERIFY true
 
 // Needed for macOS
 typedef unsigned int uint;
@@ -391,21 +391,20 @@ public:
         std::cout << "T2 match groups: " << t2_matches.size() << std::endl;
 #endif
 
-        // Phase 11: T3, T4, T5 Matching – Further pair T2 matches.
+        // Phase 11: T3 Matching – Further pair T2 matches.
         std::array<std::vector<T3_match>, TOTAL_T3_PAIRS_IN_PROOF> t3_matches;
-        std::array<std::vector<T4_match>, TOTAL_T4_PAIRS_IN_PROOF> t4_matches;
-        matchT3T4Candidates(num_k_bits_, t2_matches, t3_matches, t4_matches);
+        matchT3Candidates(num_k_bits_, t2_matches, t3_matches);
 
 #ifdef DEBUG_VERIFY
-        std::cout << "T5 matches: " << t5_matches.size() << std::endl;
-        for (size_t i = 0; i < t5_matches.size(); i++)
+        std::cout << "T3 matches: " << t3_matches.size() << std::endl;
+        for (size_t i = 0; i < t3_matches.size(); i++)
         {
             std::cout << "Group " << i << ":";
-            for (size_t j = 0; j < t5_matches[i].size(); j++)
+            for (size_t j = 0; j < t3_matches[i].size(); j++)
             {
                 for (int x = 0; x < 32; x++)
                 {
-                    std::cout << t5_matches[i][j].x_values[x] << ", ";
+                    std::cout << t3_matches[i][j].x_values[x] << ", ";
                 }
             }
             std::cout << std::endl;
@@ -413,16 +412,15 @@ public:
 #endif
 
         // TODO: handle rare chance we get a false positive full proof
-        auto all_proofs = constructProofs(t4_matches);
+        auto all_proofs = constructProofs(t3_matches);
 
         return all_proofs;
     }
 
     // Phase 11 helper: T3, T4, T5 matching – further pair and validate matches.
-    void matchT3T4Candidates(int /*num_k_bits*/,
+    void matchT3Candidates(int /*num_k_bits*/,
                                std::span<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> const t2_matches,
-                               std::span<std::vector<T3_match>, TOTAL_T3_PAIRS_IN_PROOF> const t3_matches,
-                               std::span<std::vector<T4_match>, TOTAL_T4_PAIRS_IN_PROOF> const t4_matches)
+                               std::span<std::vector<T3_match>, TOTAL_T3_PAIRS_IN_PROOF> const t3_matches)
     {
 
         Timer timer;
@@ -464,86 +462,53 @@ public:
             }
         }
 
-        // T4 matching.
-        {
-            ProofValidator validator(params_);
-            for (size_t i = 0; i < t3_matches.size(); i += 2)
-            {
-                size_t t4_group = i / 2;
-                const std::vector<T3_match> &groupA = t3_matches[i];
-                const std::vector<T3_match> &groupB = t3_matches[i + 1];
-                for (size_t j = 0; j < groupA.size(); j++)
-                {
-                    for (size_t k = 0; k < groupB.size(); k++)
-                    {
-                        uint32_t x_values[16] = {groupA[j].x_values[0], groupA[j].x_values[1],
-                                                 groupA[j].x_values[2], groupA[j].x_values[3],
-                                                 groupA[j].x_values[4], groupA[j].x_values[5],
-                                                 groupA[j].x_values[6], groupA[j].x_values[7],
-                                                 groupB[k].x_values[0], groupB[k].x_values[1],
-                                                 groupB[k].x_values[2], groupB[k].x_values[3],
-                                                 groupB[k].x_values[4], groupB[k].x_values[5],
-                                                 groupB[k].x_values[6], groupB[k].x_values[7]};
-                        bool is_valid = validator.validate_table_4_pairs(x_values);
-                        if (is_valid)
-                        {
-                            T4_match t4;
-                            t4.x_values = {groupA[j].x_values[0], groupA[j].x_values[1],
-                                               groupA[j].x_values[2], groupA[j].x_values[3],
-                                               groupA[j].x_values[4], groupA[j].x_values[5],
-                                               groupA[j].x_values[6], groupA[j].x_values[7],
-                                               groupB[k].x_values[0], groupB[k].x_values[1],
-                                               groupB[k].x_values[2], groupB[k].x_values[3],
-                                               groupB[k].x_values[4], groupB[k].x_values[5],
-                                               groupB[k].x_values[6], groupB[k].x_values[7]};
-                            t4_matches[t4_group].push_back(t4);
-                        }
-                    }
-                }
-            }
-        }
-
         timings_.misc += timer.stop();
     }
 
-    // Phase 12 helper: Construct final proofs from T5 matches.
-    // full proof is all t5 x-value collections, should be in same sequence order as quality chain
-    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> constructProofs(std::span<std::vector<T4_match>, TOTAL_T4_PAIRS_IN_PROOF> const t4_matches)
+    // Phase 12 helper: Construct final proofs from T3 matches.
+    // A full proof is all t3 x-value collections, in the same sequence order as the quality chain.
+    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>>
+    constructProofs(std::span<std::vector<T3_match>, TOTAL_T3_PAIRS_IN_PROOF> const t3_matches)
     {
         std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> all_proofs;
 
-        std::array<uint32_t, TOTAL_XS_IN_PROOF> full_proof;
+        // One working buffer we fill as we choose matches for each group
+        std::array<uint32_t, TOTAL_XS_IN_PROOF> full_proof{};
 
-        // There are rare cases where a partial proof of the 32 sub set of x's
-        // produces more than one solution. When this happens, we can actually
-        // combine the extra solutions to make additional proofs with the other
-        // sub sets. Note all these solutions will be valid, and share the same
-        // partial proof.
+        // How many x-values belong to each T3 pair in the final proof
+        constexpr size_t XS_PER_GROUP = TOTAL_XS_IN_PROOF / TOTAL_T3_PAIRS_IN_PROOF;
+        static_assert(TOTAL_XS_IN_PROOF % TOTAL_T3_PAIRS_IN_PROOF == 0,
+                    "TOTAL_XS_IN_PROOF must be divisible by TOTAL_T3_PAIRS_IN_PROOF");
 
-        // indices into the each t5_match, indicating the current combination
-        // we're creating the full proof for. The common case is that each g
-        // only has a single match. But if there more, every combination of
-        // match is a valid proof.
-        std::array<size_t, TOTAL_T4_PAIRS_IN_PROOF> t4_vector{{0}};
-        size_t g = 0;
-
-        for (;;) {
-            if (t4_matches[g].size() == t4_vector[g])
+        // Recursive helper: choose a match for group g, then recurse to g+1.
+        std::function<void(size_t)> buildProofs =
+            [&](size_t g)
             {
-                if (g == 0) break;
-                g -= 1;
-                continue;
-            }
-            auto const& match = t4_matches[g][t4_vector[g]];
-            t4_vector[g] += 1;
+                // Base case: we have chosen a match for every group -> store one full proof
+                if (g == TOTAL_T3_PAIRS_IN_PROOF) {
+                    all_proofs.push_back(full_proof);
+                    return;
+                }
 
-            std::copy(match.x_values.begin(), match.x_values.end(), &full_proof[g * TOTAL_T4_PAIRS_IN_PROOF * 2]);
-            g += 1;
-            if (g == TOTAL_T4_PAIRS_IN_PROOF) {
-                all_proofs.push_back(full_proof);
-                g -= 1;
-            }
-        }
+                // For this group g, try every possible match
+                auto const& matches_for_group = t3_matches[g];
+                for (auto const& match : matches_for_group) {
+                    // Copy this match's x-values into the correct slice of the full proof
+                    auto dest_begin = full_proof.begin() + g * XS_PER_GROUP;
+                    std::copy(match.x_values.begin(), match.x_values.end(), dest_begin);
+
+                    // Recurse to pick matches for the next group
+                    buildProofs(g + 1);
+                }
+            };
+
+        // Start recursion at group 0; this will generate the cartesian product:
+        // for each match in t3_matches[0]
+        //   for each match in t3_matches[1]
+        //     ...
+        //       for each match in t3_matches[TOTAL_T3_PAIRS_IN_PROOF-1]
+        //         emit full_proof
+        buildProofs(0);
 
         return all_proofs;
     }

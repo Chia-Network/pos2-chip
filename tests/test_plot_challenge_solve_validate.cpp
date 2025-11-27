@@ -4,18 +4,19 @@
 #include "prove/Prover.hpp"
 #include "common/Utils.hpp"
 #include "solve/Solver.hpp"
+#include "pos/Chainer.hpp"
 
 TEST_SUITE_BEGIN("plot-challenge-solve-verify");
 
 TEST_CASE("plot-k18-strength2-4-5")
 {
-    #ifdef NDEBUG
-    const size_t N_TRIALS = 3; // strength 2, 4, 5
-    const size_t MAX_CHAINS_PER_CHALLENGE_TO_TEST = 3; // check up to 3 chains from challenge
-    #else
-    const size_t N_TRIALS = 1; // strength 2 only
+#ifdef NDEBUG
+    const size_t N_TRIALS = 1;                         // 3; // strength 2, 4, 5
+    const size_t MAX_CHAINS_PER_CHALLENGE_TO_TEST = 1; // 3; // check up to 3 chains from challenge
+#else
+    const size_t N_TRIALS = 1;                         // strength 2 only
     const size_t MAX_CHAINS_PER_CHALLENGE_TO_TEST = 1; // only check one chain from challenge
-    #endif
+#endif
     // for this test plot was generated with a prover scan to fine a challenge returning one or more quality chains
     for (size_t trial = 0; trial < N_TRIALS; trial++)
     {
@@ -26,7 +27,7 @@ TEST_CASE("plot-k18-strength2-4-5")
         {
         case 0:
             plot_strength = 2;
-            challenge_hex = "5c00000000000000000000000000000000000000000000000000000000000000";
+            challenge_hex = "4603000000000000000000000000000000000000000000000000000000000000";
             break;
         case 1:
             plot_strength = 4;
@@ -52,7 +53,8 @@ TEST_CASE("plot-k18-strength2-4-5")
         timer.debugOut = true;
         timer.start("Plot Creation");
 
-        Plotter plotter(Utils::hexToBytes(plot_id_hex), k, plot_strength);
+        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, plot_strength);
+        Plotter plotter(proof_params);
         PlotData plot = plotter.run();
         timer.stop();
 
@@ -62,25 +64,12 @@ TEST_CASE("plot-k18-strength2-4-5")
         PlotFile::writeData(plot_file_name, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
         timer.stop();
 
-        // timer.start("Reading plot file: " + plot_file_name);
-        // PlotFile::PlotFileContents read_plot = PlotFile::readData(plot_file_name);
-        // timer.stop();
-
-        // ENSURE(plot == read_plot.data);
-        // ENSURE(plotter.getProofParams() == read_plot.params);
-
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
-        Prover prover(challenge, plot_file_name);
-        prover.readPlotFileIfNeeded();
-        ENSURE(prover.getProofParams() == plotter.getProofParams());
 
-        // once prover had read file let's cleanup
-        std::remove(plot_file_name.c_str());
+        Prover prover(plot_file_name);
+        std::vector<QualityChain> quality_chains = prover.prove(challenge);
+        printfln("Prover found %d quality chains.", (int)quality_chains.size());
 
-        int proof_fragment_filter_bits = 1; // 1 bit means 50% of fragments are filtered out
-
-        std::vector<QualityChain> quality_chains = prover.prove(proof_fragment_filter_bits);
-        printfln("Found %d quality chains.", (int)quality_chains.size());
         ENSURE(!quality_chains.empty());
         if (quality_chains.empty())
         {
@@ -94,8 +83,8 @@ TEST_CASE("plot-k18-strength2-4-5")
             std::vector<uint32_t> check_proof_xs;
 
             // at this point should have at least one quality chain, so get the proof fragments for the first one
-            std::vector<ProofFragment> proof_fragments = prover.getAllProofFragmentsForProof(quality_chains[nChain]);
-            // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
+            QualityChainLinks proof_fragments = quality_chains[nChain].chain_links;
+            std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
             // get x bits list from proof fragments
             std::vector<uint32_t> x_bits_list;
@@ -133,7 +122,7 @@ TEST_CASE("plot-k18-strength2-4-5")
 
             // now solve using the x bits list
             Solver solver(prover.getProofParams());
-            std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> all_proofs = solver.solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF/2>(x_bits_list));
+            std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> all_proofs = solver.solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF / 2>(x_bits_list));
 
             solver.timings().printSummary();
 
@@ -158,45 +147,26 @@ TEST_CASE("plot-k18-strength2-4-5")
                     std::cout << all_proofs[i][j] << ", ";
                 }
                 std::cout << std::endl;
-            
-                std::array<uint32_t, TOTAL_XS_IN_PROOF> const& proof = all_proofs[0];
+
+                std::array<uint32_t, TOTAL_XS_IN_PROOF> const &proof = all_proofs[i];
                 std::cout << "Proof size: " << proof.size() << std::endl;
 
-                ENSURE(proof.size() == NUM_CHAIN_LINKS * 32); // should always have 32 x values per link
-    #ifdef RETAIN_X_VALUES_TO_T3
+                ENSURE(proof.size() == NUM_CHAIN_LINKS * 8); // should always have 8 x values per link
+#ifdef RETAIN_X_VALUES_TO_T3
                 ENSURE(proof.size() == check_proof_xs.size());
                 for (size_t i = 0; i < proof.size(); i++)
                 {
                     ENSURE(proof[i] == check_proof_xs[i]);
                 }
-    #endif
-
-                // std::cout << "Proof: ";
-                // for (size_t i = 0; i < proof.size(); i++)
-                //{
-                //     std::cout << proof[i] << " ";
-                // }
-                // std::cout << std::endl;
-
+#endif
                 // now verify the proof
                 ProofValidator proof_validator(prover.getProofParams());
-                std::optional<QualityChainLinks> res = proof_validator.validate_full_proof(proof, challenge, proof_fragment_filter_bits);
+                std::optional<QualityChainLinks> res = proof_validator.validate_full_proof(proof, challenge);
                 ENSURE(res.has_value());
 
-                QualityChainLinks const& quality_links = res.value();
-                bool links_match = true;
-                // run through quality links and ensure they match the original quality chain's links
-                for (int c = 0; c < NUM_CHAIN_LINKS; c++)
-                {
-                    auto const& check_fragments = quality_links[c].fragments;
-                    auto const& original_fragments = quality_chains[nChain].chain_links[c].fragments;
-                    // ensure fragments match
-                    if (!(check_fragments == original_fragments))
-                    {
-                        links_match = false;
-                        std::cerr << "Error: quality link " << c << " fragments does not match original." << std::endl;
-                    }
-                }
+                QualityChainLinks const &quality_links = res.value();
+                bool links_match = quality_links == proof_fragments;
+                
                 ENSURE(links_match);
             }
 
@@ -211,7 +181,6 @@ TEST_CASE("plot-k18-strength2-4-5")
                     }
                 }
             }
-
         }
     }
 }

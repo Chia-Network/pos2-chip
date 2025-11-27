@@ -334,6 +334,36 @@ public:
         return pf.readChunk(chunk_index);
     }
 
+    const ProofParams& getProofParams()
+    {
+        readHeadersAndIndexes();
+        if (!plot_file_header_) {
+            throw std::runtime_error("PlotFileHeader not loaded");
+        }
+        return plot_file_header_->params;
+    }
+
+    std::vector<ProofFragment> getProofFragmentsInRange(Range const& range)
+    {
+        uint64_t range_per_chunk = getRangePerChunk();
+        uint64_t chunk_index = range.start / range_per_chunk;
+        uint64_t end_chunk = (range.end - 1) / range_per_chunk;
+        if (chunk_index != end_chunk) {
+            throw std::invalid_argument("getProofFragmentsInRange: range spans multiple chunks");
+        }
+
+        std::vector<ProofFragment> result;
+
+        std::vector<uint64_t> chunk_fragments = readChunk(chunk_index);
+        for (const auto& fragment : chunk_fragments) {
+            if (fragment >= range.start && fragment < range.end) {
+                result.push_back(fragment);
+            }
+        }
+
+        return result;
+    }
+
 private:
     struct PlotFileHeader {
         ProofParams params;
@@ -348,6 +378,16 @@ private:
             : params(p)
         {}
     };
+
+    uint64_t getRangePerChunk()
+    {
+        readHeadersAndIndexes();
+        if (!plot_file_header_) {
+            throw std::runtime_error("PlotFileHeader not loaded");
+        }
+        // TODO: this will be written with plot eventually, tunable by groupings and disk seq. read speed.
+        return (1ULL << (plot_file_header_->params.get_k() + CHUNK_SPAN_RANGE_BITS));
+    }
 
     std::string filename_;
     std::optional<PlotFileHeader> plot_file_header_;

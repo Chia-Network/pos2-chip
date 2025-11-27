@@ -10,12 +10,6 @@
 
 #define USE_FAST_CHALLENGE true
 
-// A chain: list of challenges and the corresponding chosen proof fragments.
-struct Chain
-{
-    std::vector<ProofFragment> fragments;      // the proof fragment used at each step
-};
-
 #ifdef USE_FAST_CHALLENGE
 // Original algorithm by Sebastiano Vigna.
 // See: http://xorshift.di.unimi.it/splitmix64.c
@@ -99,9 +93,17 @@ public:
             // If we've reached the desired length, record the chain.
             if (st.iteration == NUM_CHAIN_LINKS)
             {
-                results.push_back(Chain{
-                    //.challenges = std::move(st.challenges),
-                    .fragments = std::move(st.fragments)});
+                Chain chain;
+                if (st.fragments.size() != NUM_CHAIN_LINKS) {
+                    #ifdef DEBUG_CHAINER
+                    std::cerr << "Chainer: unexpected fragment count: " << st.fragments.size() << "\n";
+                    #endif
+                    continue;
+                }
+                for (int i = 0; i < NUM_CHAIN_LINKS; ++i) {
+                    chain.fragments[i] = st.fragments[i];
+                }
+                results.push_back(std::move(chain));
 
                 #ifdef DEBUG_CHAINER
                 std::cout << "Chainer: Found complete chain of length " << NUM_CHAIN_LINKS << "\n";

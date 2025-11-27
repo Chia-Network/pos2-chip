@@ -13,23 +13,6 @@ void printUsage()
               << "  prover verify [hexPlotId] [hexProof] [hexChallenge] [plotStrength] [proofFragmentScanFilterBits]\n";
 }
 
-std::string chainLinksToHex(int k, QualityChainLinks &chain_links)
-{
-    // first put all into vector of uint32_t, then compress to k bits
-    std::vector<uint32_t> fragment_values;
-    uint64_t mask = (1ULL << k) - 1;
-    for (const auto &link : chain_links)
-    {
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[0] & mask));
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[0] >> k));
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[1] & mask));
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[1] >> k));
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[2] & mask));
-        fragment_values.push_back(static_cast<uint32_t>(link.fragments[2] >> k));
-    }
-    return Utils::kValuesToCompressedHex(k, fragment_values);
-}
-
 int main(int argc, char *argv[])
 try
 {
@@ -148,13 +131,13 @@ try
             return 1;
         }
 
-        std::optional<QualityChainLinks> chain = proof_validator.validate_full_proof(std::span<uint32_t, TOTAL_XS_IN_PROOF>(proof), challenge, proof_fragment_scan_filter_bits);
+        std::optional<QualityChainLinks> chain = proof_validator.validate_full_proof(std::span<uint32_t, TOTAL_XS_IN_PROOF>(proof), challenge);
 
         // get all sub-proofs, which are collections of 32 x-values
         if (chain.has_value())
         {
             std::cout << "Proof is valid." << std::endl;
-            std::cout << "QualityChain: " << chainLinksToHex(k, chain.value()) << std::endl;
+            // std::cout << "QualityChain: " << chainLinksToHex(k, chain.value()) << std::endl;
             return 0;
         }
         else
@@ -181,10 +164,9 @@ try
 
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
 
-        Prover prover(challenge, plotfile);
+        Prover prover(plotfile);
 
-        prover.setChallenge(challenge);
-        std::vector<QualityChain> chains = prover.prove(proof_fragment_scan_filter_bits);
+        std::vector<QualityChain> chains = prover.prove(challenge);
 
         if (chains.size() == 0)
         {
@@ -197,12 +179,12 @@ try
         for (size_t nChain = 0; nChain < chains.size(); nChain++)
         {
             std::cout << "Chain: " << nChain << std::endl;
-            std::string hex = chainLinksToHex(prover.getProofParams().get_k(), chains[nChain].chain_links);
+            //std::string hex = chainLinksToHex(prover.getProofParams().get_k(), chains[nChain].chain_links);
             std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
-            std::cout << "QualityChain: " << hex << std::endl;
+            //std::cout << "QualityChain: " << hex << std::endl;
             
 
-            std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chains[nChain]);
+            QualityChainLinks proof_fragments = chains[nChain].chain_links;//prover.getAllProofFragmentsForProof(chains[nChain]);
             // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
             ProofParams params = prover.getProofParams();
@@ -242,7 +224,7 @@ try
     {
 
         std::array<uint8_t, 32> challenge = {0};
-        Prover prover(challenge, plotfile);
+        Prover prover(plotfile);
         // set random seed
         srand(static_cast<unsigned int>(time(nullptr)));
         size_t num_chains_found = 0;
@@ -262,8 +244,7 @@ try
             //     challenge[i] = randseed;
             // }
 
-            prover.setChallenge(challenge);
-            std::vector<QualityChain> chains = prover.prove(proof_fragment_scan_filter_bits);
+            std::vector<QualityChain> chains = prover.prove(challenge);
             if (chains.size() > 0)
             {
                 std::cout << "Found " << chains.size() << " chains." << std::endl;
@@ -273,7 +254,7 @@ try
                 for (auto const &chain : chains)
                 {
 
-                    std::vector<uint64_t> proof_fragments = prover.getAllProofFragmentsForProof(chain);
+                    std::vector<uint64_t> proof_fragments;// = prover.getAllProofFragmentsForProof(chain);
                     // std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
                     ProofParams params = prover.getProofParams();
@@ -317,7 +298,6 @@ try
         std::cout << "Total chains found: " << num_chains_found << " out of " << total_trials << "  %:" << ((float)num_chains_found / (float)total_trials) << std::endl;
         std::cout << "   Found 1 in " << (float)total_trials / (float)num_chains_found << " trials." << std::endl;
         std::cout << "Prover done." << std::endl;
-        prover.showStats();
         return 0;
     }
 }

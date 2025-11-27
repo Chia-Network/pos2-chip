@@ -17,7 +17,7 @@ add_test(NAME ${name}_test COMMAND ${name} )
 endmacro()
 
 new_test(plot_file test_plot_file.cpp)
-# new_test(plot_challenge_solve_validate test_plot_challenge_solve_validate.cpp)
+new_test(plot_challenge_solve_validate test_plot_challenge_solve_validate.cpp)
 # new_test(solve test_solver.cpp)
 new_test(proof_fragment_scan_filter test_ProofFragmentScanFilter.cpp)
 # new_test(chaining test_chaining.cpp)
@@ -31,5 +31,6 @@ new_test(chainer test_chainer.cpp)
 # Link the fse test executable with the fse library target so FSE symbols are
 # resolved at link time.
 target_link_libraries(plot_file PRIVATE fse)
+target_link_libraries(plot_challenge_solve_validate PRIVATE fse)
 target_link_libraries(chunk_compressor PRIVATE fse)
 target_link_libraries(chainer PRIVATE fse)
