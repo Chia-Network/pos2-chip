@@ -387,6 +387,33 @@ public:
         
     }
 
+    struct SelectedChallengeSets 
+    {
+        uint32_t fragment_set_A_index;
+        uint32_t fragment_set_B_index;
+        Range fragment_set_A_range;
+        Range fragment_set_B_range;
+    };
+    SelectedChallengeSets selectChallengeSets(std::array<uint8_t, 32> challenge)
+    {
+        // challenge sets will be the same withing a grouped plot id
+        BlakeHash::Result256 grouped_challenge_hash = hashing.challengeWithGroupedPlotIdHash(challenge.data());
+        
+        // use bits from challenge to select two distinct chaining sets
+        uint32_t num_chaining_sets_bits = params_.get_num_chaining_sets_bits();
+
+        // fragments are guaranteed to be different by forcing one even and one odd index
+        // get first set index from lower bits, but always even (0 on lsb)
+        uint32_t fragment_set_A_index = (grouped_challenge_hash.r[0] & ((1U << num_chaining_sets_bits) - 1)) & ~1U;
+        // get second set index from lower of next 32 bits, and always odd (1 on lsb)
+        uint32_t fragment_set_B_index = (grouped_challenge_hash.r[1] & ((1U << num_chaining_sets_bits) - 1)) | 1U;
+        
+        Range fragment_set_A_range = params_.get_chaining_set_range(fragment_set_A_index);
+        Range fragment_set_B_range = params_.get_chaining_set_range(fragment_set_B_index);
+        
+        return {fragment_set_A_index, fragment_set_B_index, fragment_set_A_range, fragment_set_B_range};
+    }
+
     // Determines the required fragments pattern based on the challenge.
     FragmentsPattern requiredPatternFromChallenge(BlakeHash::Result256 challenge)
     {

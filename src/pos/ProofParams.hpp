@@ -152,6 +152,17 @@ public:
         return plot_id_bytes_;
     }
 
+    std::array<uint8_t, 32> get_grouped_plot_id() const
+    {
+        // grouped plot id is the normal plot id with the two bytes zeroed out
+
+        std::array<uint8_t, 32> grouped_plot_id_bytes;
+        std::memcpy(grouped_plot_id_bytes.data(), plot_id_bytes_, 32);
+        grouped_plot_id_bytes[30] = 0;
+        grouped_plot_id_bytes[31] = 0;
+        return grouped_plot_id_bytes;
+    }
+
     int get_k() const
     {
         return numeric_cast<int>(k_);
@@ -160,7 +171,7 @@ public:
     int get_chaining_set_bits() const
     {
         // this achieves bit saturation on T2 pairs.
-        return (get_k() >> 1) - 4;
+        return (get_k() >> 1) - 2;
     }
 
     uint32_t get_chaining_set_size() const
@@ -168,9 +179,14 @@ public:
         return 1 << get_chaining_set_bits();
     }
 
+    int get_num_chaining_sets_bits() const
+    {
+        return k_ - get_chaining_set_bits();
+    }
+
     uint32_t get_num_chaining_sets() const
     {
-        return (1 << (2*k_ - get_chaining_set_bits()));
+        return 1 << get_num_chaining_sets_bits();
     }
 
     Range get_chaining_set_range(size_t chaining_set_index) const

@@ -17,19 +17,65 @@
 
 TEST_SUITE_BEGIN("chainer");
 
+double expectedBucketsFilled(int N, int M) {
+    double p_empty = std::pow(1.0 - 1.0 / M, N);
+    return M * (1.0 - p_empty);
+}
+
 TEST_CASE("chaining_set_sizes")
 {
-    constexpr uint8_t k = 28;
-    std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
-    ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2);
+    // create map of expected values for each k:
+    // k 28, should be set size 4096
+    // k 30, should be set size 16384
+    // k 32, should be set size 65536
+    std::map<uint8_t, int> expected_set_sizes = {
+        {18, 128},
+        {20, 256},
+        {22, 512},
+        {24, 1024},
+        {26, 2048},
+        {28, 4096},
+        {30, 8192},
+        {32, 16384},
+    };
 
-    int chaining_set_size = proof_params.get_chaining_set_size();
+    std::map<uint8_t, uint32_t> expected_num_sets = {
+        {18, 2048},
+        {20, 4096},
+        {22, 8192},
+        {24, 16384},
+        {26, 32768},
+        {28, 65536},
+        {30, 131072},
+        {32, 262144},
+    };
 
-    std::cout << "For k=" << static_cast<int>(k)
-              << ", chaining set size is " << chaining_set_size << "\n";
+    for (uint8_t k = 18; k <= 32; k+=2) {
+        std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2);
 
-    
-    
+        int chaining_set_size = proof_params.get_chaining_set_size();
+
+        std::cout << "For k=" << static_cast<int>(k)
+              << ", chaining set bits: " << proof_params.get_chaining_set_bits() << std::endl
+              << ", chaining set size: " << chaining_set_size << std::endl 
+              << ", chaining num sets: " << proof_params.get_num_chaining_sets() << std::endl
+              << ", chaining set range: #" << proof_params.get_chaining_set_range(0).start << " - " << proof_params.get_chaining_set_range(0).end << std::endl;
+
+        uint64_t solver_t2_entries_per_proof_fragment = (uint64_t(1) << (k/2)) * 4;
+        std::cout << "  solver_t2_entries_per_proof_fragment: " << solver_t2_entries_per_proof_fragment << std::endl;
+        int num_bit_dropped_pairs = 4 * chaining_set_size * 2;
+        int solution_size = 1 << (k/2);
+        std::cout << "  num_bit_dropped_pairs: " << num_bit_dropped_pairs << std::endl;
+        std::cout << "  solution_size: " << solution_size << std::endl;
+        double expected_filled = expectedBucketsFilled(num_bit_dropped_pairs, solution_size);
+        double saturation = expected_filled / static_cast<double>(solution_size);
+        std::cout << "  expected filled buckets: " << expected_filled << std::endl;
+        std::cout << "  t2 bit drop saturation: " << saturation << std::endl;
+        ENSURE(chaining_set_size == expected_set_sizes[k]);
+        ENSURE(proof_params.get_num_chaining_sets() == expected_num_sets[k]);
+        ENSURE(saturation > 0.5); // at least 50% saturation
+    }
 }
 
 TEST_CASE("small_lists")
@@ -39,26 +85,31 @@ TEST_CASE("small_lists")
     std::string challenge_hex = "5c00000000000000000000000000000000000000000000000000000000000000";
     std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
     ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2);
+    ProofCore proof_core(proof_params);
 
-    int chaining_set_size = proof_params.get_chaining_set_size();
+    ProofCore::SelectedChallengeSets selected_sets = proof_core.selectChallengeSets(challenge);
 
-    // TODO: calculate how many chaining sets there are
-    // then, use hash on challenge to determine which two distinct sets to use (maybe part of hash picks even set, the other odd set)
-    // then, find start range value for both sets
-    // and generate random numbers in the range for those sets.
+    #ifdef DEBUG_CHAINER
+    std::cout << "Selected fragment set A index: " << selected_sets.fragment_set_A_index << "\n";
+    std::cout << "Selected fragment set B index: " << selected_sets.fragment_set_B_index << "\n";
+    std::cout << "Fragment set A range: " << selected_sets.fragment_set_A_range.start << " - " << selected_sets.fragment_set_A_range.end << "\n";
+    std::cout << "Fragment set B range: " << selected_sets.fragment_set_B_range.start << " - " << selected_sets.fragment_set_B_range.end << "\n";
+    #endif
     
     std::mt19937 rng(1245); // fixed seed for reproducibility
-    std::uniform_int_distribution<ProofFragment> dist(0, (1ULL << k) - 1);  
+    std::uniform_int_distribution<ProofFragment> dist(0, selected_sets.fragment_set_A_range.end - selected_sets.fragment_set_A_range.start + 1);  
     // now create two lists of size chaining_set_size each
-    int bitdrop_add_size = 0;
-    chaining_set_size += bitdrop_add_size;
-    std::cout << "Creating two chaining lists of size " << chaining_set_size << " each.\n";
+    #ifdef DEBUG_CHAINER
+    std::cout << "Creating two chaining lists of size " << chaining_set_size << " each, A in index: " << selected_sets.fragment_set_A_index
+              << ", B in index: " << selected_sets.fragment_set_B_index << "\n";
+    #endif
+    int chaining_set_size = proof_params.get_chaining_set_size();
     std::vector<ProofFragment> encrypted_As(chaining_set_size);
     std::vector<ProofFragment> encrypted_Bs(chaining_set_size);
     for (int i = 0; i < chaining_set_size; ++i)
     {
-        encrypted_As[i] = dist(rng);
-        encrypted_Bs[i] = dist(rng);
+        encrypted_As[i] = selected_sets.fragment_set_A_range.start + dist(rng);
+        encrypted_Bs[i] = selected_sets.fragment_set_B_range.start + dist(rng);
     }
     int num_trials = 1000;
     int num_chains_validated = 0;
@@ -93,10 +144,7 @@ TEST_CASE("small_lists")
         {
             for (const auto &chain : chains)
             {
-                // just make ranges maximum uint64_t for now
-                Range fragment_range_A{0, UINT64_MAX};
-                Range fragment_range_B{0, UINT64_MAX};
-                bool valid = chainer.validate(chain, fragment_range_A, fragment_range_B);
+                bool valid = chainer.validate(chain, selected_sets.fragment_set_A_range, selected_sets.fragment_set_B_range);
                 // could do more validation here if desired
                 REQUIRE(valid);
                 if (valid) {
@@ -106,7 +154,7 @@ TEST_CASE("small_lists")
                 // switch two links from same set and validation should fail
                 Chain mutated_chain = chain;
                 std::swap(mutated_chain.fragments[trial % mutated_chain.fragments.size()], mutated_chain.fragments[(trial + 2) % mutated_chain.fragments.size()]);
-                bool valid_mutated = chainer.validate(mutated_chain, fragment_range_A, fragment_range_B);
+                bool valid_mutated = chainer.validate(mutated_chain, selected_sets.fragment_set_A_range, selected_sets.fragment_set_B_range);
                 REQUIRE(!valid_mutated);
                 
             }

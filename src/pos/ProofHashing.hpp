@@ -81,6 +81,32 @@ public:
         return BlakeHash::hash_block_256(block_words);
     }
 
+    BlakeHash::Result256 challengeWithGroupedPlotIdHash(const uint8_t *challenge_32_bytes) const
+    {   
+        uint32_t block_words[16];
+        std::array<uint8_t, 32> grouped_plot_id = params_.get_grouped_plot_id();
+        // Fill the first 8 words with the plot ID.
+
+        // set data from plot id
+        for (int i = 0; i < 8; i++) {
+            block_words[i] = 
+                (static_cast<uint32_t>(grouped_plot_id[i * 4 + 0]))        |
+                (static_cast<uint32_t>(grouped_plot_id[i * 4 + 1]) << 8)   |
+                (static_cast<uint32_t>(grouped_plot_id[i * 4 + 2]) << 16)  |
+                (static_cast<uint32_t>(grouped_plot_id[i * 4 + 3]) << 24);
+        }
+        // set data from challenge
+        for (int i = 0; i < 8; i++) {
+            block_words[i + 8] = 
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 0]))        |
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 1]) << 8)   |
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 2]) << 16)  |
+                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 3]) << 24);
+        }
+        
+        return BlakeHash::hash_block_256(block_words);
+    }
+
     BlakeHash::Result256 chainHash(BlakeHash::Result256 prev_chain_hash, std::span<uint64_t const, 3> const link_fragments)
     {
         uint32_t block_words[16];
