@@ -22,13 +22,12 @@
 // Structs for pairing results
 //------------------------------------------------------------------------------
 
-// use retain x values to t3 to make a plot and save x values to disk for analysis
+// use retain x values to make a plot and save x values to disk for analysis
 // use BOTH includes to for deeper validation of results
 // #define RETAIN_X_VALUES_TO_T3 true
 // #define RETAIN_X_VALUES true
 
-// T4 and T5 are bipartite for optimal compression, T3 links back to T2 and T2 to T1 are omitted
-// so bipartite is optional. Some notes as to which mode is best:
+// bipartite is optional. Some notes as to which mode is best:
 // - The solver's performance seems slightly better without bipartite
 // - plotting could be optimized to be faster using bipartite
 // - bipartite may mix less well, and needs more analysis for T4 Partition Attack

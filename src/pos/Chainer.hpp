@@ -173,6 +173,7 @@ public:
         return results;
     }
 
+    #ifdef USE_FAST_CHALLENGE
     bool passes_fast_filter(const uint64_t fast_challenge, int iteration) const
     {
         // For now accept all links
@@ -201,7 +202,7 @@ public:
             return false;
         return true;
     }
-
+    #else
     bool passes_filter(const BlakeHash::Result256 &new_challenge, int iteration) const
     {
         // For now accept all links
@@ -230,6 +231,7 @@ public:
             return false;
         return true;
     }
+    #endif
 
     bool validate(const Chain &chain, Range fragment_A, Range fragments_B) const
     {

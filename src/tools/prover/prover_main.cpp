@@ -204,7 +204,8 @@ try
         size_t num_chains_found = 0;
         for (int i = 0; i < total_trials; i++)
         {
-            std::cout << "----------- Trial " << i << "/" << total_trials << " ------ " << std::endl;
+            std::cout << "." << std::flush;
+            //std::cout << "----------- Trial " << i << "/" << total_trials << " ------ " << std::endl;
             // std::cout << std::hex << (int)challenge[0] << std::dec << std::endl;
 
             challenge[0] = numeric_cast<uint8_t>(i & 0xFF);
@@ -221,7 +222,7 @@ try
             std::vector<QualityChain> chains = prover.prove(challenge);
             if (chains.size() > 0)
             {
-                std::cout << "Found " << chains.size() << " chains." << std::endl;
+                std::cout << "Found " << chains.size() << " proofs." << std::endl;
                 num_chains_found += chains.size();
 
                 int idx = 0;
@@ -237,16 +238,11 @@ try
                     std::vector<uint32_t> xbits_list;
                     for (const auto &fragment : proof_fragments)
                     {
-                        // std::cout << "ProofFragmentCodec: " << std::hex << fragment << std::dec;
                         std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(fragment);
                         for (const auto &x_bit : x_bits)
                         {
-                            // at most 16 bits = 4 x 4 bits
-                            // xbits_hex += Utils::toHex(x_bit, 4);
                             xbits_list.push_back(x_bit);
-                            // std::cout << " " << x_bit;
                         }
-                        // std::cout << std::endl;
                     }
 
                     std::array<uint8_t, 32> plot_id_arr;
@@ -254,21 +250,23 @@ try
                     std::string plot_id_hex = Utils::bytesToHex(plot_id_arr);
                     std::string xbits_hex_compressed = Utils::kValuesToCompressedHex(params.get_k() / 2, xbits_list);
 
-                    std::cout << "Chain solution " << idx << ": ";
+                    std::cout << "Proof solution " << idx << ": ";
                     std::cout << "solver xbits " << plot_id_hex << " " << xbits_hex_compressed << " " << (int)params.get_strength() << std::endl;
                     ++idx;
                 }
 
                 std::cout << "Challenge: " << Utils::bytesToHex(challenge) << std::endl;
+
+                std::cout << "Total proofs found: " << num_chains_found << " out of " << i << " challenges %:" << ((float)num_chains_found / (float)i) << std::endl;
+                std::cout << "   Found 1 proof every " << (float)i / (float)num_chains_found << " challenges." << std::endl;
             }
             else
             {
-                std::cout << "No chains found." << std::endl;
+                //std::cout << "No proofs found." << std::endl;
             }
-            std::cout << "Total chains found: " << num_chains_found << " out of " << i << "  %:" << ((float)num_chains_found / (float)i) << std::endl;
-            std::cout << "   Found 1 in " << (float)i / (float)num_chains_found << " trials." << std::endl;
+            
         }
-        std::cout << "Total chains found: " << num_chains_found << " out of " << total_trials << "  %:" << ((float)num_chains_found / (float)total_trials) << std::endl;
+        std::cout << "Total proofs found: " << num_chains_found << " out of " << total_trials << "  %:" << ((float)num_chains_found / (float)total_trials) << std::endl;
         std::cout << "   Found 1 in " << (float)total_trials / (float)num_chains_found << " trials." << std::endl;
         std::cout << "Prover done." << std::endl;
         return 0;

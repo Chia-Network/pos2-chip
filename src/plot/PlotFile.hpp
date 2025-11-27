@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
+#include <span>
 #include <cstdint>
 #include <cstring>
 #include <optional>

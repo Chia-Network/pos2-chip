@@ -89,67 +89,6 @@ int main(int argc, char *argv[]) try
         }
         std::cout << "Table 3 pairs validated successfully." << std::endl;
         timer.stop();
-
-
-        ProofFragmentCodec fragment_codec = plotter.getProofFragment();
-        timer.start("Validating Table 5 - Final");
-        int total_validated = 0;
-        std::cout << "Partition..." << std::flush;
-        for (int partition_id = 0; partition_id < plot.t5_to_t4_back_pointers.size(); partition_id++)
-        {
-            std::cout << partition_id << "..." << std::flush;
-            for (size_t i = 0; i < plot.t5_to_t4_back_pointers[partition_id].size(); ++i)
-            {
-                uint32_t back_pointer_index = plot.t5_to_t4_back_pointers[partition_id][i].t4_index_l;
-                uint64_t back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_l;
-                uint64_t back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_r;
-                uint64_t proof_fragment_l = plot.t3_proof_fragments[back_l];
-                uint64_t proof_fragment_r = plot.t3_proof_fragments[back_r];
-                auto res = validator.validate_table_5_pairs(plot.t5_to_t4_back_pointers[partition_id][i].xs);
-                if (!res)
-                {
-                    std::cerr << "Validation failed for T5 x-values: [";
-                    for (int i = 0; i < 16; i++)
-                    {
-                        std::cerr << plot.t5_to_t4_back_pointers[partition_id][i].xs[i] << ", ";
-                    }
-                    exit(23);
-                }
-                bool valid_l = fragment_codec.validate_proof_fragment(proof_fragment_l, plot.t5_to_t4_back_pointers[partition_id][i].xs);
-                bool valid_r = fragment_codec.validate_proof_fragment(proof_fragment_r, plot.t5_to_t4_back_pointers[partition_id][i].xs + 8);
-                if (!valid_l || !valid_r)
-                {
-                    std::cerr << "Fragments do not match x-values " << i << std::endl;
-                    for (int i = 0; i < 8; i++)
-                    {
-                        std::cerr << plot.t5_to_t4_back_pointers[partition_id][i].xs[i] << ", ";
-                    }
-                    std::cerr << std::endl;
-                    exit(23);
-                }
-
-                back_pointer_index = plot.t5_to_t4_back_pointers[partition_id][i].t4_index_r;
-                back_l = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_l;
-                back_r = plot.t4_to_t3_back_pointers[partition_id][back_pointer_index].fragment_index_r;
-                proof_fragment_l = plot.t3_proof_fragments[back_l];
-                proof_fragment_r = plot.t3_proof_fragments[back_r];
-                valid_l = fragment_codec.validate_proof_fragment(proof_fragment_l, plot.t5_to_t4_back_pointers[partition_id][i].xs + 16);
-                valid_r = fragment_codec.validate_proof_fragment(proof_fragment_r, plot.t5_to_t4_back_pointers[partition_id][i].xs + 24);
-                if (!valid_l || !valid_r)
-                {
-                    std::cerr << "Fragments xs do not match x-values " << i << std::endl;
-                    for (int i = 0; i < 8; i++)
-                    {
-                        std::cerr << plot.t5_to_t4_back_pointers[partition_id][i].xs[i] << ", ";
-                    }
-                    std::cerr << std::endl;
-                    exit(23);
-                }
-                total_validated++;
-            }
-        }
-        timer.stop();
-        std::cout << "Validated " << total_validated << " final entries." << std::endl;
     }
 #endif
 

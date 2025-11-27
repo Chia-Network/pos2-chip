@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 #include <array>
+#include <span>
 #include <optional>
 #include <iostream>
 #include <sstream>
