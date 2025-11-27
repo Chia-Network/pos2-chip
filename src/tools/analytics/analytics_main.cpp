@@ -7,7 +7,7 @@
 void printUsage()
 {
     std::cout << "Usage:\n"
-              << "  analytics diskbench [plotIdFilter=256] [pfScanFilter=64][diskTB=20] [diskSeekMs=10] [diskReadMBs=70]\n";
+              << "  analytics simdiskusage [plotIdFilter=256] [diskTB=20] [diskSeekMs=10] [diskReadMBs=70]\n";
 }
 
 int main(int argc, char *argv[])
@@ -23,7 +23,7 @@ try
 
     std::string mode = argv[1];
 
-    if (mode == "diskbench")
+    if (mode == "simdiskusage")
     {
         size_t plotIdFilter = 8;
         size_t diskTB = 20;
@@ -31,7 +31,7 @@ try
         double diskReadMBs = 70.0;
         if (argc < 2 || argc > 7)
         {
-            std::cerr << "Usage: " << argv[0] << " diskbench [plotIdFilterBits=8] [diskTB=20] [diskSeekMs=10] [diskReadMBs=70]\n";
+            std::cerr << "Usage: " << argv[0] << " simdiskusage [plotIdFilterBits=8] [diskTB=20] [diskSeekMs=10] [diskReadMBs=70]\n";
             return 1;
         }
         if (argc >= 3) {
@@ -46,7 +46,7 @@ try
         if (argc >= 6) {
             diskReadMBs = std::stod(argv[6]);
         }
-        std::cout << "Disk benchmark simulation: Plot ID filter bits: " << plotIdFilter
+        std::cout << "Disk usage simulation: Plot ID filter bits: " << plotIdFilter
                   << ", " << diskTB << " TB, Seek time: " << diskSeekMs << " ms, Read speed: " << diskReadMBs << " MB/s\n";
         
         ProofParams proof_params(Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").data(), 28, 2);
