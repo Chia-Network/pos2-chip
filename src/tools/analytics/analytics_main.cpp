@@ -26,32 +26,36 @@ try
     if (mode == "simdiskusage")
     {
         size_t plotIdFilter = 8;
+        size_t plotsInGroup = 32;
         size_t diskTB = 20;
         double diskSeekMs = 10.0;
-        double diskReadMBs = 70.0;
+        double diskReadMBs = 250.0;
         if (argc < 2 || argc > 7)
         {
-            std::cerr << "Usage: " << argv[0] << " simdiskusage [plotIdFilterBits=8] [diskTB=20] [diskSeekMs=10] [diskReadMBs=70]\n";
+            std::cerr << "Usage: " << argv[0] << " simdiskusage [plotIdFilterBits=8] [plotsInGroup=32] [diskTB=20] [diskSeekMs=10] [diskReadMBs=250]\n";
             return 1;
         }
         if (argc >= 3) {
             plotIdFilter = std::stoul(argv[2]);
         }
         if (argc >= 4) {
-            diskTB = std::stoul(argv[4]);
+            plotsInGroup = std::stoul(argv[3]);
         }
         if (argc >= 5) {
-            diskSeekMs = std::stod(argv[5]);
+            diskTB = std::stoul(argv[4]);
         }
         if (argc >= 6) {
+            diskSeekMs = std::stod(argv[5]);
+        }
+        if (argc >= 7) {
             diskReadMBs = std::stod(argv[6]);
         }
-        std::cout << "Disk usage simulation: Plot ID filter bits: " << plotIdFilter
-                  << ", " << diskTB << " TB, Seek time: " << diskSeekMs << " ms, Read speed: " << diskReadMBs << " MB/s\n";
+        //std::cout << "Disk usage simulation: Plot ID filter bits: " << plotIdFilter
+        //          << ", " << diskTB << " TB, Seek time: " << diskSeekMs << " ms, Read speed: " << diskReadMBs << " MB/s\n";
         
         ProofParams proof_params(Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").data(), 28, 2);
         DiskBench diskbench(proof_params);
-        diskbench.simulateChallengeDiskReads(plotIdFilter, diskTB, diskSeekMs, diskReadMBs);
+        diskbench.simulateChallengeDiskReads(plotIdFilter, plotsInGroup, diskTB, diskSeekMs, diskReadMBs);
 
         return 0;
     }

@@ -8,12 +8,103 @@
 #include "common/Utils.hpp"
 #include "pos/ProofCore.hpp"
 #include "pos/ProofParams.hpp"
+#include "pos/Chainer.hpp"
 #include "prove/Prover.hpp"
+#include "common/Timer.hpp"
 #include <vector>
 #include <cmath>
 #include <algorithm>
 #include <iomanip>
 #include <random>
+
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <sstream>
+
+// Simple helpers for pretty printing
+namespace pretty {
+
+    constexpr int LABEL_WIDTH = 38;
+    constexpr int VALUE_WIDTH = 22;
+
+    inline void printSeparator(char ch = '-', int extra = 0) {
+        int totalWidth = LABEL_WIDTH + VALUE_WIDTH + 7 + extra; // borders + spaces
+        std::cout << std::string(totalWidth, ch) << "\n";
+    }
+
+    inline void printSectionHeader(const std::string& title) {
+        printSeparator('=');
+        std::cout << "| " << std::left << std::setw(LABEL_WIDTH + VALUE_WIDTH + 3)
+                  << title << " |\n";
+        printSeparator('=');
+    }
+
+    template <typename T>
+    inline void printRow(const std::string& label, const T& value) {
+        std::cout << "| "
+                  << std::left << std::setw(LABEL_WIDTH) << label
+                  << " | "
+                  << std::right << std::setw(VALUE_WIDTH) << value
+                  << " |\n";
+    }
+
+    inline std::string pct(double v, int precision = 2) {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(precision) << v << " %";
+        return oss.str();
+    }
+
+    inline std::string ms(double v, int precision = 2) {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(precision) << v << " ms";
+        return oss.str();
+    }
+
+    inline std::string bytes_sensible(double bytes, int precision = 2) {
+        const char* sizes[] = { "B", "KB", "MB", "GB", "TB", "PB" };
+        int order = 0;
+        while (bytes >= 1000.0 && order < 5) {
+            order++;
+            bytes = bytes / 1000.0;
+        }
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(precision) << bytes << " " << sizes[order];
+        return oss.str();
+    }
+
+    inline std::string mb(double v, int precision = 2) {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(precision) << v << " MB";
+        return oss.str();
+    }
+
+    inline std::string gb(double v, int precision = 2) {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(precision) << v << " GB";
+        return oss.str();
+    }
+
+    inline std::string tb(double v, int precision = 1) {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(precision) << v << " TB";
+        return oss.str();
+    }
+
+    template <typename T>
+    inline std::string num(T v, int precision = 2, bool fixed = true) {
+        std::ostringstream oss;
+        if constexpr (std::is_floating_point<T>::value) {
+            if (fixed) oss << std::fixed;
+            oss << std::setprecision(precision);
+        }
+        oss << v;
+        return oss.str();
+    }
+
+}
+
+using namespace pretty;
 
 class DiskBench
 {
@@ -23,137 +114,250 @@ public:
 
     // Run a simulation of disk reads for a given number of plots.
     // Outputs: total time in ms and total data read in MB.
-    void simulateChallengeDiskReads(size_t plot_id_filter_bits, size_t diskTB, double diskSeekMs, double diskReadMBs) const
+    void simulateChallengeDiskReads(size_t plot_id_filter_bits, size_t num_plots_in_group, size_t diskTB, double diskSeekMs, double diskReadMBs) const
     {
-        std::cout << "Simulating disk reads with plot ID filter bits: " << plot_id_filter_bits
-                  << ", Disk size: " << diskTB << " TB, Seek time: " << diskSeekMs << " ms, Read speed: " << diskReadMBs << " MB/s\n";
+        //std::cout << "Simulating disk reads with plot ID filter bits: " << plot_id_filter_bits
+        //          << ", Disk size: " << diskTB << " TB, Seek time: " << diskSeekMs << " ms, Read speed: " << diskReadMBs << " MB/s\n";
+        
         double bits_per_entry = 1.45 + double(proof_params_.get_k());
         size_t plot_bytes = (size_t) (bits_per_entry * (1ULL << proof_params_.get_k()) / 8);
+        size_t grouped_plot_bytes = plot_bytes * num_plots_in_group;
 
         uint32_t chaining_set_size = proof_params_.get_chaining_set_size();
         size_t chaining_set_bytes = (size_t) ((double) chaining_set_size * bits_per_entry / 8);
 
         size_t num_plots = (diskTB * 1000 * 1000 * 1000 * 1000) / plot_bytes;
-        std::cout << "Plot size bytes: " << plot_bytes << ", Num plots per " << diskTB << "TB: " << num_plots << std::endl;
+        size_t num_grouped_plots = num_plots / num_plots_in_group;
+        std::cout << std::endl;
+        std::cout << "------------------------------------\n";
+        std::cout << "Harvester Disk Simulation Parameters:\n";
+        std::cout << "------------------------------------\n";
+        std::cout << "   Plot ID filter                   : " << (1 << plot_id_filter_bits) << " (bits: " << plot_id_filter_bits << ")\n";
+        std::cout << "   ----------------------------------\n";
+        std::cout << "   Disk capacity                    : " << diskTB << " TB\n";
+        std::cout << "   Disk seek time (ms)              : " << diskSeekMs << " ms\n";
+        std::cout << "   Disk read speed                  : " << diskReadMBs << " MB/s\n";
+        std::cout << "   ----------------------------------\n";
+        std::cout << "   Plot size bytes                  : " << bytes_sensible(plot_bytes) << std::endl;
+        std::cout << "   Total plots per Disk             : " << num_plots << std::endl;
+        std::cout << "   ----------------------------------\n";
+        std::cout << "   Plots in group                   : " << num_plots_in_group << std::endl;
+        std::cout << "   Grouped plot size bytes          : " << bytes_sensible(grouped_plot_bytes) << std::endl;
+        std::cout << "   Num grouped plots on disk        : " << num_grouped_plots << std::endl;
+        std::cout << "   ----------------------------------\n";
         
-        // TODO:
-        // create our set of proof fragments
-        // simulate random challenges
-        // for each challenge, scan all proofs and test if they pass plot id filter
-        // if they pass, add simulated hdd seek times OR pick big file and do random seek and read on that
-        // then do chaining run with random 
+        std::mt19937 rng(1245); // fixed seed for reproducibility
+        std::uniform_int_distribution<uint32_t> plot_filter_dist(0, (1U << plot_id_filter_bits) - 1);
+        Range fragment_set_A_range = proof_params_.get_chaining_set_range(0);
+        std::uniform_int_distribution<ProofFragment> fragment_dist(0, fragment_set_A_range.end + 1);
+        std::vector<ProofFragment> fragments_As(chaining_set_size);
+        std::vector<ProofFragment> fragments_Bs(chaining_set_size);
+        for (int i = 0; i < (int)chaining_set_size; ++i)
+        {
+            fragments_As[i] = fragment_set_A_range.start + fragment_dist(rng);
+            fragments_Bs[i] = fragment_set_A_range.end + 1 + fragment_dist(rng);
+        }
 
-        // Simulate disk reads
-        /*double total_time_ms = 0.0;
-        size_t total_data_read_bytes = 0;
-        size_t total_random_disk_seeks = 0;
+        size_t num_challenges = 1000;//9216; // simulate 9216 challenges (about one every 9.375 seconds for 24 hours)
 
-        double total_block_time_ms = 0.0;
-        double maximum_block_time_ms = 0.0;
-        double minimum_block_time_ms = std::numeric_limits<double>::max();
-        double total_time_passing_plot_id_filter_ms = 0.0;
+        // Simulate disk reads for chaining sets
+        size_t total_plots_passed_filter = 0;
 
-        // Collect per-challenge stats for histograms
-        std::vector<double> block_times_ms;
-        std::vector<int> proofs_per_challenge;
-        std::vector<int> proofs_per_chain_fetch;
-        block_times_ms.reserve(10000);
-        proofs_per_challenge.reserve(10000);
-        proofs_per_chain_fetch.reserve(10000);
+        constexpr uint8_t k = 28;
+        std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+        std::string challenge_hex = "5c00000000000000000000000000000000000000000000000000000000000000";
+        std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
+        uint32_t sim_challenge_id = 0;
+        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2);
+        ProofCore proof_core(proof_params);
+        Timer timer;
+        double total_harvesting_compute_time_ms = 0.0;
+        size_t proofs_found = 0;
 
-        size_t num_plots_passed_filter = 0;
+        const double CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS = 60000.0; // cap at 20 seconds total compute time
+        size_t total_simulation_runs_before_cap = 0;
+        double max_compute_ms_per_challenge = 0;
+        size_t max_plots_passing_filter_per_challenge = 0;
 
-        size_t num_plots_passed_chaining = 0;
-        size_t total_proofs_found = 0;
-
-        ProofCore proof_core(proof_params_);
-
-        std::array<uint8_t, 32> challenge;
-        challenge.fill(0); // Initialize challenge with zeros
-
-        double time_per_block_ms = 9375.0;
-        double hdd_load = total_time_ms / time_per_block_ms;
-
-        std::cout << "---- completed " << num_challenges << " challenges ----" << std::endl;
-        std::cout << "Random seed used: " << seed << std::endl;
-        std::cout << "Plots passed filter: " << num_plots_passed_filter << " out of " << num_plots << " for " << num_challenges << " challenges ("
-                  << (static_cast<double>(num_plots_passed_filter) * 100.0 / static_cast<double>(num_plots * num_challenges)) << "%)" << std::endl;
-        double expected_plots_passing_filter = static_cast<double>(num_plots * num_challenges) / static_cast<double>(1 << plot_id_filter_bits);
-        std::cout << "Expected plots passing filter: " << expected_plots_passing_filter << std::endl;
+        // start progress bar output
+        std::cout << std::endl;
+        std::cout << "Running simulation (cap at 60s):\n";
+        int progress_bar_steps = 40;
+        std::cout << "[";
+        for (int i = 0; i < progress_bar_steps; ++i) std::cout << " ";
+        std::cout << "]\n";
+        // move cursor back to start of line
+        std::cout << "\r";
+        std::cout.flush();
+        // move cursor up one line
+        std::cout << "\033[A" << "[" << std::flush;
         
-       
-        std::cout << "Total time for " << num_plots << " plots: " << total_time_ms << " ms" << std::endl;
-        std::cout << "Plots passed chaining: " << num_plots_passed_chaining << " out of " << num_plots << " for " << num_challenges << " challenges ("
-                  << (static_cast<double>(num_plots_passed_chaining) * 100.0 / static_cast<double>(num_plots * num_challenges)) << "%)" << std::endl;
-        
-        // on average each plot passing proof fragment scan filter should produce 4 proofs
-        double expected_proofs_found = expected_plots_passing_proof_fragment_scan_filter * 4;
-        std::cout << "Total proofs found: " << total_proofs_found << std::endl;
-        std::cout << "Expected proofs found: " << expected_proofs_found << std::endl;
-        
-        std::cout << "Average proofs per plot per challenge:" << (static_cast<double>(total_proofs_found) / static_cast<double>(num_plots * num_challenges)) << std::endl;
+        int progress_bar_step_size = num_challenges / progress_bar_steps;
+        int current_progress = 0; // when we reach steps then output progress marker
 
-        std::cout << "Average time per plot: " << (total_time_ms / static_cast<double>(num_plots)) << " ms" << std::endl;
-        std::cout << "Time spent passing plot id filter: " << total_time_passing_plot_id_filter_ms << " ms (% " << (total_time_passing_plot_id_filter_ms / total_time_ms) * 100.0 << ")" << std::endl;
-        std::cout << "Time spent passing proof fragment scan filter: " << total_time_passing_proof_fragment_scan_ms << " ms (% " << (total_time_passing_proof_fragment_scan_ms / total_time_ms) * 100.0 << ")" << std::endl;
-        std::cout << "Time spent fetching full proofs partitions: " << total_time_fetching_full_proofs_partitions_ms << " ms (% " << (total_time_fetching_full_proofs_partitions_ms / total_time_ms) * 100.0 << ")" << std::endl;
-        std::cout << "Total data bytes read: " << total_data_read_bytes << std::endl;
-        std::cout << "Average data read per plot: " << (total_data_read_bytes / num_plots) << " bytes" << std::endl;
-        std::cout << "Total random disk seeks: " << total_random_disk_seeks << std::endl;
+        for (size_t challenge_id = 0; challenge_id < num_challenges; ++challenge_id) {
+            size_t challenge_plots_passed_filter = 0;
+            double challenge_compute_time_ms = 0.0;
+            for (size_t plot_id = 0; plot_id < num_grouped_plots; ++plot_id) {
+                // Simulate whether this plot passes the plot ID filter
+                
+                uint32_t plot_id_filter_value = plot_filter_dist(rng);
+                if (plot_id_filter_value != 0) {
+                    continue; // does not pass filter
+                }
 
-        std::cout << "Plot ID filter: " << (1 << plot_id_filter_bits) << std::endl;
-        std::cout << "Proof fragment scan filter: " << (1 << proof_fragment_scan_filter_bits) << std::endl;
+                // if it passes filter, requires 2 disk seeks and 2*chaining_set_bytes read
+                challenge_plots_passed_filter++;
 
-        std::cout << "Estimated HDD load for 1 challenge every 9.375 seconds: " << (hdd_load * 100.0 / (double)num_challenges) << "%" << std::endl;
+                if (challenge_plots_passed_filter > max_plots_passing_filter_per_challenge) {
+                    max_plots_passing_filter_per_challenge = challenge_plots_passed_filter;
+                }
 
-        // Helper: print a simple ASCII histogram for double data
-        auto print_double_histogram = [&](const std::string &title, const std::vector<double> &data, int bins) {
-            std::cout << title << std::endl;
-            if (data.empty()) { std::cout << "  (no data)\n"; return; }
-            double minv = *std::min_element(data.begin(), data.end());
-            double maxv = *std::max_element(data.begin(), data.end());
-            if (minv == maxv) { std::cout << "  All values: " << minv << "\n"; return; }
-            double range = maxv - minv;
-            std::vector<size_t> counts(bins);
-            for (double v : data) {
-                int idx = static_cast<int>(std::floor((v - minv) / range * bins));
-                if (idx < 0) idx = 0;
-                if (idx >= bins) idx = bins - 1;
-                counts[idx]++;
+                // simulate harvester challenge compute time for chaining.
+                // create new random challenge each plot passing filter
+                // remember have to compute for all plots in group
+                if (total_harvesting_compute_time_ms > CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS) {
+                    continue; // cap reached, skip further compute
+                }
+                total_simulation_runs_before_cap++;
+                for (size_t i = 0; i < num_plots_in_group; ++i)
+                {
+                    challenge[0] = static_cast<uint8_t>(sim_challenge_id & 0xFF);
+                    challenge[1] = static_cast<uint8_t>((sim_challenge_id >> 8) & 0xFF);
+                    challenge[2] = static_cast<uint8_t>((sim_challenge_id >> 16) & 0xFF);
+                    challenge[3] = static_cast<uint8_t>((sim_challenge_id >> 24) & 0xFF);
+                    sim_challenge_id++;
+                    timer.start();
+                    Chainer chainer(proof_params, challenge);
+                    auto chains = chainer.find_links(fragments_As, fragments_Bs);
+                    double elapsed_ms = timer.stop();
+                    total_harvesting_compute_time_ms += elapsed_ms;
+                    proofs_found += chains.size();
+                    challenge_compute_time_ms += elapsed_ms;
+                }
+                if (challenge_compute_time_ms > max_compute_ms_per_challenge) {
+                    max_compute_ms_per_challenge = challenge_compute_time_ms;
+                }
+
             }
-            for (int b = 0; b < bins; ++b) {
-                double lo = minv + (static_cast<double>(b) / bins) * range;
-                double hi = minv + (static_cast<double>(b + 1) / bins) * range;
-                std::cout << "  [" << lo << ", " << hi << "): " << counts[b] << " ";
-                int stars = static_cast<int>(std::round(50.0 * counts[b] / data.size()));
-                for (int s = 0; s < stars; ++s) std::cout << '*';
-                std::cout << std::endl;
-            }
-        };
 
-        // Helper: print histogram for integer data (uses discrete bins)
-        auto print_int_histogram = [&](const std::string &title, const std::vector<int> &data) {
-            std::cout << title << std::endl;
-            if (data.empty()) { std::cout << "  (no data)\n"; return; }
-            int minv = *std::min_element(data.begin(), data.end());
-            int maxv = *std::max_element(data.begin(), data.end());
-            if (minv == maxv) { std::cout << "  All values: " << minv << "\n"; return; }
-            int range = maxv - minv + 1;
-            std::vector<size_t> counts(range);
-            for (int v : data) counts[v - minv]++;
-            for (int i = 0; i < range; ++i) {
-                int val = i + minv;
-                std::cout << "  " << val << ": " << counts[i] << " ";
-                int stars = static_cast<int>(std::round(50.0 * counts[i] / data.size()));
-                for (int s = 0; s < stars; ++s) std::cout << '*';
-                std::cout << std::endl;
-            }
-        };
+            total_plots_passed_filter += challenge_plots_passed_filter;
 
-        std::cout << "---- Histograms ----" << std::endl;
-        print_double_histogram("Time per block (ms) histogram:", block_times_ms, 20);
-        print_int_histogram("# Proofs found per challenge histogram:", proofs_per_challenge);
-        print_int_histogram("# Proofs found per chain fetch histogram:", proofs_per_chain_fetch);*/
+            // update progress bar
+            if ((challenge_id + 1) % progress_bar_step_size == 0) {
+                current_progress++;
+                std::cout << "=" << std::flush;
+            }
+        }
+        // finish progress bar
+        std::cout << "]" << std::endl << std::endl;
+
+        // now we can compute our disk stats
+        // each plot passing filter requires 2 seeks + reading chaining set
+        size_t total_seeks = total_plots_passed_filter * 2;
+        size_t total_data_read_bytes = total_plots_passed_filter * num_plots_in_group * chaining_set_bytes * 2;
+        double diskSeekTimeMs = total_seeks * diskSeekMs;
+        double diskReadTimeMs = (static_cast<double>(total_data_read_bytes) / (diskReadMBs * 1000.0));
+        double total_time_ms = diskSeekTimeMs + diskReadTimeMs;
+        double disk_load_percentage = 100.0 * (total_time_ms / (num_challenges * 9375.0));
+
+        //std::cout << "---- Disk Read Simulation Results ----" << std::endl;
+        double plots_passed_perc = (static_cast<double>(total_plots_passed_filter)) / static_cast<double>(num_grouped_plots * num_challenges);
+        //std::cout << "Total plots passed filter: " << total_plots_passed_filter << " (1 out of " << (1/plots_passed_perc) << ")" << std::endl;
+        //std::cout << "Total disk seeks: " << total_seeks << ", Total data read: " << (total_data_read_bytes / (1024.0 * 1024.0)) << " MB" << std::endl;
+        //std::cout << "Total disk seek time: " << diskSeekTimeMs << " ms, Total disk read time: " << diskReadTimeMs << " ms" << std::endl;
+        //std::cout << "Total time for " << num_challenges << " challenges: " << total_time_ms << " ms" << std::endl;
+        //std::cout << "Estimated HDD load for 1 challenge every 9.375 seconds: " << disk_load_percentage << "%" << std::endl;
+        // get max load experienced for a challenge
+       // std::cout << "Max compute time for a single challenge: " << max_compute_ms_per_challenge << " ms" << std::endl;
+        //std::cout << "Max plots passing filter for a single challenge: " << max_plots_passing_filter_per_challenge << std::endl;
+        // and load calc for max
+        double max_disk_load_percentage = 100.0 * ((max_plots_passing_filter_per_challenge * 2 * diskSeekMs + (static_cast<double>(max_plots_passing_filter_per_challenge * num_plots_in_group * chaining_set_bytes * 2) / (diskReadMBs * 1000.0))) / 9375.0);
+        //std::cout << "Estimated max HDD load for a single challenge: " << max_disk_load_percentage << "%" << std::endl;
+        double max_compute_load_percentage = 100.0 * (max_compute_ms_per_challenge / 9375.0);
+        //std::cout << "Estimated max CPU harvesting load for a single challenge: " << max_compute_load_percentage << "%" << std::endl;
+                
+        //std::cout << "---- Harvesting Compute Time ----" << std::endl;
+        //std::cout << "Total harvesting compute time for " << num_challenges << " challenges: " << total_harvesting_compute_time_ms << " ms" << std::endl;
+        //std::cout << "Total proofs found: " << proofs_found << std::endl;
+        double avg_compute_time_per_challenge_ms = total_harvesting_compute_time_ms / static_cast<double>(total_simulation_runs_before_cap);
+        //std::cout << "Average harvesting compute time per challenge: " << avg_compute_time_per_challenge_ms << " ms" << std::endl;
+        double cpu_harvesting_load_percentage = 100.0 * (total_harvesting_compute_time_ms / (total_simulation_runs_before_cap * 9375.0));
+        //std::cout << "Estimated CPU harvesting load for 1 challenge every 9.375 seconds: " << cpu_harvesting_load_percentage << "%" << std::endl;
+
+        
+    
+
+        // --------------------------------------------------
+        // OVERVIEW SECTION
+        // --------------------------------------------------
+        printSectionHeader("Overall Harvesting Overview");
+
+        printRow("Challenges simulated", num(num_challenges, 0));
+        printRow("Total proofs found", num(proofs_found, 0));
+        printSeparator();
+        printRow("HDD Capacity", tb(diskTB));
+        printRow("Avg HDD load (all challenges)", pct(disk_load_percentage));
+        printRow("Max HDD load (single challenge)", pct(max_disk_load_percentage));
+        size_t read_bytes_per_day = (total_data_read_bytes * 9216) / num_challenges;
+        printRow("Estimated data read per day", bytes_sensible(read_bytes_per_day));
+        printSeparator();
+
+        printRow("Avg CPU harvesting load", pct(cpu_harvesting_load_percentage));
+        printRow("Max CPU harvesting load", pct(max_compute_load_percentage));
+        printSeparator();
+
+        printRow("Max plots passing filter (1 challenge)",
+                num(max_plots_passing_filter_per_challenge, 0));
+        printRow("Overall filter pass rate",
+                num(plots_passed_perc * 100.0, 4) + std::string(" %"));
+        //printRow("Approx. 1 out of", num(one_out_of, 2));
+        printSeparator('=');
+        std::cout << std::endl;
+
+        // --------------------------------------------------
+        // DISK I/O SECTION
+        // --------------------------------------------------
+        printSectionHeader("Disk I/O Details");
+
+        printRow("Total plots passed filter",
+                num(total_plots_passed_filter, 0));
+        printRow("Total disk seeks", num(total_seeks, 0));
+        printRow("Total data read", bytes_sensible(total_data_read_bytes));
+        printSeparator();
+
+        printRow("Total disk seek time", ms(diskSeekTimeMs));
+        printRow("Total disk read time", ms(diskReadTimeMs));
+        printRow("Total disk time (all challenges)", ms(total_time_ms));
+        printRow("HDD load @ 1 challenge / 9.375s",
+                pct(disk_load_percentage));
+        printSeparator('=');
+        std::cout << std::endl;
+
+        // --------------------------------------------------
+        // HARVESTING COMPUTE SECTION
+        // --------------------------------------------------
+        printSectionHeader("Harvesting Compute Details");
+        printRow("Total simulation runs before cap",
+                num(total_simulation_runs_before_cap, 0));
+        printSeparator();
+        printRow("Farm size (plots)", num(num_plots, 0));
+        printRow("Farm netspace", tb(diskTB));
+        printSeparator();
+        printRow("Total harvesting compute time",
+                ms(total_harvesting_compute_time_ms));
+        printRow("Average compute time / challenge",
+                ms(avg_compute_time_per_challenge_ms));
+        printRow("Max compute time (single challenge)",
+                ms(max_compute_ms_per_challenge));
+        printSeparator();
+
+        printRow("Avg CPU harvesting load @ 9.375s",
+                pct(cpu_harvesting_load_percentage));
+        printRow("Max CPU harvesting load @ 9.375s",
+                pct(max_compute_load_percentage));
+        printSeparator('=');
+        std::cout << std::endl;
     }
 
 private:
