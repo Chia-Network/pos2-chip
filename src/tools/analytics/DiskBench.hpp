@@ -174,14 +174,14 @@ public:
         double total_harvesting_compute_time_ms = 0.0;
         size_t proofs_found = 0;
 
-        const double CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS = 60000.0; // cap at 20 seconds total compute time
-        size_t total_simulation_runs_before_cap = 0;
+        const double CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS = 20000.0; // cap at 20 seconds total compute time
+        size_t total_challenges_before_compute_cap = 0;
         double max_compute_ms_per_challenge = 0;
         size_t max_plots_passing_filter_per_challenge = 0;
 
         // start progress bar output
         std::cout << std::endl;
-        std::cout << "Running simulation (cap at 60s):\n";
+        std::cout << "Running simulation (cap at " << std::ceil(CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS / 1000.0) << "s):\n";
         int progress_bar_steps = 40;
         std::cout << "[";
         for (int i = 0; i < progress_bar_steps; ++i) std::cout << " ";
@@ -195,9 +195,16 @@ public:
         int progress_bar_step_size = num_challenges / progress_bar_steps;
         int current_progress = 0; // when we reach steps then output progress marker
 
+        bool cap_harvesting_compute_reached = false;
         for (size_t challenge_id = 0; challenge_id < num_challenges; ++challenge_id) {
             size_t challenge_plots_passed_filter = 0;
             double challenge_compute_time_ms = 0.0;
+            if (total_harvesting_compute_time_ms > CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS) {
+                cap_harvesting_compute_reached = true;
+            }
+            else {
+                total_challenges_before_compute_cap++;
+            }
             for (size_t plot_id = 0; plot_id < num_grouped_plots; ++plot_id) {
                 // Simulate whether this plot passes the plot ID filter
                 
@@ -216,10 +223,10 @@ public:
                 // simulate harvester challenge compute time for chaining.
                 // create new random challenge each plot passing filter
                 // remember have to compute for all plots in group
-                if (total_harvesting_compute_time_ms > CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS) {
+                if (cap_harvesting_compute_reached) {
                     continue; // cap reached, skip further compute
                 }
-                total_simulation_runs_before_cap++;
+                
                 for (size_t i = 0; i < num_plots_in_group; ++i)
                 {
                     challenge[0] = static_cast<uint8_t>(sim_challenge_id & 0xFF);
@@ -280,9 +287,9 @@ public:
         //std::cout << "---- Harvesting Compute Time ----" << std::endl;
         //std::cout << "Total harvesting compute time for " << num_challenges << " challenges: " << total_harvesting_compute_time_ms << " ms" << std::endl;
         //std::cout << "Total proofs found: " << proofs_found << std::endl;
-        double avg_compute_time_per_challenge_ms = total_harvesting_compute_time_ms / static_cast<double>(total_simulation_runs_before_cap);
+        double avg_compute_time_per_challenge_ms = total_harvesting_compute_time_ms / static_cast<double>(total_challenges_before_compute_cap);
         //std::cout << "Average harvesting compute time per challenge: " << avg_compute_time_per_challenge_ms << " ms" << std::endl;
-        double cpu_harvesting_load_percentage = 100.0 * (total_harvesting_compute_time_ms / (total_simulation_runs_before_cap * 9375.0));
+        double cpu_harvesting_load_percentage = 100.0 * (total_harvesting_compute_time_ms / (total_challenges_before_compute_cap * 9375.0));
         //std::cout << "Estimated CPU harvesting load for 1 challenge every 9.375 seconds: " << cpu_harvesting_load_percentage << "%" << std::endl;
 
         
@@ -339,7 +346,7 @@ public:
         // --------------------------------------------------
         printSectionHeader("Harvesting Compute Details");
         printRow("Total simulation runs before cap",
-                num(total_simulation_runs_before_cap, 0));
+                num(total_challenges_before_compute_cap, 0));
         printSeparator();
         printRow("Farm size (plots)", num(num_plots, 0));
         printRow("Farm netspace", tb(diskTB));
