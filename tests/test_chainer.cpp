@@ -125,7 +125,7 @@ TEST_CASE("small_lists")
     #ifdef NDEBUG
     int num_trials = 2000;
     int num_chains_validated = 0;
-    int total_chains_found = 0;
+    size_t total_chains_found = 0;
     Timer timer;
     timer.start("Chaining trials");
     std::vector<int> trial_results;
