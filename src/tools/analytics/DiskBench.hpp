@@ -138,7 +138,7 @@ public:
         std::cout << "   Disk seek time (ms)              : " << diskSeekMs << " ms\n";
         std::cout << "   Disk read speed                  : " << diskReadMBs << " MB/s\n";
         std::cout << "   ----------------------------------\n";
-        std::cout << "   Plot size bytes                  : " << bytes_sensible(static_cast<double(plot_bytes)) << std::endl;
+        std::cout << "   Plot size bytes                  : " << bytes_sensible(static_cast<double>(plot_bytes)) << std::endl;
         std::cout << "   Total plots per Disk             : " << num_plots << std::endl;
         std::cout << "   ----------------------------------\n";
         std::cout << "   Plots in group                   : " << num_plots_in_group << std::endl;
