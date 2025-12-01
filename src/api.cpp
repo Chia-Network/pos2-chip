@@ -54,7 +54,8 @@ uint32_t qualities_for_challenge(
 {
     Prover p(plot_file);
 
-    std::vector<QualityChain> ret = p.prove(proof_fragment_scan_filter);
+    const std::array<uint8_t, 32> &challenge_arr = *reinterpret_cast<const std::array<uint8_t, 32>*>(challenge);
+    std::vector<QualityChain> ret = p.prove(challenge_arr);
     uint32_t const num_results = std::min(static_cast<uint32_t>(ret.size()), num_outputs);
     std::copy(ret.begin(), ret.begin() + num_results, output);
     return num_results;
@@ -72,8 +73,10 @@ bool get_partial_proof(
     QualityChain const* input,
     uint64_t* output) try
 {
+    return false; // this function now obsolete.
+
     // We don't need the challenge to turn QualityChain into a partial proof, so just pass in a dummy
-    std::array<uint8_t, 32> c{{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    /*std::array<uint8_t, 32> c{{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
                                0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
     Prover p(c, plot_file);
 
@@ -86,12 +89,12 @@ bool get_partial_proof(
 }
 catch (std::exception const& e) {
     std::cerr << e.what() << std::endl;
-    return false;
+    return false;*/
 }
 
-// proof must point to exactly 64 proof fragments (each a uint64_t)
+// proof must point to exactly TOTAL_PROOF_FRAGMENTS_IN_PROOF (16) proof fragments (each a uint64_t)
 // plot ID must point to exactly 32 bytes
-// output must point to exactly 512 32-bit integers
+// output must point to exactly TOTAL_XS_IN_PROOF (128) 32-bit integers
 bool solve_partial_proof(
     uint64_t const* fragments,
     uint8_t const* plot_id,
@@ -137,7 +140,8 @@ bool create_plot(char const* filename, uint8_t const k, uint8_t const strength, 
 
     if ((k & 1) == 1)
         throw std::invalid_argument("k must be even");
-    Plotter plotter(std::span<uint8_t const, 32>(plot_id, plot_id + 32), int(k), int(strength));
+    ProofParams params(std::span<uint8_t const, 32>(plot_id, plot_id + 32), int(k), int(strength));
+    Plotter plotter(params);
     PlotData plot = plotter.run();
     PlotFile::writeData(filename, plot, plotter.getProofParams(), std::span<uint8_t const, 32 + 48 + 32>(memo, memo + 32 + 48 + 32));
     return true;
