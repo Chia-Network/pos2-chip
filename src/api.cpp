@@ -16,18 +16,19 @@ bool validate_proof(
     uint8_t const k_size,
     uint8_t const strength,
     uint8_t const* challenge,
-    uint8_t const proof_fragment_scan_filter,
+    uint8_t const proof_fragment_scan_filter, // NOTE: not used anymore
     uint32_t const* proof,
     QualityChain* quality) try
 {
     if ((k_size & 1) == 1)
         throw std::invalid_argument("k must be even");
+    if (proof_fragment_scan_filter != 0)
+        throw std::invalid_argument("proof_fragment_scan_filter is no longer supported");
     ProofParams const params(plot_id, k_size, strength);
     ProofValidator validator(params);
     std::optional<QualityChainLinks> quality_links = validator.validate_full_proof(
         std::span<uint32_t const, TOTAL_XS_IN_PROOF>(proof, proof + TOTAL_XS_IN_PROOF),
-        std::span<uint8_t const, 32>(challenge, challenge + 32),
-        proof_fragment_scan_filter
+        std::span<uint8_t const, 32>(challenge, challenge + 32)
         );
     if (!quality_links) {
         return false;
@@ -48,12 +49,14 @@ catch (std::exception const& e) {
 uint32_t qualities_for_challenge(
     char const* plot_file,
     uint8_t const* challenge,
-    uint8_t const proof_fragment_scan_filter,
+    uint8_t const proof_fragment_scan_filter, // NOTE: not used anymore
     QualityChain* output,
     uint32_t const num_outputs) try
 {
     Prover p(plot_file);
 
+    if (proof_fragment_scan_filter != 0)
+        throw std::invalid_argument("proof_fragment_scan_filter is no longer supported");
     const std::array<uint8_t, 32> &challenge_arr = *reinterpret_cast<const std::array<uint8_t, 32>*>(challenge);
     std::vector<QualityChain> ret = p.prove(challenge_arr);
     uint32_t const num_results = std::min(static_cast<uint32_t>(ret.size()), num_outputs);
