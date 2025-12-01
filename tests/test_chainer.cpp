@@ -12,7 +12,7 @@
 #include <iomanip>
 #include <random>
 
-//#define DEBUG_CHAINER true
+#define DEBUG_CHAINER true
 
 TEST_SUITE_BEGIN("chainer");
 
@@ -100,11 +100,11 @@ TEST_CASE("small_lists")
     std::uniform_int_distribution<ProofFragment> dist(0, max_offset);
     
     // now create two lists of size chaining_set_size each
+    int chaining_set_size = proof_params.get_chaining_set_size();
     #ifdef DEBUG_CHAINER
     std::cout << "Creating two chaining lists of size " << chaining_set_size << " each, A in index: " << selected_sets.fragment_set_A_index
               << ", B in index: " << selected_sets.fragment_set_B_index << "\n";
     #endif
-    int chaining_set_size = proof_params.get_chaining_set_size();
     // below can test attacker times by increasing list sizes to simulate bit dropping attacks on t3.
     // chaining_set_size += chaining_set_size / 2; // add 50% extra as an attack
     // chaining_set_size += 3 * chaining_set_size / 4; // add 75% extra as an attack
@@ -114,6 +114,13 @@ TEST_CASE("small_lists")
     {
         encrypted_As[i] = selected_sets.fragment_set_A_range.start + dist(rng);
         encrypted_Bs[i] = selected_sets.fragment_set_B_range.start + dist(rng);
+        #ifdef DEBUG_CHAINER
+        if ((i < 10) || (i >= chaining_set_size - 10))
+        {
+            std::cout << "  A[" << i << "] = " << encrypted_As[i]
+                  << ", B[" << i << "] = " << encrypted_Bs[i] << "\n";
+        }
+        #endif
     }
     int num_trials = 1000;
     int num_chains_validated = 0;
