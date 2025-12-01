@@ -124,7 +124,7 @@ public:
         size_t grouped_plot_bytes = plot_bytes * num_plots_in_group;
 
         uint32_t chaining_set_size = proof_params_.get_chaining_set_size();
-        size_t chaining_set_bytes = (size_t) ((double) chaining_set_size * bits_per_entry / 8);
+        size_t chaining_set_bytes = (size_t) (static_cast<double>(chaining_set_size) * bits_per_entry / 8);
 
         size_t num_plots = (diskTB * 1000 * 1000 * 1000 * 1000) / plot_bytes;
         size_t num_grouped_plots = num_plots / num_plots_in_group;
@@ -142,7 +142,7 @@ public:
         std::cout << "   Total plots per Disk             : " << num_plots << std::endl;
         std::cout << "   ----------------------------------\n";
         std::cout << "   Plots in group                   : " << num_plots_in_group << std::endl;
-        std::cout << "   Grouped plot size bytes          : " << bytes_sensible(grouped_plot_bytes) << std::endl;
+        std::cout << "   Grouped plot size bytes          : " << bytes_sensible(static_cast<double>(grouped_plot_bytes)) << std::endl;
         std::cout << "   Num grouped plots on disk        : " << num_grouped_plots << std::endl;
         std::cout << "   ----------------------------------\n";
         
@@ -152,7 +152,7 @@ public:
         std::uniform_int_distribution<ProofFragment> fragment_dist(0, fragment_set_A_range.end + 1);
         std::vector<ProofFragment> fragments_As(chaining_set_size);
         std::vector<ProofFragment> fragments_Bs(chaining_set_size);
-        for (int i = 0; i < (int)chaining_set_size; ++i)
+        for (int i = 0; i < static_cast<int>(chaining_set_size); ++i)
         {
             fragments_As[i] = fragment_set_A_range.start + fragment_dist(rng);
             fragments_Bs[i] = fragment_set_A_range.end + 1 + fragment_dist(rng);
@@ -193,7 +193,6 @@ public:
         std::cout << "\033[A" << "[" << std::flush;
         
         int progress_bar_step_size = num_challenges / progress_bar_steps;
-        int current_progress = 0; // when we reach steps then output progress marker
 
         bool cap_harvesting_compute_reached = false;
         for (size_t challenge_id = 0; challenge_id < num_challenges; ++challenge_id) {
@@ -252,7 +251,6 @@ public:
 
             // update progress bar
             if ((challenge_id + 1) % progress_bar_step_size == 0) {
-                current_progress++;
                 std::cout << "=" << std::flush;
             }
         }
@@ -266,7 +264,7 @@ public:
         double diskSeekTimeMs = total_seeks * diskSeekMs;
         double diskReadTimeMs = (static_cast<double>(total_data_read_bytes) / (diskReadMBs * 1000.0));
         double total_time_ms = diskSeekTimeMs + diskReadTimeMs;
-        double disk_load_percentage = 100.0 * (total_time_ms / (num_challenges * 9375.0));
+        double disk_load_percentage = 100.0 * (total_time_ms / (numeric_cast<double>(num_challenges) * 9375.0));
 
         //std::cout << "---- Disk Read Simulation Results ----" << std::endl;
         double plots_passed_perc = (static_cast<double>(total_plots_passed_filter)) / static_cast<double>(num_grouped_plots * num_challenges);
@@ -279,7 +277,7 @@ public:
        // std::cout << "Max compute time for a single challenge: " << max_compute_ms_per_challenge << " ms" << std::endl;
         //std::cout << "Max plots passing filter for a single challenge: " << max_plots_passing_filter_per_challenge << std::endl;
         // and load calc for max
-        double max_disk_load_percentage = 100.0 * ((max_plots_passing_filter_per_challenge * 2 * diskSeekMs + (static_cast<double>(max_plots_passing_filter_per_challenge * num_plots_in_group * chaining_set_bytes * 2) / (diskReadMBs * 1000.0))) / 9375.0);
+        double max_disk_load_percentage = 100.0 * ((static_cast<double>(max_plots_passing_filter_per_challenge) * 2 * diskSeekMs + (static_cast<double>(max_plots_passing_filter_per_challenge * num_plots_in_group * chaining_set_bytes * 2) / (diskReadMBs * 1000.0))) / 9375.0);
         //std::cout << "Estimated max HDD load for a single challenge: " << max_disk_load_percentage << "%" << std::endl;
         double max_compute_load_percentage = 100.0 * (max_compute_ms_per_challenge / 9375.0);
         //std::cout << "Estimated max CPU harvesting load for a single challenge: " << max_compute_load_percentage << "%" << std::endl;
@@ -330,7 +328,7 @@ public:
         printRow("Total plots passed filter",
                 num(total_plots_passed_filter, 0));
         printRow("Total disk seeks", num(total_seeks, 0));
-        printRow("Total data read", bytes_sensible(total_data_read_bytes));
+        printRow("Total data read", bytes_sensible(static_cast<double>(total_data_read_bytes)));
         printSeparator();
 
         printRow("Total disk seek time", ms(diskSeekTimeMs));
