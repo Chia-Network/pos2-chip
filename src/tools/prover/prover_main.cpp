@@ -193,6 +193,7 @@ try
             // std::cout << "solver xbits " << params.get_k() << " " << plot_id_hex << " " << xbits_hex << " " << (int)params.get_strength() << std::endl;
             std::cout << "To complete proof run: " << std::endl << " solver xbits " << plot_id_hex << " " << xbits_hex_compressed << " " << (int)params.get_strength() << std::endl;
         }
+        return 0;
     }
 
     if (mode == "check")
