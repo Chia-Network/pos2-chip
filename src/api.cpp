@@ -52,9 +52,7 @@ uint32_t qualities_for_challenge(
     QualityChain* output,
     uint32_t const num_outputs) try
 {
-    std::array<uint8_t, 32> c;
-    memcpy(c.data(), challenge, 32);
-    Prover p(c, plot_file);
+    Prover p(plot_file);
 
     std::vector<QualityChain> ret = p.prove(proof_fragment_scan_filter);
     uint32_t const num_results = std::min(static_cast<uint32_t>(ret.size()), num_outputs);
