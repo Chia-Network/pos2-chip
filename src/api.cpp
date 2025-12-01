@@ -25,7 +25,7 @@ bool validate_proof(
     ProofParams const params(plot_id, k_size, strength);
     ProofValidator validator(params);
     std::optional<QualityChainLinks> quality_links = validator.validate_full_proof(
-        std::span<uint32_t const, 512>(proof, proof + 512),
+        std::span<uint32_t const, TOTAL_XS_IN_PROOF>(proof, proof + TOTAL_XS_IN_PROOF),
         std::span<uint8_t const, 32>(challenge, challenge + 32),
         proof_fragment_scan_filter
         );
@@ -82,7 +82,7 @@ bool get_partial_proof(
     std::vector<uint64_t> ret = p.getAllProofFragmentsForProof(*input);
     if (ret.empty()) return false;
 
-    assert(ret.size() == 64);
+    assert(ret.size() == TOTAL_PROOF_FRAGMENTS_IN_PROOF);
     std::copy(ret.begin(), ret.end(), output);
     return true;
 }
@@ -106,18 +106,18 @@ bool solve_partial_proof(
     ProofParams params(plot_id, k, strength);
     ProofFragmentCodec c(params);
 
-    std::array<uint32_t, 256> x_bits;
+    std::array<uint32_t, TOTAL_T1_PAIRS_IN_PROOF> x_bits;
     size_t idx = 0;
-    for (int i = 0; i < 64; ++i, ++fragments) {
+    for (int i = 0; i < TOTAL_PROOF_FRAGMENTS_IN_PROOF; ++i, ++fragments) {
         for (const uint32_t x: c.get_x_bits_from_proof_fragment(*fragments)) {
             x_bits[idx] = x;
             ++idx;
         }
     }
-    assert(idx == 256);
+    assert(idx == TOTAL_T1_PAIRS_IN_PROOF);
 
     Solver solver(params);
-    std::vector<std::array<uint32_t, 512>> full_proofs = solver.solve(x_bits);
+    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> full_proofs = solver.solve(x_bits);
     if (full_proofs.empty()) return false;
     // TODO: support returning multiple proofs
     std::copy(full_proofs[0].begin(), full_proofs[0].end(), output);
