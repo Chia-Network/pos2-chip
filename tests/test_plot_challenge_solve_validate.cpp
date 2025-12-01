@@ -11,7 +11,7 @@ TEST_SUITE_BEGIN("plot-challenge-solve-verify");
 TEST_CASE("plot-k18-strength2-4-5")
 {
 #ifdef NDEBUG
-    const size_t N_TRIALS = 1;                         // 3; // strength 2, 4, 5
+    const size_t N_TRIALS = 1;                         // 3; // strength 2, 4, 5 -- this will be updated to more trials later pending strength changes
     const size_t MAX_CHAINS_PER_CHALLENGE_TO_TEST = 1; // 3; // check up to 3 chains from challenge
 #else
     const size_t N_TRIALS = 1;                         // strength 2 only
