@@ -138,7 +138,7 @@ public:
         std::cout << "   Disk seek time (ms)              : " << diskSeekMs << " ms\n";
         std::cout << "   Disk read speed                  : " << diskReadMBs << " MB/s\n";
         std::cout << "   ----------------------------------\n";
-        std::cout << "   Plot size bytes                  : " << bytes_sensible(plot_bytes) << std::endl;
+        std::cout << "   Plot size bytes                  : " << bytes_sensible(static_cast<double(plot_bytes)) << std::endl;
         std::cout << "   Total plots per Disk             : " << num_plots << std::endl;
         std::cout << "   ----------------------------------\n";
         std::cout << "   Plots in group                   : " << num_plots_in_group << std::endl;
@@ -192,7 +192,7 @@ public:
         // move cursor up one line
         std::cout << "\033[A" << "[" << std::flush;
         
-        int progress_bar_step_size = num_challenges / progress_bar_steps;
+        size_t progress_bar_step_size = num_challenges / progress_bar_steps;
 
         bool cap_harvesting_compute_reached = false;
         for (size_t challenge_id = 0; challenge_id < num_challenges; ++challenge_id) {
@@ -301,11 +301,11 @@ public:
         printRow("Challenges simulated", num(num_challenges, 0));
         printRow("Total proofs found", num(proofs_found, 0));
         printSeparator();
-        printRow("HDD Capacity", tb(diskTB));
+        printRow("HDD Capacity", tb(static_cast<double>(diskTB)));
         printRow("Avg HDD load (all challenges)", pct(disk_load_percentage));
         printRow("Max HDD load (single challenge)", pct(max_disk_load_percentage));
         size_t read_bytes_per_day = (total_data_read_bytes * 9216) / num_challenges;
-        printRow("Estimated data read per day", bytes_sensible(read_bytes_per_day));
+        printRow("Estimated data read per day", bytes_sensible(static_cast<double>(read_bytes_per_day)));
         printSeparator();
 
         printRow("Avg CPU harvesting load", pct(cpu_harvesting_load_percentage));
@@ -347,7 +347,7 @@ public:
                 num(total_challenges_before_compute_cap, 0));
         printSeparator();
         printRow("Farm size (plots)", num(num_plots, 0));
-        printRow("Farm netspace", tb(diskTB));
+        printRow("Farm netspace", tb(static_cast<double>(diskTB)));
         printSeparator();
         printRow("Total harvesting compute time",
                 ms(total_harvesting_compute_time_ms));

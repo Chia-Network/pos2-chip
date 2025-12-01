@@ -85,12 +85,12 @@ jobs:
         if: ${{ startsWith(matrix.os, 'windows') }}
         run: |
           build\src\tools\plotter\${{ matrix.mode }}\plotter.exe test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF 2
-          build\src\tools\prover\${{ matrix.mode }}\prover.exe challenge 4603000000000000000000000000000000000000000000000000000000000000 plot_18_2_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin 1
+          build\src\tools\prover\${{ matrix.mode }}\prover.exe challenge 4603000000000000000000000000000000000000000000000000000000000000 plot_18_2_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin
       - name: Plotter
         if: ${{ !startsWith(matrix.os, 'windows') }}
         run: |
           build/src/tools/plotter/plotter test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF 2
-          build/src/tools/prover/prover challenge 4603000000000000000000000000000000000000000000000000000000000000 plot_18_2_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin 1
+          build/src/tools/prover/prover challenge 4603000000000000000000000000000000000000000000000000000000000000 plot_18_2_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin
       - name: Benchmark (Windows)
         if: ${{ matrix.mode == 'Release' && startsWith(matrix.os, 'windows') }}
         run: |

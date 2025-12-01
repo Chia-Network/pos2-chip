@@ -33,7 +33,7 @@ try
 
     if (mode == "challenge")
     {
-        if ((argc < 4) || (argc > 4))
+        if (argc != 4)
         {
             std::cerr << "Usage: " << argv[0] << " challenge [challengehex] [plotfile]\n";
             return 1;

@@ -27,11 +27,13 @@ fn main() {
     let plot_id: [u8; 32] = Sha256::digest(args.plot_seed.to_be_bytes()).into();
 
     let k = 18;
+    let strength = 2;
     let plot_filename = format!("k-18-test-{}.plot2", hex::encode(plot_id));
     let plot_filename = Path::new(&plot_filename);
     if !exists(plot_filename).expect("exists failed") {
         println!("generating plot: {}", plot_filename.display());
-        create_v2_plot(plot_filename, k, 2, &plot_id, &[32; 64 + 48]).expect("create_v2_plot");
+        create_v2_plot(plot_filename, k, strength, &plot_id, &[32; 64 + 48])
+            .expect("create_v2_plot");
     }
 
     let mut seed = args.seed;
@@ -44,7 +46,7 @@ fn main() {
         }
         let challenge: [u8; 32] = Sha256::digest(seed.to_be_bytes()).into();
         let qualities = prover
-            .get_qualities_for_challenge(&challenge, 4)
+            .get_qualities_for_challenge(&challenge)
             .expect("get_qualities_for_challenge");
 
         if qualities.len() > 1 {
@@ -53,12 +55,13 @@ fn main() {
         for q in qualities {
             // We pretend the qualities pass just to exercise more partial
             // proofs
-            let partial_proof = prover.get_partial_proof(&q).expect("get_partial_proofs");
             if !args.disable_solving {
-                let full_proof = solve_proof(&partial_proof, &plot_id, k);
+                let full_proof = solve_proof(&q, &plot_id, k, strength);
                 // we expect the proof to be valid
                 assert!(!full_proof.is_empty());
-                assert!(validate_proof_v2(&plot_id, k, &challenge, 2, 4, &full_proof).is_some());
+                assert!(
+                    validate_proof_v2(&plot_id, k, &challenge, strength, &full_proof).is_some()
+                );
             }
         }
         seed += 1;

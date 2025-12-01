@@ -59,7 +59,7 @@ public:
     }
     ~Prover() = default;
 
-    std::vector<QualityChain> prove(const std::array<uint8_t, 32> &challenge)
+    std::vector<QualityChain> prove(std::span<uint8_t const, 32> const challenge)
     {
         // use proof core to find the proof fragment sets
         ProofParams const& plot_proof_params = plot_file_.getProofParams();
