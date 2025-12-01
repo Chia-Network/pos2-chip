@@ -19,19 +19,9 @@ fuzz_target!(|data: &[u8]| {
     let Ok(strength) = unstructured.int_in_range::<u8>(2..=64) else {
         return;
     };
-    let Ok(proof_fragment_scan_filter) = u8::arbitrary(&mut unstructured) else {
-        return;
-    };
     let Ok(proof) = Vec::<u8>::arbitrary(&mut unstructured) else {
         return;
     };
 
-    let _ = validate_proof_v2(
-        &plot_id,
-        k_size,
-        &challenge,
-        strength,
-        proof_fragment_scan_filter,
-        &proof,
-    );
+    let _ = validate_proof_v2(&plot_id, k_size, &challenge, strength, &proof);
 });

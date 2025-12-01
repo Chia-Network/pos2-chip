@@ -27,7 +27,7 @@ class Chainer
 public:
     int num_hashes = 0;
     Chainer(const ProofParams &params,
-              const std::array<uint8_t, 32> &challenge)
+              const std::span<uint8_t const, 32> challenge)
         : proof_core_(params),
           challenge_(challenge)
     {
@@ -58,7 +58,7 @@ public:
         };
 
         BlakeHash::Result256 initial_challenge =
-            proof_core_.hashing.challengeWithPlotIdHash(challenge_.data());
+            proof_core_.hashing.challengeWithPlotIdHash(challenge_);
 
         #ifdef DEBUG_CHAINER
         std::cout << "Chainer: Initial challenge: "
@@ -264,7 +264,7 @@ public:
         }
 
         BlakeHash::Result256 challenge =
-            proof_core_.hashing.challengeWithPlotIdHash(challenge_.data());
+            proof_core_.hashing.challengeWithPlotIdHash(challenge_);
         #ifdef USE_FAST_CHALLENGE
         uint64_t fast_challenge = challenge.r[0] | (static_cast<uint64_t>(challenge.r[1]) << 32);
         #endif
@@ -285,8 +285,6 @@ public:
                 return false;
             }
             #endif
-
-            
         }
 
         return true;
@@ -294,5 +292,5 @@ public:
 
 private:
     ProofCore proof_core_;
-    std::array<uint8_t, 32> challenge_;
+    std::span<uint8_t const, 32> challenge_;
 };

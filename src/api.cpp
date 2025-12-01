@@ -51,7 +51,7 @@ uint32_t qualities_for_challenge(
 {
     Prover p(plot_file);
 
-    const std::array<uint8_t, 32> &challenge_arr = *reinterpret_cast<const std::array<uint8_t, 32>*>(challenge);
+    std::span<uint8_t const, 32> const challenge_arr(challenge, challenge + 32);
     std::vector<QualityChain> ret = p.prove(challenge_arr);
     uint32_t const num_results = std::min(static_cast<uint32_t>(ret.size()), num_outputs);
     std::copy(ret.begin(), ret.begin() + num_results, output);
@@ -67,7 +67,7 @@ catch (std::exception const& e) {
 // plot ID must point to exactly 32 bytes
 // output must point to exactly TOTAL_XS_IN_PROOF (128) 32-bit integers
 bool solve_partial_proof(
-    uint64_t const* fragments,
+    QualityChain const* quality,
     uint8_t const* plot_id,
     uint8_t const k,
     uint8_t const strength,
@@ -80,8 +80,8 @@ bool solve_partial_proof(
 
     std::array<uint32_t, TOTAL_T1_PAIRS_IN_PROOF> x_bits;
     size_t idx = 0;
-    for (int i = 0; i < TOTAL_PROOF_FRAGMENTS_IN_PROOF; ++i, ++fragments) {
-        for (const uint32_t x: c.get_x_bits_from_proof_fragment(*fragments)) {
+    for (int i = 0; i < TOTAL_PROOF_FRAGMENTS_IN_PROOF; ++i) {
+        for (const uint32_t x: c.get_x_bits_from_proof_fragment(quality->chain_links[i])) {
             x_bits[idx] = x;
             ++idx;
         }

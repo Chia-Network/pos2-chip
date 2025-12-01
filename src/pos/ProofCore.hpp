@@ -315,10 +315,10 @@ public:
         Range fragment_set_A_range;
         Range fragment_set_B_range;
     };
-    SelectedChallengeSets selectChallengeSets(std::array<uint8_t, 32> challenge)
+    SelectedChallengeSets selectChallengeSets(std::span<uint8_t const, 32> const challenge)
     {
         // challenge sets will be the same withing a grouped plot id
-        BlakeHash::Result256 grouped_challenge_hash = hashing.challengeWithGroupedPlotIdHash(challenge.data());
+        BlakeHash::Result256 grouped_challenge_hash = hashing.challengeWithGroupedPlotIdHash(challenge);
         
         // use bits from challenge to select two distinct chaining sets
         uint32_t num_chaining_sets_bits = params_.get_num_chaining_sets_bits();

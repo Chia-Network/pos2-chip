@@ -13,31 +13,6 @@ pub const NUM_CHAIN_LINKS: usize = 16;
 pub const OUTSIDE_FRAGMENT_IS_LR: u8 = 0; // outside t3 index is RL
 pub const OUTSIDE_FRAGMENT_IS_RR: u8 = 1; // outside t3 index is RR
 
-#[derive(Clone)]
-pub struct PartialProof {
-    pub proof_fragments: [u64; NUM_CHAIN_LINKS * 4],
-    pub strength: u8,
-}
-
-impl Default for PartialProof {
-    fn default() -> Self {
-        Self {
-            proof_fragments: [0; 64],
-            strength: 0,
-        }
-    }
-}
-
-#[cfg(feature = "arbitrary")]
-impl<'a> arbitrary::Arbitrary<'a> for PartialProof {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self {
-            proof_fragments: <[u64; NUM_CHAIN_LINKS * 4]>::arbitrary(u)?,
-            strength: u.int_in_range::<u8>(2..=63)?,
-        })
-    }
-}
-
 #[repr(C)]
 #[derive(Default, Clone)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -76,7 +51,6 @@ unsafe extern "C" {
         k_size: u8,
         strength: u8,
         challenge: *const u8,
-        proof_fragment_scan_filter: u8,
         proof: *const u32,
         quality: *mut QualityChain,
     ) -> bool;
@@ -84,26 +58,19 @@ unsafe extern "C" {
     fn qualities_for_challenge(
         plot_file: *const c_char,
         challenge: *const u8,
-        proof_fragment_scan_filter: u8,
         output: *mut QualityChain,
         num_outputs: u32,
     ) -> u32;
 
-    // proof must point to exactly 64 proof fragments (each a uint64_t)
+    // proof must point to exactly 16 proof fragments (each a uint64_t)
     // plot ID must point to exactly 32 bytes
     // output must point to exactly 512 32 bit integers
     fn solve_partial_proof(
-        partial_proof: *const u64,
+        quality: *const QualityChain,
         plot_id: *const u8,
         k: u8,
         strength: u8,
         output: *mut u32,
-    ) -> bool;
-
-    fn get_partial_proof(
-        plot_file: *const c_char,
-        input: *const QualityChain,
-        output: *mut u64,
     ) -> bool;
 
     fn create_plot(
@@ -117,7 +84,12 @@ unsafe extern "C" {
 
 pub type Bytes32 = [u8; 32];
 
-pub fn solve_proof(partial_proof: &PartialProof, plot_id: &Bytes32, k: u8) -> Vec<u8> {
+pub fn solve_proof(
+    quality_proof: &QualityChain,
+    plot_id: &Bytes32,
+    k: u8,
+    strength: u8,
+) -> Vec<u8> {
     let mut proof = [0_u32; 512];
     // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
     // proof must point to exactly 64 proof fragments (each a uint64_t)
@@ -125,10 +97,10 @@ pub fn solve_proof(partial_proof: &PartialProof, plot_id: &Bytes32, k: u8) -> Ve
     // output must point to exactly 512 32-bit integers
     if !unsafe {
         solve_partial_proof(
-            partial_proof.proof_fragments.as_ptr(),
+            quality_proof,
             plot_id.as_ptr(),
             k,
-            partial_proof.strength,
+            strength,
             proof.as_mut_ptr(),
         )
     } {
@@ -143,7 +115,6 @@ pub fn validate_proof_v2(
     size: u8,
     challenge: &Bytes32,
     strength: u8,
-    proof_fragment_scan_filter: u8,
     proof: &[u8],
 ) -> Option<[u8; 385]> {
     let x_values = bits::expand_bits(proof, size)?;
@@ -167,7 +138,6 @@ pub fn validate_proof_v2(
             size,
             strength,
             challenge.as_ptr(),
-            proof_fragment_scan_filter,
             x_values.as_ptr(),
             &mut quality,
         )
@@ -309,11 +279,7 @@ impl Prover {
         })
     }
 
-    pub fn get_qualities_for_challenge(
-        &self,
-        challenge: &Bytes32,
-        proof_fragment_scan_filter: u8,
-    ) -> Result<Vec<QualityChain>> {
+    pub fn get_qualities_for_challenge(&self, challenge: &Bytes32) -> Result<Vec<QualityChain>> {
         let Some(plot_path) = self.path.to_str() else {
             return Err(Error::other("invalid path"));
         };
@@ -330,36 +296,12 @@ impl Prover {
             let num_results = qualities_for_challenge(
                 plot_path.as_ptr(),
                 challenge.as_ptr(),
-                proof_fragment_scan_filter,
                 results.as_mut_ptr(),
                 10,
             );
             results.set_len(num_results as usize);
         }
         Ok(results)
-    }
-
-    pub fn get_partial_proof(&self, quality: &QualityChain) -> Result<PartialProof> {
-        let Some(plot_path) = self.path.to_str() else {
-            return Err(Error::other("invalid path"));
-        };
-
-        let plot_path = CString::new(plot_path)?;
-
-        let mut proof_fragments = [0_u64; NUM_CHAIN_LINKS * 4];
-        // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
-        // turn a quality proof into a partial proof, which can then be solved
-        // into a full proof. output must point to exactly 64 uint64 objects.
-        // They will all be initialized as the partial proof returns true on
-        // success, false on failure
-        if unsafe { get_partial_proof(plot_path.as_ptr(), quality, proof_fragments.as_mut_ptr()) } {
-            Ok(PartialProof {
-                proof_fragments,
-                strength: self.strength,
-            })
-        } else {
-            Err(Error::other("failed to get partial proof"))
-        }
     }
 
     pub fn size(&self) -> u8 {
