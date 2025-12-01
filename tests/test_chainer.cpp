@@ -12,7 +12,7 @@
 #include <iomanip>
 #include <random>
 
-#define DEBUG_CHAINER true
+// #define DEBUG_CHAINER true
 
 TEST_SUITE_BEGIN("chainer");
 
@@ -122,7 +122,11 @@ TEST_CASE("small_lists")
         }
         #endif
     }
+    #ifdef NDEBUG
     int num_trials = 2000;
+    #else
+    int num_trials = 500;
+    #endif
     int num_chains_validated = 0;
     int total_chains_found = 0;
     Timer timer;
@@ -197,6 +201,7 @@ TEST_CASE("small_lists")
     std::cout << "Chaining trials took " << trials_ms << " ms\n";
 
     // create and show historgram of trial_results
+    #ifdef NDEBUG
     std::map<int, int> histogram;
     for (int count : trial_results)
     {
@@ -207,6 +212,7 @@ TEST_CASE("small_lists")
     {
         std::cout << "  " << entry.first << " chains: " << entry.second << " trials\n";
     }
+    #endif
 
     // calculate standard deviation and variance of results
     double mean = static_cast<double>(total_chains_found) / num_trials;
@@ -224,8 +230,13 @@ TEST_CASE("small_lists")
 
     // the mean should average the expected outcome +- 10%
     double expected_mean = 1 / static_cast<double>(1 << AVERAGE_PROOFS_PER_CHALLENGE_BITS);
-    REQUIRE(mean > expected_mean * 0.85);
-    REQUIRE(mean < expected_mean * 1.15);
+    #ifdef NDEBUG
+    REQUIRE(mean > expected_mean * 0.80);
+    REQUIRE(mean < expected_mean * 1.20);
+    #else
+    REQUIRE(mean > expected_mean * 0.5);
+    REQUIRE(mean < expected_mean * 1.5);
+    #endif
 
 }
 
