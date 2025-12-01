@@ -103,7 +103,7 @@ try
         ProofValidator proof_validator(params);
 
         std::vector<uint32_t> proof = Utils::compressedHexToKValues(k, proof_hex);
-        if (proof.size() != 512)
+        if (proof.size() != TOTAL_XS_IN_PROOF)
         {
             std::cerr << "invalid proof" << std::endl;
             return 1;
