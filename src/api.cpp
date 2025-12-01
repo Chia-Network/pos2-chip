@@ -111,7 +111,7 @@ bool create_plot(char const* filename, uint8_t const k, uint8_t const strength, 
 
     if ((k & 1) == 1)
         throw std::invalid_argument("k must be even");
-    ProofParams params(std::span<uint8_t const, 32>(plot_id, plot_id + 32), int(k), int(strength));
+    ProofParams params(plot_id, int(k), int(strength));
     Plotter plotter(params);
     PlotData plot = plotter.run();
     PlotFile::writeData(filename, plot, plotter.getProofParams(), std::span<uint8_t const, 32 + 48 + 32>(memo, memo + 32 + 48 + 32));
