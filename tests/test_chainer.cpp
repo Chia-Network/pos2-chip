@@ -122,7 +122,7 @@ TEST_CASE("small_lists")
         }
         #endif
     }
-    int num_trials = 1000;
+    int num_trials = 2000;
     int num_chains_validated = 0;
     int total_chains_found = 0;
     Timer timer;
