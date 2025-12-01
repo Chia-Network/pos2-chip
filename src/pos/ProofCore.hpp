@@ -13,9 +13,9 @@
 #include "ProofFragment.hpp"
 
 constexpr int TOTAL_XS_IN_PROOF = 128;
-constexpr int TOTAL_T3_PAIRS_IN_PROOF = 16;
-constexpr int TOTAL_T2_PAIRS_IN_PROOF = 32;
 constexpr int TOTAL_T1_PAIRS_IN_PROOF = 64;
+constexpr int TOTAL_T2_PAIRS_IN_PROOF = 32;
+constexpr int TOTAL_T3_PAIRS_IN_PROOF = 16;
 constexpr int TOTAL_PROOF_FRAGMENTS_IN_PROOF = 16;
 //------------------------------------------------------------------------------
 // Structs for pairing results
