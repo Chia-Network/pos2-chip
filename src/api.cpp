@@ -16,14 +16,11 @@ bool validate_proof(
     uint8_t const k_size,
     uint8_t const strength,
     uint8_t const* challenge,
-    uint8_t const proof_fragment_scan_filter, // NOTE: not used anymore
     uint32_t const* proof,
     QualityChain* quality) try
 {
     if ((k_size & 1) == 1)
         throw std::invalid_argument("k must be even");
-    if (proof_fragment_scan_filter != 0)
-        throw std::invalid_argument("proof_fragment_scan_filter is no longer supported");
     ProofParams const params(plot_id, k_size, strength);
     ProofValidator validator(params);
     std::optional<QualityChainLinks> quality_links = validator.validate_full_proof(
@@ -49,14 +46,11 @@ catch (std::exception const& e) {
 uint32_t qualities_for_challenge(
     char const* plot_file,
     uint8_t const* challenge,
-    uint8_t const proof_fragment_scan_filter, // NOTE: not used anymore
     QualityChain* output,
     uint32_t const num_outputs) try
 {
     Prover p(plot_file);
 
-    if (proof_fragment_scan_filter != 0)
-        throw std::invalid_argument("proof_fragment_scan_filter is no longer supported");
     const std::array<uint8_t, 32> &challenge_arr = *reinterpret_cast<const std::array<uint8_t, 32>*>(challenge);
     std::vector<QualityChain> ret = p.prove(challenge_arr);
     uint32_t const num_results = std::min(static_cast<uint32_t>(ret.size()), num_outputs);
@@ -68,32 +62,6 @@ catch (std::exception const& e) {
     return 0;
 }
 
-// turn a quality proof into a partial proof, which can then be solved into a full proof.
-// output must point to exactly 64 uint64 objects. They will all be initialized as the partial proof
-// returns true on success, false on failure
-bool get_partial_proof(
-    char const* plot_file,
-    QualityChain const* input,
-    uint64_t* output) try
-{
-    return false; // this function now obsolete.
-
-    // We don't need the challenge to turn QualityChain into a partial proof, so just pass in a dummy
-    /*std::array<uint8_t, 32> c{{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-                               0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
-    Prover p(c, plot_file);
-
-    std::vector<uint64_t> ret = p.getAllProofFragmentsForProof(*input);
-    if (ret.empty()) return false;
-
-    assert(ret.size() == TOTAL_PROOF_FRAGMENTS_IN_PROOF);
-    std::copy(ret.begin(), ret.end(), output);
-    return true;
-}
-catch (std::exception const& e) {
-    std::cerr << e.what() << std::endl;
-    return false;*/
-}
 
 // proof must point to exactly TOTAL_PROOF_FRAGMENTS_IN_PROOF (16) proof fragments (each a uint64_t)
 // plot ID must point to exactly 32 bytes
