@@ -48,58 +48,6 @@ public:
         return cipher_.decrypt(ciphertext);
     }
 
-    // Returns the specified number of bits extracted from proof fragment
-    // The extraction treats the MSB as bit 0.
-    uint64_t get_proof_fragment_bits_with_msb_as_zero(ProofFragment proof_fragment, size_t start_bits_incl, size_t len) const {
-        size_t total_bits = params_.get_k() * 2;
-        return (proof_fragment >> (total_bits - start_bits_incl - len)) & ((uint64_t(1) << len) - 1);
-    }
-
-    // Extracts 2 order bits following the partition as a uint32_t.
-    uint32_t extract_t3_order_bits(ProofFragment proof_fragment) const {
-        return static_cast<uint32_t>(
-            get_proof_fragment_bits_with_msb_as_zero(proof_fragment, params_.get_num_partition_bits(), 2)
-        );
-    }
-
-    // Extracts the T3 right partition bits (the LSB partition) as a uint32_t.
-    uint32_t extract_t3_r_partition_bits(ProofFragment proof_fragment) const {
-        return static_cast<uint32_t>(
-            proof_fragment & ((uint64_t(1) << params_.get_num_partition_bits()) - 1)
-        );
-    }
-
-    // Extracts the T3 left partition bits (from the MSB side) as a uint32_t.
-    uint32_t extract_t3_l_partition_bits(ProofFragment proof_fragment) const {
-        return static_cast<uint32_t>(
-            get_proof_fragment_bits_with_msb_as_zero(proof_fragment, 0, params_.get_num_partition_bits())
-        );
-    }
-
-    uint32_t get_lateral_to_t4_partition(ProofFragment proof_fragment) const {
-        uint32_t top_order_bit = extract_t3_order_bits(proof_fragment) >> 1;
-        if (top_order_bit == 0)
-        {
-            return extract_t3_l_partition_bits(proof_fragment);
-        }
-        else
-        {
-            return extract_t3_l_partition_bits(proof_fragment) + params_.get_num_partitions();
-        }
-    }
-
-    uint32_t get_r_t4_partition(ProofFragment proof_fragment) const {
-        uint32_t top_order_bit = extract_t3_order_bits(proof_fragment) >> 1;
-        if (top_order_bit == 0)
-        {
-            return extract_t3_r_partition_bits(proof_fragment) + params_.get_num_partitions();
-        }
-        else
-        {
-            return extract_t3_r_partition_bits(proof_fragment);
-        }
-    }
-
     // checks that the decoded x-values match the provided x_values.
     // x_values is an array of 8 uint32_t values (each representing a k-bit number).
     // It compares the upper halves (k/2 bits) of x_values[0], [2], [4], and [6] with those

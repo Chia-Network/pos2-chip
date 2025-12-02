@@ -17,9 +17,22 @@ TEST_CASE("plot-read-write")
     Timer timer{};
     timer.start("");
 
-    Plotter  plotter(Utils::hexToBytes(PLOT_ID_HEX), K, strength);
+    ProofParams params(Utils::hexToBytes(PLOT_ID_HEX).data(), K, strength);
+    Plotter  plotter(params);
     PlotData plot = plotter.run();
     timer.stop();
+
+    int CHUNK_SPAN_SCAN_RANGE_BITS = 16; // 65k entries per chunk
+    uint64_t chunk_span = (1ULL << (plotter.getProofParams().get_k() + CHUNK_SPAN_SCAN_RANGE_BITS));
+    ChunkedProofFragments partitioned_data = ChunkedProofFragments::convertToChunkedProofFragments(plot, chunk_span);
+    std::cout << "partitioned data has " << partitioned_data.proof_fragments_chunks.size() << " spans." << std::endl;
+    // show all spans
+    std::cout << "Span sizes (" << partitioned_data.proof_fragments_chunks.size() << "): ";
+    for (size_t i = 0; i < partitioned_data.proof_fragments_chunks.size(); i++) {
+        std::cout << "," << partitioned_data.proof_fragments_chunks[i].size();
+        //std::cout << " span #" << i << " has " << partitioned_data.t3_proof_fragments_chunks[i].size() << " fragments." << std::endl;
+    }
+    std::cout << std::endl;
 
     printfln("Plot completed, writing to file..."); 
 
@@ -31,10 +44,11 @@ TEST_CASE("plot-read-write")
     timer.stop();
 
     timer.start("Reading plot file: " + file_name);
-    PlotFile::PlotFileContents read_plot = PlotFile::readData(file_name);
+    PlotFile::PlotFileContents read_plot = PlotFile::readAllChunkedData(file_name);
     timer.stop();
 
-    ENSURE(plot == read_plot.data);
+    PlotData converted = ChunkedProofFragments::convertToPlotData(partitioned_data);
+    ENSURE(plot == converted);
     ENSURE(plotter.getProofParams() == read_plot.params);
 }
 

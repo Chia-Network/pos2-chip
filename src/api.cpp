@@ -16,7 +16,6 @@ bool validate_proof(
     uint8_t const k_size,
     uint8_t const strength,
     uint8_t const* challenge,
-    uint8_t const proof_fragment_scan_filter,
     uint32_t const* proof,
     QualityChain* quality) try
 {
@@ -25,9 +24,8 @@ bool validate_proof(
     ProofParams const params(plot_id, k_size, strength);
     ProofValidator validator(params);
     std::optional<QualityChainLinks> quality_links = validator.validate_full_proof(
-        std::span<uint32_t const, 512>(proof, proof + 512),
-        std::span<uint8_t const, 32>(challenge, challenge + 32),
-        proof_fragment_scan_filter
+        std::span<uint32_t const, TOTAL_XS_IN_PROOF>(proof, proof + TOTAL_XS_IN_PROOF),
+        std::span<uint8_t const, 32>(challenge, challenge + 32)
         );
     if (!quality_links) {
         return false;
@@ -48,15 +46,13 @@ catch (std::exception const& e) {
 uint32_t qualities_for_challenge(
     char const* plot_file,
     uint8_t const* challenge,
-    uint8_t const proof_fragment_scan_filter,
     QualityChain* output,
     uint32_t const num_outputs) try
 {
-    std::array<uint8_t, 32> c;
-    memcpy(c.data(), challenge, 32);
-    Prover p(c, plot_file);
+    Prover p(plot_file);
 
-    std::vector<QualityChain> ret = p.prove(proof_fragment_scan_filter);
+    std::span<uint8_t const, 32> const challenge_arr(challenge, challenge + 32);
+    std::vector<QualityChain> ret = p.prove(challenge_arr);
     uint32_t const num_results = std::min(static_cast<uint32_t>(ret.size()), num_outputs);
     std::copy(ret.begin(), ret.begin() + num_results, output);
     return num_results;
@@ -66,36 +62,12 @@ catch (std::exception const& e) {
     return 0;
 }
 
-// turn a quality proof into a partial proof, which can then be solved into a full proof.
-// output must point to exactly 64 uint64 objects. They will all be initialized as the partial proof
-// returns true on success, false on failure
-bool get_partial_proof(
-    char const* plot_file,
-    QualityChain const* input,
-    uint64_t* output) try
-{
-    // We don't need the challenge to turn QualityChain into a partial proof, so just pass in a dummy
-    std::array<uint8_t, 32> c{{0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-                               0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}};
-    Prover p(c, plot_file);
 
-    std::vector<uint64_t> ret = p.getAllProofFragmentsForProof(*input);
-    if (ret.empty()) return false;
-
-    assert(ret.size() == 64);
-    std::copy(ret.begin(), ret.end(), output);
-    return true;
-}
-catch (std::exception const& e) {
-    std::cerr << e.what() << std::endl;
-    return false;
-}
-
-// proof must point to exactly 64 proof fragments (each a uint64_t)
+// proof must point to exactly TOTAL_PROOF_FRAGMENTS_IN_PROOF (16) proof fragments (each a uint64_t)
 // plot ID must point to exactly 32 bytes
-// output must point to exactly 512 32-bit integers
+// output must point to exactly TOTAL_XS_IN_PROOF (128) 32-bit integers
 bool solve_partial_proof(
-    uint64_t const* fragments,
+    QualityChain const* quality,
     uint8_t const* plot_id,
     uint8_t const k,
     uint8_t const strength,
@@ -106,18 +78,18 @@ bool solve_partial_proof(
     ProofParams params(plot_id, k, strength);
     ProofFragmentCodec c(params);
 
-    std::array<uint32_t, 256> x_bits;
+    std::array<uint32_t, TOTAL_T1_PAIRS_IN_PROOF> x_bits;
     size_t idx = 0;
-    for (int i = 0; i < 64; ++i, ++fragments) {
-        for (const uint32_t x: c.get_x_bits_from_proof_fragment(*fragments)) {
+    for (int i = 0; i < TOTAL_PROOF_FRAGMENTS_IN_PROOF; ++i) {
+        for (const uint32_t x: c.get_x_bits_from_proof_fragment(quality->chain_links[i])) {
             x_bits[idx] = x;
             ++idx;
         }
     }
-    assert(idx == 256);
+    assert(idx == TOTAL_T1_PAIRS_IN_PROOF);
 
     Solver solver(params);
-    std::vector<std::array<uint32_t, 512>> full_proofs = solver.solve(x_bits);
+    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> full_proofs = solver.solve(x_bits);
     if (full_proofs.empty()) return false;
     // TODO: support returning multiple proofs
     std::copy(full_proofs[0].begin(), full_proofs[0].end(), output);
@@ -139,7 +111,8 @@ bool create_plot(char const* filename, uint8_t const k, uint8_t const strength, 
 
     if ((k & 1) == 1)
         throw std::invalid_argument("k must be even");
-    Plotter plotter(std::span<uint8_t const, 32>(plot_id, plot_id + 32), int(k), int(strength));
+    ProofParams params(plot_id, int(k), int(strength));
+    Plotter plotter(params);
     PlotData plot = plotter.run();
     PlotFile::writeData(filename, plot, plotter.getProofParams(), std::span<uint8_t const, 32 + 48 + 32>(memo, memo + 32 + 48 + 32));
     return true;

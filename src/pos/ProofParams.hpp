@@ -9,6 +9,18 @@
 #include <array>
 #include <cassert>
 
+struct Range {
+    uint64_t start;
+    uint64_t end;
+
+    // ranges are INCLUSIVE
+    bool isInRange(uint64_t value) const {
+        return value >= start && value <= end;
+    }
+
+    bool operator==(const Range& other) const = default;
+};
+
 class ProofParams
 {
 public:
@@ -28,11 +40,8 @@ public:
         if (strength_ > 63) {
             throw std::invalid_argument("ProofParams: strength must be less than 64.");
         }
-        if (strength_ > k + get_num_section_bits()) {
-            throw std::invalid_argument("ProofParams: strength must be less than k - section_bits");
-        }
-        if (get_sub_k() > k) {
-            throw std::invalid_argument("ProofParams: k must be at least 12");
+        if (strength_ > k - get_num_section_bits() - 1) {
+            throw std::invalid_argument("ProofParams: strength must be less than k - section_bits - 1");
         }
         // Copy the 32-byte plot ID.
         for (int i = 0; i < 32; ++i)
@@ -126,8 +135,7 @@ public:
     // Displays the plot parameters and a hexadecimal representation of the plot ID.
     void show() const
     {
-        std::cout << "Plot parameters: k=" << k_
-                  << ", sub_k=" << get_sub_k();
+        std::cout << "Plot parameters: k=" << k_;
         std::cout << " | Plot ID: ";
         for (int i = 0; i < 32; ++i)
         {
@@ -144,32 +152,56 @@ public:
         return plot_id_bytes_;
     }
 
+    std::array<uint8_t, 32> get_grouped_plot_id() const
+    {
+        // grouped plot id is the normal plot id with the two bytes zeroed out
+        // this allows up to 65536 grouped plots (or 60TB)
+        // may want to bump this up another level and leave the farmer to handle grouping
+
+        std::array<uint8_t, 32> grouped_plot_id_bytes;
+        std::memcpy(grouped_plot_id_bytes.data(), plot_id_bytes_, 32);
+        grouped_plot_id_bytes[30] = 0;
+        grouped_plot_id_bytes[31] = 0;
+        return grouped_plot_id_bytes;
+    }
+
     int get_k() const
     {
         return numeric_cast<int>(k_);
     }
 
-    int get_num_partition_bits() const
+    int get_chaining_set_bits() const
     {
-        return numeric_cast<int>(k_ - get_sub_k());
+        // this achieves bit saturation on T2 pairs.
+        return (get_k() >> 1) - 2;
+    }
+
+    uint32_t get_chaining_set_size() const
+    {
+        return 1 << get_chaining_set_bits();
+    }
+
+    int get_num_chaining_sets_bits() const
+    {
+        return k_ - get_chaining_set_bits();
+    }
+
+    uint32_t get_num_chaining_sets() const
+    {
+        return 1 << get_num_chaining_sets_bits();
+    }
+
+    Range get_chaining_set_range(size_t chaining_set_index) const
+    {
+        uint64_t range = (uint64_t) 1 << (k_ + get_chaining_set_bits());
+        uint64_t start = chaining_set_index * range;
+        uint64_t end = start + range - 1;
+        return Range{start, end};
     }
 
     int get_num_pairing_meta_bits() const
     {
         return 2 * k_;
-    }
-
-    int get_num_partitions() const
-    {
-        return 1ULL << get_num_partition_bits();
-    }
-
-    int get_sub_k() const
-    {
-        // k32/k30/k28/26...18 use sub_k of 23/22/20/19...15
-        if (k_ == 30) return 22;
-        if (k_ == 32) return 23;
-        return numeric_cast<int>(k_ / 2 + 6);
     }
 
     // Returns the number of match key bits for table 3
@@ -190,9 +222,6 @@ public:
 
         std::cout << "k: " << (int) k_ << std::endl;
         std::cout << "num_pairing_meta_bits: " << get_num_pairing_meta_bits() << std::endl;
-        std::cout << "num_partition_bits: " << get_num_partition_bits() << std::endl;
-        std::cout << "num_partitions: " << get_num_partitions() << std::endl;
-        std::cout << "sub_k: " << get_sub_k() << std::endl;
         std::cout << "num sections: " << get_num_sections() << std::endl;
         std::cout << "strength: " << (int) strength_ << std::endl;
     }

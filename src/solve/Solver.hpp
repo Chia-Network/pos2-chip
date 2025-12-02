@@ -27,6 +27,8 @@
 #include <xmmintrin.h>
 #endif
 
+
+
 // #define DEBUG_VERIFY true
 
 // Needed for macOS
@@ -34,8 +36,8 @@ typedef unsigned int uint;
 
 struct T1_Match
 {
-    uint32_t x1;        // in T1 this is x1
-    uint32_t x2;        // in T1 this is x2
+    uint32_t x1;        
+    uint32_t x2;        
     uint32_t pair_hash; // hash of x1 and x2 when paired.
 };
 
@@ -51,23 +53,11 @@ struct T2_match
 struct T3_match
 {
     std::array<uint32_t, 8> x_values;
-    // variables below could be passed along for optimization
-    // uint32_t match_info;
-    // uint64_t meta;
-    // uint32_t partition;
 };
 
 struct T4_match
 {
     std::array<uint32_t, 16> x_values;
-    // variables below could be passed along for optimization
-    // uint32_t match_info;
-    // uint64_t meta;
-};
-
-struct T5_match
-{
-    std::array<uint32_t, 32> x_values;
 };
 
 //
@@ -130,11 +120,9 @@ public:
         XBitGroupMappings out;
 
         int mapping_idx = 0;
-        for (size_t i = 0; i < x_bits_list.size(); ++i)
+        for (uint32_t x_bits : x_bits_list)
         {
-            uint32_t x_bits = x_bits_list[i];
-
-            int idx = lookup[x_bits];
+            int const idx = lookup[x_bits];
             if (idx < 0)
             {
                 // first time we see `x_bits`
@@ -159,39 +147,39 @@ public:
     // Main solver function.
     // Input: an array of 256 x1 candidates.
     //        x_solution is an dev-mode test array that the solver should solve to and test against (debug and verify).
-    // Returns: a vector of complete proofs (each proof is an array of 512 uint32_t x-values).
-    std::vector<std::array<uint32_t, 512>> solve(std::span<uint32_t const, 256> const x_bits_list, const std::vector<uint32_t> &x_solution = {})
+    // Returns: a vector of complete proofs (each proof is an array of TOTAL_XS_IN_PROOF uint32_t x-values).
+    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF/2> const x_bits_list, const std::vector<uint32_t> &x_solution = {})
     {
         XBitGroupMappings x_bits_group = compress_with_lookup(x_bits_list, params_.get_k() / 2);
 #ifdef DEBUG_VERIFY
         if (true)
         {
             std::cout << "original x bits list: ";
-            for (size_t i = 0; i < x_bits_list.size(); i++)
+            for (auto v : x_bits_list)
             {
-                std::cout << x_bits_list[i] << ", ";
+                std::cout << v << ", ";
             }
             std::cout << std::endl;
             // output x1 list
             std::cout << "unique x bits list (" << x_bits_group.unique_x_bits_list.size() << "):" << std::endl;
-            for (size_t i = 0; i < x_bits_group.unique_x_bits_list.size(); i++)
+            for (auto v : x_bits_group.unique_x_bits_list)
             {
-                std::cout << x_bits_group.unique_x_bits_list[i] << ", ";
+                std::cout << v << ", ";
             }
             std::cout << std::endl;
 
             // output mappings
             std::cout << "x bits mapping (" << x_bits_group.mapping.size() << "):" << std::endl;
-            for (size_t i = 0; i < x_bits_group.mapping.size(); i++)
+            for (auto v : x_bits_group.mapping)
             {
-                std::cout << x_bits_group.mapping[i] << ", ";
+                std::cout << v << ", ";
             }
             std::cout << std::endl;
 
             std::cout << "x_solution (" << x_solution.size() << "):" << std::endl;
-            for (size_t i = 0; i < x_solution.size(); i++)
+            for (auto v : x_solution)
             {
-                std::cout << x_solution[i] << ", ";
+                std::cout << v << ", ";
             }
             std::cout << std::endl;
         }
@@ -280,12 +268,12 @@ public:
                 uint32_t x1 = x_solution[i];
                 uint32_t x2 = x_solution[i + 1];
                 bool found = false;
-                for (size_t j = 0; j < t1_matches.size(); j++)
+                for (auto const& t1 : t1_matches)
                 {
-                    if (t1_matches[j].x1 == x1 && t1_matches[j].x2 == x2)
+                    if (t1.x1 == x1 && t1.x2 == x2)
                     {
                         found = true;
-                        std::cout << "Found match for x pair: " << x1 << ", " << x2 << ", hash: " << t1_matches[j].pair_hash << std::endl;
+                        std::cout << "Found match for x pair: " << x1 << ", " << x2 << ", hash: " << t1.pair_hash << std::endl;
                         break;
                     }
                 }
@@ -325,26 +313,26 @@ public:
                 uint32_t x3 = x_solution[i + 2];
                 uint32_t x4 = x_solution[i + 3];
 
-                int x1_group = x_bits_group.mapping[i / 2];
-                int x2_group = x_bits_group.mapping[i / 2 + 1];
+                size_t const x1_group = x_bits_group.mapping[i / 2];
+                size_t const x2_group = x_bits_group.mapping[i / 2 + 1];
                 std::cout << "x1 group: " << x1_group << ", x2 group: " << x2_group << std::endl;
 
                 bool found_l = false;
-                for (int l = 0; l < t1_match_groups[x1_group].size(); l++)
+                for (auto const& group : t1_match_groups[x1_group])
                 {
-                    if (t1_match_groups[x1_group][l].x1 == x1 && t1_match_groups[x1_group][l].x2 == x2)
+                    if (group.x1 == x1 && group.x2 == x2)
                     {
-                        std::cout << "Found match for x pair: " << x1 << ", " << x2 << " hash: " << t1_match_groups[x1_group][l].pair_hash << std::endl;
+                        std::cout << "Found match for x pair: " << x1 << ", " << x2 << " hash: " << group.pair_hash << std::endl;
                         found_l = true;
                     }
                 }
 
                 bool found_r = false;
-                for (int r = 0; r < t1_match_groups[x2_group].size(); r++)
+                for (auto const& group : t1_match_groups[x2_group])
                 {
-                    if (t1_match_groups[x2_group][r].x1 == x3 && t1_match_groups[x2_group][r].x2 == x4)
+                    if (group.x1 == x3 && group.x2 == x4)
                     {
-                        std::cout << "Found match for x pair: " << x3 << ", " << x4 << " hash: " << t1_match_groups[x2_group][r].pair_hash << std::endl;
+                        std::cout << "Found match for x pair: " << x3 << ", " << x4 << " hash: " << group.pair_hash << std::endl;
                         found_r = true;
                     }
                 }
@@ -362,7 +350,7 @@ public:
         }
 #endif
         // Phase 10: T2 Matching – Process adjacent T1 groups to produce T2 matches.
-        std::array<std::vector<T2_match>, 128> t2_matches = matchT2Candidates(t1_match_groups, x_bits_group);
+        std::array<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> t2_matches = matchT2Candidates(t1_match_groups, x_bits_group);
 #ifdef DEBUG_VERIFY
         if (true)
         {
@@ -401,22 +389,20 @@ public:
         std::cout << "T2 match groups: " << t2_matches.size() << std::endl;
 #endif
 
-        // Phase 11: T3, T4, T5 Matching – Further pair T2 matches.
-        std::array<std::vector<T3_match>, 64> t3_matches;
-        std::array<std::vector<T4_match>, 32> t4_matches;
-        std::array<std::vector<T5_match>, 16> t5_matches;
-        matchT3T4T5Candidates(num_k_bits_, t2_matches, t3_matches, t4_matches, t5_matches);
+        // Phase 11: T3 Matching – Further pair T2 matches.
+        std::array<std::vector<T3_match>, TOTAL_T3_PAIRS_IN_PROOF> t3_matches;
+        matchT3Candidates(num_k_bits_, t2_matches, t3_matches);
 
 #ifdef DEBUG_VERIFY
-        std::cout << "T5 matches: " << t5_matches.size() << std::endl;
-        for (size_t i = 0; i < t5_matches.size(); i++)
+        std::cout << "T3 matches: " << t3_matches.size() << std::endl;
+        for (size_t i = 0; i < t3_matches.size(); i++)
         {
             std::cout << "Group " << i << ":";
-            for (size_t j = 0; j < t5_matches[i].size(); j++)
+            for (size_t j = 0; j < t3_matches[i].size(); j++)
             {
                 for (int x = 0; x < 32; x++)
                 {
-                    std::cout << t5_matches[i][j].x_values[x] << ", ";
+                    std::cout << t3_matches[i][j].x_values[x] << ", ";
                 }
             }
             std::cout << std::endl;
@@ -424,17 +410,15 @@ public:
 #endif
 
         // TODO: handle rare chance we get a false positive full proof
-        auto all_proofs = constructProofs(t5_matches);
+        auto all_proofs = constructProofs(t3_matches);
 
         return all_proofs;
     }
 
     // Phase 11 helper: T3, T4, T5 matching – further pair and validate matches.
-    void matchT3T4T5Candidates(int /*num_k_bits*/,
-                               std::span<std::vector<T2_match>, 128> const t2_matches,
-                               std::span<std::vector<T3_match>, 64> const t3_matches,
-                               std::span<std::vector<T4_match>, 32> const t4_matches,
-                               std::span<std::vector<T5_match>, 16> const t5_matches)
+    void matchT3Candidates(int /*num_k_bits*/,
+                               std::span<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> const t2_matches,
+                               std::span<std::vector<T3_match>, TOTAL_T3_PAIRS_IN_PROOF> const t3_matches)
     {
 
         Timer timer;
@@ -476,150 +460,58 @@ public:
             }
         }
 
-        // T4 matching.
-        {
-            ProofValidator validator(params_);
-            for (size_t i = 0; i < t3_matches.size(); i += 2)
-            {
-                size_t t4_group = i / 2;
-                const std::vector<T3_match> &groupA = t3_matches[i];
-                const std::vector<T3_match> &groupB = t3_matches[i + 1];
-                for (size_t j = 0; j < groupA.size(); j++)
-                {
-                    for (size_t k = 0; k < groupB.size(); k++)
-                    {
-                        uint32_t x_values[16] = {groupA[j].x_values[0], groupA[j].x_values[1],
-                                                 groupA[j].x_values[2], groupA[j].x_values[3],
-                                                 groupA[j].x_values[4], groupA[j].x_values[5],
-                                                 groupA[j].x_values[6], groupA[j].x_values[7],
-                                                 groupB[k].x_values[0], groupB[k].x_values[1],
-                                                 groupB[k].x_values[2], groupB[k].x_values[3],
-                                                 groupB[k].x_values[4], groupB[k].x_values[5],
-                                                 groupB[k].x_values[6], groupB[k].x_values[7]};
-                        std::vector<T4Pairing> t4_pairings = validator.validate_table_4_pairs(x_values);
-                        if (t4_pairings.size() > 0)
-                        {
-                            // the validator may return more than one valid T4 pairing for the same x_values
-                            // this could happen when the upper and lower partitions of the L and R sides coincide and each produce a valid pairing
-                            // e.g. when L has lower/upper partition [4, 11] and R has [11, 4] and both pass tests.
-                            // In either case, the x-values are the same for both pairings, so the Solver just needs to pair the x-values once.
-                            // Later, validate_t5_pairings used by the solver will re-validate the full T5 proof and check both pairings again.
-                            T4_match t4;
-                            t4.x_values = {groupA[j].x_values[0], groupA[j].x_values[1],
-                                               groupA[j].x_values[2], groupA[j].x_values[3],
-                                               groupA[j].x_values[4], groupA[j].x_values[5],
-                                               groupA[j].x_values[6], groupA[j].x_values[7],
-                                               groupB[k].x_values[0], groupB[k].x_values[1],
-                                               groupB[k].x_values[2], groupB[k].x_values[3],
-                                               groupB[k].x_values[4], groupB[k].x_values[5],
-                                               groupB[k].x_values[6], groupB[k].x_values[7]};
-                            t4_matches[t4_group].push_back(t4);
-                        }
-                    }
-                }
-            }
-        }
-
-        // T5 matching.
-        {
-            ProofValidator validator(params_);
-            for (size_t i = 0; i < t4_matches.size(); i += 2)
-            {
-                size_t t5_group = i / 2;
-                const std::vector<T4_match> &groupA = t4_matches[i];
-                const std::vector<T4_match> &groupB = t4_matches[i + 1];
-                for (size_t j = 0; j < groupA.size(); j++)
-                {
-                    for (size_t k = 0; k < groupB.size(); k++)
-                    {
-                        uint32_t x_values[32] = {groupA[j].x_values[0], groupA[j].x_values[1],
-                                                 groupA[j].x_values[2], groupA[j].x_values[3],
-                                                 groupA[j].x_values[4], groupA[j].x_values[5],
-                                                 groupA[j].x_values[6], groupA[j].x_values[7],
-                                                 groupA[j].x_values[8], groupA[j].x_values[9],
-                                                 groupA[j].x_values[10], groupA[j].x_values[11],
-                                                 groupA[j].x_values[12], groupA[j].x_values[13],
-                                                 groupA[j].x_values[14], groupA[j].x_values[15],
-                                                 groupB[k].x_values[0], groupB[k].x_values[1],
-                                                 groupB[k].x_values[2], groupB[k].x_values[3],
-                                                 groupB[k].x_values[4], groupB[k].x_values[5],
-                                                 groupB[k].x_values[6], groupB[k].x_values[7],
-                                                 groupB[k].x_values[8], groupB[k].x_values[9],
-                                                 groupB[k].x_values[10], groupB[k].x_values[11],
-                                                 groupB[k].x_values[12], groupB[k].x_values[13],
-                                                 groupB[k].x_values[14], groupB[k].x_values[15]};
-                        bool is_valid = validator.validate_table_5_pairs(x_values);
-                        if (is_valid)
-                        {
-                            T5_match t5;
-                            t5.x_values = {groupA[j].x_values[0], groupA[j].x_values[1],
-                                           groupA[j].x_values[2], groupA[j].x_values[3],
-                                           groupA[j].x_values[4], groupA[j].x_values[5],
-                                           groupA[j].x_values[6], groupA[j].x_values[7],
-                                           groupA[j].x_values[8], groupA[j].x_values[9],
-                                           groupA[j].x_values[10], groupA[j].x_values[11],
-                                           groupA[j].x_values[12], groupA[j].x_values[13],
-                                           groupA[j].x_values[14], groupA[j].x_values[15],
-                                           groupB[k].x_values[0], groupB[k].x_values[1],
-                                           groupB[k].x_values[2], groupB[k].x_values[3],
-                                           groupB[k].x_values[4], groupB[k].x_values[5],
-                                           groupB[k].x_values[6], groupB[k].x_values[7],
-                                           groupB[k].x_values[8], groupB[k].x_values[9],
-                                           groupB[k].x_values[10], groupB[k].x_values[11],
-                                           groupB[k].x_values[12], groupB[k].x_values[13],
-                                           groupB[k].x_values[14], groupB[k].x_values[15]};
-                            t5_matches[t5_group].push_back(t5);
-                        }
-                    }
-                }
-            }
-        }
         timings_.misc += timer.stop();
     }
 
-    // Phase 12 helper: Construct final proofs from T5 matches.
-    // full proof is all t5 x-value collections, should be in same sequence order as quality chain
-    std::vector<std::array<uint32_t, 512>> constructProofs(std::span<std::vector<T5_match>, 16> const t5_matches)
+    // Phase 12 helper: Construct final proofs from T3 matches.
+    // A full proof is all t3 x-value collections, in the same sequence order as the quality chain.
+    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>>
+    constructProofs(std::span<std::vector<T3_match>, TOTAL_T3_PAIRS_IN_PROOF> const t3_matches)
     {
-        std::vector<std::array<uint32_t, 512>> all_proofs;
+        std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> all_proofs;
 
-        std::array<uint32_t, 512> full_proof;
+        // One working buffer we fill as we choose matches for each group
+        std::array<uint32_t, TOTAL_XS_IN_PROOF> full_proof{};
 
-        // There are rare cases where a partial proof of the 32 sub set of x's
-        // produces more than one solution. When this happens, we can actually
-        // combine the extra solutions to make additional proofs with the other
-        // sub sets. Note all these solutions will be valid, and share the same
-        // partial proof.
+        // How many x-values belong to each T3 pair in the final proof
+        constexpr size_t XS_PER_GROUP = TOTAL_XS_IN_PROOF / TOTAL_T3_PAIRS_IN_PROOF;
+        static_assert(TOTAL_XS_IN_PROOF % TOTAL_T3_PAIRS_IN_PROOF == 0,
+                    "TOTAL_XS_IN_PROOF must be divisible by TOTAL_T3_PAIRS_IN_PROOF");
 
-        // indices into the each t5_match, indicating the current combination
-        // we're creating the full proof for. The common case is that each g
-        // only has a single match. But if there more, every combination of
-        // match is a valid proof.
-        std::array<size_t, 16> t5_vector{{0}};
-        size_t g = 0;
-
-        for (;;) {
-            if (t5_matches[g].size() == t5_vector[g])
+        // Recursive helper: choose a match for group g, then recurse to g+1.
+        std::function<void(size_t)> buildProofs =
+            [&](size_t g)
             {
-                if (g == 0) break;
-                g -= 1;
-                continue;
-            }
-            auto const& match = t5_matches[g][t5_vector[g]];
-            t5_vector[g] += 1;
+                // Base case: we have chosen a match for every group -> store one full proof
+                if (g == TOTAL_T3_PAIRS_IN_PROOF) {
+                    all_proofs.push_back(full_proof);
+                    return;
+                }
 
-            std::copy(match.x_values.begin(), match.x_values.end(), &full_proof[g * 32]);
-            g += 1;
-            if (g == 16) {
-                all_proofs.push_back(full_proof);
-                g -= 1;
-            }
-        }
+                // For this group g, try every possible match
+                auto const& matches_for_group = t3_matches[g];
+                for (auto const& match : matches_for_group) {
+                    // Copy this match's x-values into the correct slice of the full proof
+                    auto dest_begin = full_proof.begin() + g * XS_PER_GROUP;
+                    std::copy(match.x_values.begin(), match.x_values.end(), dest_begin);
+
+                    // Recurse to pick matches for the next group
+                    buildProofs(g + 1);
+                }
+            };
+
+        // Start recursion at group 0; this will generate the cartesian product:
+        // for each match in t3_matches[0]
+        //   for each match in t3_matches[1]
+        //     ...
+        //       for each match in t3_matches[TOTAL_T3_PAIRS_IN_PROOF-1]
+        //         emit full_proof
+        buildProofs(0);
 
         return all_proofs;
     }
 
-    std::array<std::vector<T2_match>, 128> matchT2Candidates(
+    std::array<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> matchT2Candidates(
         std::span<std::vector<T1_Match>> const t1_match_groups,
         const XBitGroupMappings &x_bits_group)
     {
@@ -642,7 +534,7 @@ public:
         std::vector<uint32_t> hashes_bitmask(size_t(1) << HASHES_BITMASK_SIZE_BITS, 0);
         std::vector<T1_Match> L_short_list;
 
-        std::array<std::vector<T2_match>, 128> t2_matches;
+        std::array<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> t2_matches;
 
         // Process adjacent groups: group 0 with 1, 2 with 3, etc.
         for (size_t t2_group = 0; t2_group < t2_matches.size(); ++t2_group)
@@ -870,7 +762,7 @@ public:
         timer.start("Splitting matches into x1 groups");
         // Split concurrent_matches into separate match lists
         // We iterate over all matches to find the x1 part of the match, then we map that x1 by it's lower k/2 bits
-        //  to find which of the 128 groups it belongs to.
+        //  to find which of the TOTAL_T2_PAIRS_IN_PROOF groups it belongs to.
         //  Then we push all matches into their own groups defined by x1.
         // A "group" is basically the nth x-pair in the proof.
         const size_t NUM_X1S = x_bit_group_mappings.unique_x_bits_list.size();
@@ -884,10 +776,10 @@ public:
 
         for (T1_Match const& match : t1_matches)
         {
-            uint32_t x1_bit_dropped = match.x1 >> (num_k_bits - x1_bits);
-            int lookup_index = x_bit_group_mappings.lookup[x1_bit_dropped];
+            uint32_t const x1_bit_dropped = match.x1 >> (num_k_bits - x1_bits);
+            int const lookup_index = x_bit_group_mappings.lookup[x1_bit_dropped];
 #ifdef DEBUG_VERIFY
-            if ((lookup_index == -1) || (lookup_index >= NUM_X1S))
+            if ((lookup_index == -1) || (size_t(lookup_index) >= NUM_X1S))
             {
                 // error
                 std::cout << "x1_bit_dropped: " << x1_bit_dropped << " OUT OF BOUNDS to total_ranges: " << NUM_X1S << std::endl;
@@ -1691,7 +1583,7 @@ done:
                                      std::vector<uint32_t> &x2_potential_match_xs,
                                      std::vector<uint32_t> &x2_potential_match_hashes)
     {
-        const size_t num_x_pairs = 256;
+        const size_t num_x_pairs = TOTAL_T1_PAIRS_IN_PROOF;
 
         const int num_k_bits = params_.get_k();
         const int num_section_bits = params_.get_num_section_bits();
@@ -2158,9 +2050,9 @@ done:
 
         // TODO: could be multi-threaded
         timer.start("Setting bitmask hash");
-        for (size_t i = 0; i < x1_hashes.size(); i++)
+        for (auto const& x1 : x1_hashes)
         {
-            uint32_t hash = x1_hashes[i] >> bitmask_shift_;
+            uint32_t hash = x1 >> bitmask_shift_;
             int slot = hash >> 5;
             int bit = hash & 31;
             x1_bitmask[slot] |= (1 << bit);

@@ -55,8 +55,8 @@ public:
     // Prepares Blake hash data for pairing.
     void set_data_for_pairing(uint32_t salt, uint64_t meta_l, uint64_t meta_r, int num_meta_bits);
 
-    BlakeHash::Result256 challengeWithPlotIdHash(const uint8_t *challenge_32_bytes)
-    {   
+    BlakeHash::Result256 challengeWithPlotIdHash(const std::span<uint8_t const, 32> challenge) const
+    {
         uint32_t block_words[16];
         const uint8_t *plot_id_bytes = params_.get_plot_id_bytes();
         // Fill the first 8 words with the plot ID.
@@ -72,28 +72,55 @@ public:
         // set data from challenge
         for (int i = 0; i < 8; i++) {
             block_words[i + 8] = 
-                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 0]))        |
-                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 1]) << 8)   |
-                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 2]) << 16)  |
-                (static_cast<uint32_t>(challenge_32_bytes[i * 4 + 3]) << 24);
+                (static_cast<uint32_t>(challenge[i * 4 + 0]))        |
+                (static_cast<uint32_t>(challenge[i * 4 + 1]) << 8)   |
+                (static_cast<uint32_t>(challenge[i * 4 + 2]) << 16)  |
+                (static_cast<uint32_t>(challenge[i * 4 + 3]) << 24);
         }
         
         return BlakeHash::hash_block_256(block_words);
     }
 
-    BlakeHash::Result256 chainHash(BlakeHash::Result256 prev_chain_hash, std::span<uint64_t const, 3> const link_fragments)
+    BlakeHash::Result256 challengeWithGroupedPlotIdHash(const std::span<uint8_t const, 32> challenge) const
+    {   
+        uint32_t block_words[16];
+        std::array<uint8_t, 32> grouped_plot_id = params_.get_grouped_plot_id();
+        // Fill the first 8 words with the plot ID.
+
+        // set data from plot id
+        for (int i = 0; i < 8; i++) {
+            block_words[i] = 
+                (static_cast<uint32_t>(grouped_plot_id[i * 4 + 0]))        |
+                (static_cast<uint32_t>(grouped_plot_id[i * 4 + 1]) << 8)   |
+                (static_cast<uint32_t>(grouped_plot_id[i * 4 + 2]) << 16)  |
+                (static_cast<uint32_t>(grouped_plot_id[i * 4 + 3]) << 24);
+        }
+        // set data from challenge
+        for (int i = 0; i < 8; i++) {
+            block_words[i + 8] = 
+                (static_cast<uint32_t>(challenge[i * 4 + 0]))        |
+                (static_cast<uint32_t>(challenge[i * 4 + 1]) << 8)   |
+                (static_cast<uint32_t>(challenge[i * 4 + 2]) << 16)  |
+                (static_cast<uint32_t>(challenge[i * 4 + 3]) << 24);
+        }
+        
+        return BlakeHash::hash_block_256(block_words);
+    }
+
+    static BlakeHash::Result256 linkHash(BlakeHash::Result256 const& challenge, uint64_t proof_fragment, uint32_t iteration)
     {
         uint32_t block_words[16];
         for (int i = 0; i < 8; i++) {
-            block_words[i] = prev_chain_hash.r[i];
+            block_words[i] = challenge.r[i];
         }
-        block_words[8] = static_cast<uint32_t>(link_fragments[0] & 0xFFFFFFFF);
-        block_words[9] = static_cast<uint32_t>(link_fragments[0] >> 32);
-        block_words[10] = static_cast<uint32_t>(link_fragments[1] & 0xFFFFFFFF);
-        block_words[11] = static_cast<uint32_t>(link_fragments[1] >> 32);
-        block_words[12] = static_cast<uint32_t>(link_fragments[2] & 0xFFFFFFFF);
-        block_words[13] = static_cast<uint32_t>(link_fragments[2] >> 32);
-        block_words[14] = 0; // Zero out the last two words.
+        block_words[8] = static_cast<uint32_t>(proof_fragment & 0xFFFFFFFF);
+        block_words[9] = static_cast<uint32_t>(proof_fragment >> 32);
+        block_words[9] = iteration;
+        block_words[10] = 0;
+        block_words[11] = 0;
+        block_words[12] = 0;
+        block_words[13] = 0;
+        block_words[14] = 0;
         block_words[15] = 0;
 
         return BlakeHash::hash_block_256(block_words);

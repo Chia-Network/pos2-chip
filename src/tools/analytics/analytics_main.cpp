@@ -7,7 +7,7 @@
 void printUsage()
 {
     std::cout << "Usage:\n"
-              << "  analytics diskbench [plotIdFilter=256] [pfScanFilter=64][diskTB=20] [diskSeekMs=10] [diskReadMBs=70]\n";
+              << "  analytics simdiskusage [plotIdFilter=256] [diskTB=20] [diskSeekMs=10] [diskReadMBs=70]\n";
 }
 
 int main(int argc, char *argv[])
@@ -23,23 +23,23 @@ try
 
     std::string mode = argv[1];
 
-    if (mode == "diskbench")
+    if (mode == "simdiskusage")
     {
         size_t plotIdFilter = 8;
-        size_t pfScanFilter = 5;
+        size_t plotsInGroup = 32;
         size_t diskTB = 20;
         double diskSeekMs = 10.0;
-        double diskReadMBs = 70.0;
+        double diskReadMBs = 250.0;
         if (argc < 2 || argc > 7)
         {
-            std::cerr << "Usage: " << argv[0] << " diskbench [plotIdFilterBits=8] [pfScanFilterBits=5][diskTB=20] [diskSeekMs=10] [diskReadMBs=70]\n";
+            std::cerr << "Usage: " << argv[0] << " simdiskusage [plotIdFilterBits=8] [plotsInGroup=32] [diskTB=20] [diskSeekMs=10] [diskReadMBs=250]\n";
             return 1;
         }
         if (argc >= 3) {
             plotIdFilter = std::stoul(argv[2]);
         }
         if (argc >= 4) {
-            pfScanFilter = std::stoul(argv[3]);
+            plotsInGroup = std::stoul(argv[3]);
         }
         if (argc >= 5) {
             diskTB = std::stoul(argv[4]);
@@ -50,13 +50,9 @@ try
         if (argc >= 7) {
             diskReadMBs = std::stod(argv[6]);
         }
-        std::cout << "Disk benchmark simulation: Plot ID filter bits: " << plotIdFilter
-                  << ", Proof fragment scan filter bits: " << pfScanFilter
-                  << ", " << diskTB << " TB, Seek time: " << diskSeekMs << " ms, Read speed: " << diskReadMBs << " MB/s\n";
-        
         ProofParams proof_params(Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").data(), 28, 2);
         DiskBench diskbench(proof_params);
-        diskbench.simulateChallengeDiskReads(plotIdFilter, pfScanFilter, diskTB, diskSeekMs, diskReadMBs);
+        diskbench.simulateChallengeDiskReads(plotIdFilter, plotsInGroup, diskTB, diskSeekMs, diskReadMBs);
 
         return 0;
     }

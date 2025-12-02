@@ -12,112 +12,46 @@
 #include "ProofHashing.hpp"
 #include "ProofFragment.hpp"
 
+constexpr int TOTAL_XS_IN_PROOF = 128;
+constexpr int TOTAL_T1_PAIRS_IN_PROOF = 64;
+constexpr int TOTAL_T2_PAIRS_IN_PROOF = 32;
+constexpr int TOTAL_T3_PAIRS_IN_PROOF = 16;
+constexpr int TOTAL_PROOF_FRAGMENTS_IN_PROOF = 16;
 //------------------------------------------------------------------------------
 // Structs for pairing results
 //------------------------------------------------------------------------------
 
-// use retain x values to t3 to make a plot and save x values to disk for analysis
+// use retain x values to make a plot and save x values to disk for analysis
 // use BOTH includes to for deeper validation of results
 // #define RETAIN_X_VALUES_TO_T3 true
 // #define RETAIN_X_VALUES true
 
-// T4 and T5 are bipartite for optimal compression, T3 links back to T2 and T2 to T1 are omitted
-// so bipartite is optional. Some notes as to which mode is best:
+// bipartite is optional. Some notes as to which mode is best:
 // - The solver's performance seems slightly better without bipartite
 // - plotting could be optimized to be faster using bipartite
 // - bipartite may mix less well, and needs more analysis for T4 Partition Attack
 // NOTE: when chip goes into review should remove this macro and use the final chosen branched code.
 #define NON_BIPARTITE_BEFORE_T3 true
 
-// use to reduce T4/T5 relative to T3, T4 and T5 will be approx same size.
-// #define T3_FACTOR_T4_T5_EVEN 1
-
-const uint32_t FINAL_TABLE_FILTER = 855570511; // out of 2^32
-const double FINAL_TABLE_FILTER_D = 0.19920303275;
-
 constexpr int NUM_CHAIN_LINKS = 16;
+constexpr int AVERAGE_PROOFS_PER_CHALLENGE_BITS = 5; // expected proofs per challenge is 1/2^5 = 1/32.
 
-// first chain link is always passed in from passing fragment scan filter
-// while not used in ProofCore due to pre-computed constants, this is the chaining factors used in quality chain math
-// and referenced in testing.
-constexpr uint64_t CHAINING_FACTORS[NUM_CHAIN_LINKS - 1] = {
-    4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-// for k sizes 18 to 32 even.
-constexpr uint32_t QUALITY_LINK_FIRST_CHAIN_PASS_THRESHOLD[8] = {
-    5263856, // k=18, sub_k=15
-    5263856, // k=20, sub_k=16
-    5263856, // k=22, sub_k=17
-    5263856, // k=24, sub_k=18
-    5263856, // k=26, sub_k=19
-    5263856, // k=28, sub_k=20
-    1315964, // k=30, sub_k=22
-    1315964  // k=32, sub_k=23
-};
-
-constexpr uint32_t QUALITY_LINK_REST_CHAIN_PASS_THRESHOLD[8] = {
-    1315964, // k=18, sub_k=15
-    1315964, // k=20, sub_k=16
-    1315964, // k=22, sub_k=17
-    1315964, // k=24, sub_k=18
-    1315964, // k=26, sub_k=19
-    1315964, // k=28, sub_k=20
-    328991,  // k=30, sub_k=22
-    328991   // k=32, sub_k=23
-};
-
-// constexpr double PROOF_FRAGMENT_SCAN_FILTER = 2.0; // 1 / expected number of fragments to pass scan filter.
-
-enum class FragmentsPattern : uint8_t
-{
-    OUTSIDE_FRAGMENT_IS_LR = 0, // outside t3 index is RL
-    OUTSIDE_FRAGMENT_IS_RR = 1  // outside t3 index is RR
-};
-
-// Utility function to convert FragmentsPattern to string
-inline std::string FragmentsPatternToString(FragmentsPattern pattern)
-{
-    switch (pattern)
-    {
-    case FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR:
-        return "OUTSIDE_FRAGMENT_IS_LR";
-    case FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR:
-        return "OUTSIDE_FRAGMENT_IS_RR";
-    default:
-        return "UNKNOWN_PATTERN";
-    }
-}
-
-enum class FragmentsParent : uint8_t
-{
-    PARENT_NODE_IN_CHALLENGE_PARTITION = 0, // challenge partition is the partition in t3 for proof fragment scan filter
-    PARENT_NODE_IN_OTHER_PARTITION = 1      // other partition, is the r-side partition of the proof fragment passing the scan filter
-};
-
-enum QualityLinkProofFragmentPositions : size_t
-{
-    LL = 0, // left left
-    LR = 1, // left right
-    RL = 2, // right left
-    RR = 3  // right right
-};
-
-struct QualityLink
-{
-    // there are 2 patterns: either LR or RR is included in the fragment, but never both.
-    std::array<ProofFragment, 3> fragments; // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
-    FragmentsPattern pattern;
-    uint64_t outside_t3_index;
-};
-
-using QualityChainLinks = std::array<QualityLink, NUM_CHAIN_LINKS>;
+using QualityChainLinks = std::array<ProofFragment, NUM_CHAIN_LINKS>;
 
 struct QualityChain
 {
     QualityChainLinks chain_links;
-    BlakeHash::Result256 chain_hash;
     uint8_t strength;
 };
+
+// chaining
+// A chain: list of challenges and the corresponding chosen proof fragments.
+struct Chain
+{
+    std::array<ProofFragment, NUM_CHAIN_LINKS> fragments;      // the proof fragments used in the chain
+};
+
+// chaining end 
 
 struct T1Pairing
 {
@@ -138,71 +72,9 @@ struct T2Pairing
 struct T3Pairing
 {
     ProofFragment proof_fragment;  // 2k-bit encrypted x-values.
-    uint64_t meta_lower_partition; // 2k-bit meta.
-    uint64_t meta_upper_partition;
-    uint32_t match_info_lower_partition; // sub_k bits (from lower partition).
-    uint32_t match_info_upper_partition; // sub_k bits (from upper partition).
-    uint32_t lower_partition;            // (k - sub_k) bits.
-    uint32_t upper_partition;            // (k - sub_k) bits.
-    uint32_t order_bits;                 // 2-bit order field.
 #ifdef RETAIN_X_VALUES_TO_T3
     uint32_t xs[8];
 #endif
-};
-
-// Split from T3Pairing, 2 for 1
-struct T3PartitionedPairing
-{
-    uint64_t meta;
-    uint64_t fragment_index;
-    uint32_t match_info; // sub_k bits
-    uint32_t order_bits;
-#ifdef RETAIN_X_VALUES
-    uint32_t xs[8];
-#endif
-};
-
-struct T4Pairing
-{
-    uint64_t meta; // 2k-bit meta value.
-    uint64_t fragment_index_l;
-    uint64_t fragment_index_r;
-    uint32_t match_info; // sub_k-bit match info.
-#ifdef RETAIN_X_VALUES
-    uint32_t xs[16];
-#endif
-};
-
-struct T4BackPointers
-{
-    uint64_t fragment_index_l;
-    uint64_t fragment_index_r;
-#ifdef RETAIN_X_VALUES
-    uint32_t xs[16];
-#endif
-
-    bool operator==(T4BackPointers const &o) const = default;
-};
-
-struct T4PairingPropagation
-{
-    uint64_t meta;       // 2k-bit meta value.
-    uint32_t match_info; // sub_k-bit match info.
-    uint32_t t4_back_pointer_index;
-#ifdef RETAIN_X_VALUES
-    uint32_t xs[16];
-#endif
-};
-
-struct T5Pairing
-{
-    uint32_t t4_index_l;
-    uint32_t t4_index_r;
-#ifdef RETAIN_X_VALUES
-    uint32_t xs[32];
-#endif
-
-    bool operator==(T5Pairing const &o) const = default;
 };
 
 //------------------------------------------------------------------------------
@@ -308,114 +180,22 @@ public:
             return std::nullopt;
         */
 
-        PairingResult lower_partition_pair = hashing.pairing(3, meta_l, meta_r,
+        PairingResult pair = hashing.pairing(3, meta_l, meta_r,
                                                              static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                                             static_cast<int>(params_.get_sub_k()) - 1,
-                                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
+                                                             0,
+                                                             0,
                                                              num_test_bits);
 
         // pairing filter test
-        if (lower_partition_pair.test_result != 0)
+        if (pair.test_result != 0)
             return std::nullopt;
 
         uint64_t all_x_bits = (static_cast<uint64_t>(x_bits_l) << params_.get_k()) | x_bits_r;
         ProofFragment proof_fragment = fragment_codec.encode(all_x_bits);
-        uint32_t order_bits = fragment_codec.extract_t3_order_bits(proof_fragment);
-        uint32_t top_order_bit = order_bits >> 1;
-        uint32_t lower_partition, upper_partition;
-
-        if (top_order_bit == 0)
-        {
-            lower_partition = fragment_codec.extract_t3_l_partition_bits(proof_fragment);
-            upper_partition = fragment_codec.extract_t3_r_partition_bits(proof_fragment) + params_.get_num_partitions();
-        }
-        else
-        {
-            lower_partition = fragment_codec.extract_t3_r_partition_bits(proof_fragment);
-            upper_partition = fragment_codec.extract_t3_l_partition_bits(proof_fragment) + params_.get_num_partitions();
-        }
-
-        PairingResult upper_partition_pair = hashing.pairing(~3, meta_l, meta_r,
-                                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                                             static_cast<int>(params_.get_sub_k()) - 1,
-                                                             static_cast<int>(params_.get_num_pairing_meta_bits()));
-
-        // TODO: this can be bitpacked much better
+        
         T3Pairing result;
-
         result.proof_fragment = proof_fragment;
-        result.order_bits = order_bits;
-
-        result.lower_partition = lower_partition;
-        result.meta_lower_partition = lower_partition_pair.meta_result;
-        result.match_info_lower_partition = (top_order_bit << (params_.get_sub_k() - 1)) | lower_partition_pair.match_info_result;
-
-        result.upper_partition = upper_partition;
-        result.meta_upper_partition = upper_partition_pair.meta_result;
-        result.match_info_upper_partition = ((1 - top_order_bit) << (params_.get_sub_k() - 1)) | upper_partition_pair.match_info_result;
         return result;
-    }
-
-    // pairing_t4:
-    // Input: meta_l, meta_r (each 2k bits), order_bits_l (2 bits).
-    // Returns: a T4Pairing with match_info (sub_k bits) and meta (2k bits).
-    std::optional<T4Pairing>
-    pairing_t4(uint64_t meta_l, uint64_t meta_r, uint32_t order_bits_l)
-    {
-#if defined(T3_FACTOR_T4_T5_EVEN)
-        int num_test_bits = 32;
-#else
-        // shrink output by 50% by using 1 bit larger than num match bits.
-        int num_test_bits = params_.get_num_match_key_bits(4) + 1;
-#endif
-        PairingResult pair = hashing.pairing(4, meta_l, meta_r,
-                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                             static_cast<int>(params_.get_k()) - 1,
-                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                             num_test_bits);
-
-#if defined(T3_FACTOR_T4_T5_EVEN)
-        double threshold_double = (4294967296 / 8) * T3_FACTOR_T4_T5_EVEN;
-        unsigned long threshold = static_cast<unsigned long>(threshold_double);
-        if (pair.test_result > threshold)
-            return std::nullopt;
-#else
-        if (pair.test_result > 0)
-            return std::nullopt;
-#endif
-        T4Pairing result;
-        result.match_info = pair.match_info_result;
-        result.meta = pair.meta_result;
-        uint32_t top_bit = order_bits_l & 1;
-        result.match_info = (top_bit << (params_.get_k() - 1)) | result.match_info;
-        return result;
-    }
-
-    // pairing_t5:
-    // Input: meta_l and meta_r (each 2k bits).
-    // Returns true if the pairing filter passes (i.e. test bits are zero), false otherwise.
-    bool pairing_t5(uint64_t meta_l, uint64_t meta_r)
-    {
-        // filter_test_bits is 32 bits of hash, the chance of passing is 0.1992030328 or 855570511 out of 2^32
-        // this will result in T3 onwards being at same sizes after pruning.
-        int num_test_bits = 32;
-        PairingResult pair = hashing.pairing(5, meta_l, meta_r,
-                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                             0, 0, num_test_bits);
-
-        // adjust the final table so that T3/4/5 will prune to the same # of entries each.
-        if (pair.test_result >= (FINAL_TABLE_FILTER << 1))
-            return false;
-        return true;
-
-        /*
-        // below does parity matching, T5 will have more entries than T4/3.
-        int num_test_bits = params_.get_num_match_key_bits(5) - 1;
-        PairingResult pair = hashing.pairing(5, meta_l, meta_r,
-                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                             0, 0, num_test_bits);
-
-        return (pair.test_result == 0);*/
     }
 
     // validate_match_info_pairing:
@@ -528,106 +308,31 @@ public:
         return (((r >> 2) + r) & 3U) == 2;
     }
 
-    uint32_t quality_chain_pass_threshold(size_t link_index)
+    struct SelectedChallengeSets 
     {
-        // referencing the constants. The root math works out to:
-        // chance = 2 * CHAINING_FACTORS[link_index - 1] / expected_quality_links_set_size();
-        // mapped to 32 bits range.
-        if (link_index == 1) {
-            return QUALITY_LINK_FIRST_CHAIN_PASS_THRESHOLD[(params_.get_k() - 18) / 2];
-        }
-        return QUALITY_LINK_REST_CHAIN_PASS_THRESHOLD[(params_.get_k() - 18) / 2];
-        
-    }
-
-    // Determines the required fragments pattern based on the challenge.
-    FragmentsPattern requiredPatternFromChallenge(BlakeHash::Result256 challenge)
-    {
-        // if the highest order bit is 0, return RL else return RR
-        uint32_t highest_order_bits = challenge.r[3];
-        uint32_t highest_order_bit = highest_order_bits >> 31; // get the highest order bit
-        if (highest_order_bit == 0)
-        {
-            return FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR;
-        }
-        return FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR;
-    }
-
-    // Quality Chaining functions
-    BlakeHash::Result256 firstLinkHash(const QualityLink &link, const BlakeHash::Result256 &next_challenge) // const std::array<uint8_t, 32> &challenge)
-    {
-        // BlakeHash::Result256 challenge_plotid_hash = hashing.challengeWithPlotIdHash(challenge.data());
-        return hashing.chainHash(next_challenge, link.fragments);
-    }
-
-    struct NewLinksResult
-    {
-        QualityLink link;
-        BlakeHash::Result256 new_hash;
+        uint32_t fragment_set_A_index;
+        uint32_t fragment_set_B_index;
+        Range fragment_set_A_range;
+        Range fragment_set_B_range;
     };
-
-    std::vector<QualityLink> filterLinkSetToPartitions(const std::vector<QualityLink> &link_set, uint32_t lower_partition, uint32_t upper_partition)
+    SelectedChallengeSets selectChallengeSets(std::span<uint8_t const, 32> const challenge)
     {
-        std::vector<QualityLink> filtered_links;
-        for (const auto &link : link_set)
-        {
-            if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_LR)
-            {
-                uint32_t lateral_partition = fragment_codec.get_lateral_to_t4_partition(link.fragments[2]); // the RR fragment
-                uint32_t cross_partition = fragment_codec.get_r_t4_partition(link.fragments[2]);            // the RR fragment
-                if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
-                {
-                    filtered_links.push_back(link);
-                }
-                else if ((lateral_partition == upper_partition) && (cross_partition == lower_partition))
-                {
-                    filtered_links.push_back(link);
-                }
-            }
-            else if (link.pattern == FragmentsPattern::OUTSIDE_FRAGMENT_IS_RR)
-            {
-                uint32_t lateral_partition = fragment_codec.get_lateral_to_t4_partition(link.fragments[1]); // the LR fragment
-                uint32_t cross_partition = fragment_codec.get_r_t4_partition(link.fragments[1]);            // the LR fragment
-                if ((lateral_partition == lower_partition) && (cross_partition == upper_partition))
-                {
-                    filtered_links.push_back(link);
-                }
-                else if ((lateral_partition == upper_partition) && (cross_partition == lower_partition))
-                {
-                    filtered_links.push_back(link);
-                }
-            }
-            else
-            {
-                throw std::runtime_error("Unknown fragments pattern in filterLinkSetToPartitions");
-            }
-        }
-        return filtered_links;
-    }
+        // challenge sets will be the same withing a grouped plot id
+        BlakeHash::Result256 grouped_challenge_hash = hashing.challengeWithGroupedPlotIdHash(challenge);
+        
+        // use bits from challenge to select two distinct chaining sets
+        uint32_t num_chaining_sets_bits = params_.get_num_chaining_sets_bits();
 
-    std::vector<NewLinksResult> getNewLinksForChain(BlakeHash::Result256 current_challenge, const std::vector<QualityLink> &link_set, size_t link_index) // , uint32_t lower_partition, uint32_t upper_partition)
-    {
-        uint32_t qc_pass_threshold = quality_chain_pass_threshold(link_index);
-
-        FragmentsPattern pattern = requiredPatternFromChallenge(current_challenge);
-
-        std::vector<NewLinksResult> new_links;
-        for (QualityLink const &link : link_set)
-        {
-            if (link.pattern != pattern)
-            {
-                // skip links that do not match the required pattern
-                continue;
-            }
-
-            // test the hash
-            BlakeHash::Result256 next_challenge = hashing.chainHash(current_challenge, link.fragments);
-            if (next_challenge.r[0] < qc_pass_threshold)
-            {
-                new_links.push_back({link, next_challenge});
-            }
-        }
-        return new_links;
+        // fragments are guaranteed to be different by forcing one even and one odd index
+        // get first set index from lower bits, but always even (0 on lsb)
+        uint32_t fragment_set_A_index = (grouped_challenge_hash.r[0] & ((1U << num_chaining_sets_bits) - 1)) & ~1U;
+        // get second set index from lower of next 32 bits, and always odd (1 on lsb)
+        uint32_t fragment_set_B_index = (grouped_challenge_hash.r[1] & ((1U << num_chaining_sets_bits) - 1)) | 1U;
+        
+        Range fragment_set_A_range = params_.get_chaining_set_range(fragment_set_A_index);
+        Range fragment_set_B_range = params_.get_chaining_set_range(fragment_set_B_index);
+        
+        return {fragment_set_A_index, fragment_set_B_index, fragment_set_A_range, fragment_set_B_range};
     }
 
     ProofParams getProofParams() const

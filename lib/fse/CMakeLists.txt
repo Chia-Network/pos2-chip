@@ -53,7 +53,6 @@ target_compile_options(fse PRIVATE
       /GL
       /D
       /MT
-      /FAcs
       /Zi
     >
     $<$<CONFIG:Debug>:
