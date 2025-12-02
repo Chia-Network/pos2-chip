@@ -12,8 +12,10 @@
 class ChunkCompressor {
 public:
 
-    static std::vector<uint8_t> compressProofFragments(const std::vector<ProofFragment>& proof_fragments,
-                                                        uint64_t start_proof_fragment_range, int stub_bits)
+    static std::vector<uint8_t> compressProofFragments(
+        std::span<ProofFragment const> const proof_fragments,
+        uint64_t const start_proof_fragment_range,
+        int const stub_bits)
     {
         #ifdef DEBUG_CHUNK_COMPRESSOR
         {
@@ -47,8 +49,10 @@ public:
         return compress(deltas, stubs, static_cast<uint8_t>(stub_bits));
     }
 
-    static std::vector<ProofFragment> decompressProofFragments(const std::vector<uint8_t>& compressed_data,
-                                                       uint64_t start_proof_fragment_range, int stub_bits)
+    static std::vector<ProofFragment> decompressProofFragments(
+        std::span<uint8_t const> const compressed_data,
+        uint64_t const start_proof_fragment_range,
+        int const stub_bits)
     {
         std::vector<uint8_t> deltas;
         std::vector<uint64_t> stubs;
@@ -96,7 +100,10 @@ public:
         return proof_fragments;
     }
 
-    static std::pair<std::vector<uint8_t>, std::vector<uint64_t>> deltifyAndStubProofFragments(uint64_t start_proof_fragment_range, std::vector<ProofFragment> const& proof_fragments, int stub_bits)
+    static std::pair<std::vector<uint8_t>, std::vector<uint64_t>> deltifyAndStubProofFragments(
+        uint64_t const start_proof_fragment_range,
+        std::span<ProofFragment const> const proof_fragments,
+        int const stub_bits)
     {
         if (stub_bits == 0 || stub_bits >= 64) {
             throw std::invalid_argument("ChunkCompressor::deltifyAndStubProofFragments: stub_bits must be in [1, 63]");
@@ -141,9 +148,9 @@ public:
     // - stub_bits: number of LSBs in each stub (1..56 typically)
     //
     // Returns: encoded chunk bytes
-    static std::vector<uint8_t> compress(const std::vector<uint8_t>& deltas,
-                                         const std::vector<uint64_t>& stubs,
-                                         uint8_t stub_bits)
+    static std::vector<uint8_t> compress(std::span<uint8_t const> const deltas,
+                                         std::span<uint64_t const> const stubs,
+                                         uint8_t const stub_bits)
     {
         if (deltas.size() != stubs.size()) {
             throw std::invalid_argument("ChunkCompressor::compress: deltas and stubs size mismatch");
@@ -203,8 +210,8 @@ public:
     // Output:
     // - out_deltas: resized to num_values, filled with deltas
     // - out_stubs:  resized to num_values, filled with stub values
-    static void decompress(const std::vector<uint8_t>& chunk,
-                           uint8_t stub_bits,
+    static void decompress(std::span<uint8_t const> const chunk,
+                           uint8_t const stub_bits,
                            std::vector<uint8_t>& out_deltas,
                            std::vector<uint64_t>& out_stubs)
     {
@@ -275,7 +282,7 @@ private:
     // ---- Stub bitpacking ----
 
     // Pack stubs (each using stub_bits LSBs) into a byte array (little-endian bit order).
-    static std::vector<uint8_t> packStubs(const std::vector<uint64_t>& stubs,
+    static std::vector<uint8_t> packStubs(std::span<uint64_t const> const stubs,
                                           uint8_t stub_bits)
     {
         std::vector<uint8_t> out;
