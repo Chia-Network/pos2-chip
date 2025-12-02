@@ -40,8 +40,8 @@ public:
         if (strength_ > 63) {
             throw std::invalid_argument("ProofParams: strength must be less than 64.");
         }
-        if (strength_ > k + get_num_section_bits()) {
-            throw std::invalid_argument("ProofParams: strength must be less than k - section_bits");
+        if (strength_ > k - get_num_section_bits() - 1) {
+            throw std::invalid_argument("ProofParams: strength must be less than k - section_bits - 1");
         }
         // Copy the 32-byte plot ID.
         for (int i = 0; i < 32; ++i)
