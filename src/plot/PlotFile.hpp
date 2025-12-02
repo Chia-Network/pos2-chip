@@ -45,7 +45,7 @@ public:
                             ProofParams const &params,
                             std::span<uint8_t const, 32 + 48 + 32> const memo)
     {
-        uint64_t range_per_chunk = (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS));
+        uint64_t const range_per_chunk = (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS));
         ChunkedProofFragments chunked_data = ChunkedProofFragments::convertToChunkedProofFragments(
             data,
             range_per_chunk
@@ -108,8 +108,8 @@ public:
             // Collect real offsets as we write chunks
             std::vector<uint64_t> offsets(num_chunks);
 
-            int stub_bits = params.get_k() - MINUS_STUB_BITS;
-            uint64_t range_per_chunk = (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS));
+            int const stub_bits = params.get_k() - MINUS_STUB_BITS;
+            uint64_t const range_per_chunk = (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS));
 
             for (uint64_t i = 0; i < num_chunks; ++i) {
                 // record offset for this chunk (absolute offset from file start)
@@ -247,8 +247,8 @@ public:
             throw std::runtime_error("Failed to open " + filename_);
         }
 
-        int stub_bits = header.params.get_k() - MINUS_STUB_BITS;
-        uint64_t range_per_chunk = (1ULL << (header.params.get_k() + CHUNK_SPAN_RANGE_BITS));
+        int const stub_bits = header.params.get_k() - MINUS_STUB_BITS;
+        uint64_t const range_per_chunk = (1ULL << (header.params.get_k() + CHUNK_SPAN_RANGE_BITS));
 
         for (uint64_t i = 0; i < num_chunks; ++i) {
             in.seekg(static_cast<std::streamoff>(header.offsets[i]), std::ios::beg);
@@ -303,9 +303,9 @@ public:
                                      " in " + filename_);
         }
 
-        int stub_bits = header.params.get_k() - MINUS_STUB_BITS;
-        uint64_t range_per_chunk = (1ULL << (header.params.get_k() + CHUNK_SPAN_RANGE_BITS));
-        uint64_t start_proof_fragment_range = chunk_index * range_per_chunk;
+        int const stub_bits = header.params.get_k() - MINUS_STUB_BITS;
+        uint64_t const range_per_chunk = (1ULL << (header.params.get_k() + CHUNK_SPAN_RANGE_BITS));
+        uint64_t const start_proof_fragment_range = chunk_index * range_per_chunk;
 
         std::vector<uint8_t> compressed_chunk = readVector<uint8_t>(in);
         if (!in) {
@@ -345,9 +345,9 @@ public:
 
     std::vector<ProofFragment> getProofFragmentsInRange(Range const& range)
     {
-        uint64_t range_per_chunk = getRangePerChunk();
-        uint64_t chunk_index = range.start / range_per_chunk;
-        uint64_t end_chunk = (range.end - 1) / range_per_chunk;
+        uint64_t const range_per_chunk = getRangePerChunk();
+        uint64_t const chunk_index = range.start / range_per_chunk;
+        uint64_t const end_chunk = (range.end - 1) / range_per_chunk;
         if (chunk_index != end_chunk) {
             throw std::invalid_argument("getProofFragmentsInRange: range spans multiple chunks");
         }
