@@ -30,8 +30,8 @@ public:
     }
 
     std::vector<Chain> find_links(
-        const std::vector<ProofFragment> &fragments_A,
-        const std::vector<ProofFragment> &fragments_B)
+        std::span<ProofFragment const> const fragments_A,
+        std::span<ProofFragment const> const fragments_B)
     {
 
         #ifdef DEBUG_CHAINER
@@ -99,13 +99,13 @@ public:
             }
 
             // On first iteration use As, then Bs, alternating.
-            const std::vector<ProofFragment> &current_list =
+            std::span<ProofFragment const> const& current_list =
                 (st.iteration % 2 == 0) ? fragments_A : fragments_B;
 
             // Try extending the chain with each value from the current list.
             for (ProofFragment fragment : current_list)
             {
-                uint64_t new_fast_challenge = splitmix64(st.fast_challenge ^ fragment ^ get_round_bits(initial_challenge, st.iteration));
+                uint64_t const new_fast_challenge = splitmix64(st.fast_challenge ^ fragment ^ get_round_bits(initial_challenge, st.iteration));
                 num_hashes++;
 
                 #ifdef DEBUG_CHAINER
@@ -159,7 +159,7 @@ public:
             passing_zeros_needed += AVERAGE_PROOFS_PER_CHALLENGE_BITS; // only want 1/32 of the proofs.
         }
     
-        uint64_t check_value =
+        uint64_t const check_value =
             fast_challenge & ((1ULL << passing_zeros_needed) - 1);
 
         #ifdef DEBUG_CHAINER
@@ -173,7 +173,7 @@ public:
     }
     
 
-    static inline uint64_t get_round_bits(const BlakeHash::Result256 &challenge, unsigned r) {
+    static uint64_t get_round_bits(const BlakeHash::Result256 &challenge, unsigned r) {
         uint32_t w0 = challenge.r[r & 7];          // first word
         uint32_t w1 = challenge.r[(r + 3) & 7];    // second word, offset by odd constant
 

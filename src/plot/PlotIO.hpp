@@ -7,10 +7,12 @@
 #include <vector>
 
 template <typename T>
-inline void writeVector(std::ofstream& out, std::vector<T> const& v)
+void writeVector(std::ofstream& out, std::vector<T> const& v)
 {
     static_assert(std::is_trivially_copyable_v<T>,
                   "writeVector requires trivially copyable type");
+    static_assert(std::has_unique_object_representations_v<T>,
+                  "writeVector does not allow padding bits");
     uint64_t n = static_cast<uint64_t>(v.size());
     out.write(reinterpret_cast<char*>(&n), sizeof(n));
     if (n) {
@@ -20,10 +22,12 @@ inline void writeVector(std::ofstream& out, std::vector<T> const& v)
 }
 
 template <typename T>
-inline std::vector<T> readVector(std::ifstream& in)
+std::vector<T> readVector(std::ifstream& in)
 {
     static_assert(std::is_trivially_copyable_v<T>,
                   "readVector requires trivially copyable type");
+    static_assert(std::has_unique_object_representations_v<T>,
+                  "readVector does not allow padding bits");
     uint64_t n = 0;
     in.read(reinterpret_cast<char*>(&n), sizeof(n));
     std::vector<T> v(static_cast<size_t>(n));
@@ -35,10 +39,12 @@ inline std::vector<T> readVector(std::ifstream& in)
 }
 
 template <typename T, size_t N>
-inline void writeArray(std::ofstream& out, std::array<T, N> const& a)
+void writeArray(std::ofstream& out, std::array<T, N> const& a)
 {
     static_assert(std::is_trivially_copyable_v<T>,
                   "writeArray requires trivially copyable type");
+    static_assert(std::has_unique_object_representations_v<T>,
+                  "writeArray does not allow padding bits");
     out.write(reinterpret_cast<char const*>(a.data()),
               sizeof(T) * N);
 }
