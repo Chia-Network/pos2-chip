@@ -8,9 +8,6 @@
 
 #pragma once
 
-#define USE_FAST_CHALLENGE true
-
-#ifdef USE_FAST_CHALLENGE
 // Original algorithm by Sebastiano Vigna.
 // See: http://xorshift.di.unimi.it/splitmix64.c
 uint64_t splitmix64(uint64_t x) {
@@ -20,7 +17,6 @@ uint64_t splitmix64(uint64_t x) {
     x ^= (x >> 31);
     return x;
 }
-#endif
 
 class Chainer
 {
@@ -47,13 +43,8 @@ public:
         // State for the explicit stack.
         struct State
         {
-            #ifdef USE_FAST_CHALLENGE
             uint64_t fast_challenge;
-            #else
-            BlakeHash::Result256 challenge;
-            #endif
             int iteration;
-            //std::vector<BlakeHash::Result256> challenges; // built so far
             std::vector<ProofFragment> fragments;      // chosen fragments so far
         };
 
@@ -71,11 +62,7 @@ public:
 
         // Start at iteration 0, no picks yet.
         stack.push_back(State{
-            #ifdef USE_FAST_CHALLENGE
-            .fast_challenge = initial_challenge.r[0] | (static_cast<uint64_t>(initial_challenge.r[1]) << 32),
-            #else
-            .challenge = initial_challenge,
-            #endif
+            .fast_challenge = 0,
             .iteration = 0,
             .fragments = {}});
 
@@ -118,11 +105,7 @@ public:
             // Try extending the chain with each value from the current list.
             for (ProofFragment fragment : current_list)
             {
-                #ifdef USE_FAST_CHALLENGE
-                uint64_t new_fast_challenge = splitmix64(st.fast_challenge ^ fragment);
-                #else
-                BlakeHash::Result256 new_challenge = proof_core_.hashing.linkHash(st.challenge, fragment, st.iteration);
-                #endif
+                uint64_t new_fast_challenge = splitmix64(st.fast_challenge ^ fragment ^ get_round_bits(initial_challenge, st.iteration));
                 num_hashes++;
 
                 #ifdef DEBUG_CHAINER
@@ -132,7 +115,6 @@ public:
                           << new_challenge.toString() << "\n";
                 #endif
 
-                #ifdef USE_FAST_CHALLENGE
                 if (!passes_fast_filter(new_fast_challenge, st.iteration))
                 {
                     #ifdef DEBUG_CHAINER
@@ -140,22 +122,10 @@ public:
                     #endif
                     continue;
                 }
-                #else
-                if (!passes_filter(new_challenge, st.iteration))
-                {
-                    #ifdef DEBUG_CHAINER
-                    std::cout << "Chainer:     Fragment rejected by filter.\n";
-                    #endif
-                    continue;
-                }
-                #endif
 
                 State next;
-                #ifdef USE_FAST_CHALLENGE
                 next.fast_challenge = new_fast_challenge;
-                #else
-                next.challenge = new_challenge;
-                #endif
+
                 next.iteration = st.iteration + 1;
                 next.fragments = st.fragments;
 
@@ -173,7 +143,6 @@ public:
         return results;
     }
 
-    #ifdef USE_FAST_CHALLENGE
     bool passes_fast_filter(const uint64_t fast_challenge, int iteration) const
     {
         // For now accept all links
@@ -202,36 +171,15 @@ public:
             return false;
         return true;
     }
-    #else
-    bool passes_filter(const BlakeHash::Result256 &new_challenge, int iteration) const
-    {
-        // For now accept all links
-        int passing_zeros_needed = proof_core_.getProofParams().get_chaining_set_bits();
-        if (iteration == 0)
-        {
-            // First iteration uses a looser filter
-            passing_zeros_needed -= 2; // first chain has 4x chance of passing.
-        }
-        else if (iteration == NUM_CHAIN_LINKS - 1)
-        {
-            // last iteration has stricter filter
-            passing_zeros_needed += 2; // last chain has 1/4x chance of passing.
-            passing_zeros_needed += AVERAGE_PROOFS_PER_CHALLENGE_BITS; // only want 1/32 of the proofs.
-        }
     
-        uint32_t check_value =
-            new_challenge.r[0] & ((1U << passing_zeros_needed) - 1);
 
-        #ifdef DEBUG_CHAINER
-        std::cout << "Chainer:       Checking filter with "
-                  << passing_zeros_needed << " bits, check value: "
-                  << check_value << "\n";
-        #endif
-        if (check_value != 0)
-            return false;
-        return true;
+    static inline uint64_t get_round_bits(const BlakeHash::Result256 &challenge, unsigned r) {
+        uint32_t w0 = challenge.r[r & 7];          // first word
+        uint32_t w1 = challenge.r[(r + 3) & 7];    // second word, offset by odd constant
+
+        // Combine into 64 bits
+        return (numeric_cast<uint64_t>(w0) << 32) | w1;
     }
-    #endif
 
     bool validate(const Chain &chain, Range fragment_A, Range fragments_B) const
     {
@@ -265,26 +213,16 @@ public:
 
         BlakeHash::Result256 challenge =
             proof_core_.hashing.challengeWithPlotIdHash(challenge_);
-        #ifdef USE_FAST_CHALLENGE
-        uint64_t fast_challenge = challenge.r[0] | (static_cast<uint64_t>(challenge.r[1]) << 32);
-        #endif
+        
+        uint64_t fast_challenge = 0;
 
         for (int i = 0; i < NUM_CHAIN_LINKS; i++)
         {
-            #ifdef USE_FAST_CHALLENGE
-            fast_challenge = splitmix64(fast_challenge ^ chain.fragments[i]);
+            fast_challenge = splitmix64(fast_challenge ^ chain.fragments[i] ^ get_round_bits(challenge, i));
             if (!passes_fast_filter(fast_challenge, i))
             {
                 return false;
             }
-            #else
-            challenge = proof_core_.hashing.linkHash(challenge, chain.fragments[i], i);
-
-            if (!passes_filter(challenge, i))
-            {
-                return false;
-            }
-            #endif
         }
 
         return true;
