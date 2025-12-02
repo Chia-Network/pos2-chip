@@ -120,11 +120,9 @@ public:
         XBitGroupMappings out;
 
         int mapping_idx = 0;
-        for (size_t i = 0; i < x_bits_list.size(); ++i)
+        for (uint32_t x_bits : x_bits_list)
         {
-            uint32_t x_bits = x_bits_list[i];
-
-            int idx = lookup[x_bits];
+            int const idx = lookup[x_bits];
             if (idx < 0)
             {
                 // first time we see `x_bits`
@@ -157,31 +155,31 @@ public:
         if (true)
         {
             std::cout << "original x bits list: ";
-            for (size_t i = 0; i < x_bits_list.size(); i++)
+            for (auto v : x_bits_list)
             {
-                std::cout << x_bits_list[i] << ", ";
+                std::cout << v << ", ";
             }
             std::cout << std::endl;
             // output x1 list
             std::cout << "unique x bits list (" << x_bits_group.unique_x_bits_list.size() << "):" << std::endl;
-            for (size_t i = 0; i < x_bits_group.unique_x_bits_list.size(); i++)
+            for (auto v : x_bits_group.unique_x_bits_list)
             {
-                std::cout << x_bits_group.unique_x_bits_list[i] << ", ";
+                std::cout << v << ", ";
             }
             std::cout << std::endl;
 
             // output mappings
             std::cout << "x bits mapping (" << x_bits_group.mapping.size() << "):" << std::endl;
-            for (size_t i = 0; i < x_bits_group.mapping.size(); i++)
+            for (auto v : x_bits_group.mapping)
             {
-                std::cout << x_bits_group.mapping[i] << ", ";
+                std::cout << v << ", ";
             }
             std::cout << std::endl;
 
             std::cout << "x_solution (" << x_solution.size() << "):" << std::endl;
-            for (size_t i = 0; i < x_solution.size(); i++)
+            for (auto v : x_solution)
             {
-                std::cout << x_solution[i] << ", ";
+                std::cout << v << ", ";
             }
             std::cout << std::endl;
         }
@@ -270,12 +268,12 @@ public:
                 uint32_t x1 = x_solution[i];
                 uint32_t x2 = x_solution[i + 1];
                 bool found = false;
-                for (size_t j = 0; j < t1_matches.size(); j++)
+                for (auto const& t1 : t1_matches)
                 {
-                    if (t1_matches[j].x1 == x1 && t1_matches[j].x2 == x2)
+                    if (t1.x1 == x1 && t1.x2 == x2)
                     {
                         found = true;
-                        std::cout << "Found match for x pair: " << x1 << ", " << x2 << ", hash: " << t1_matches[j].pair_hash << std::endl;
+                        std::cout << "Found match for x pair: " << x1 << ", " << x2 << ", hash: " << t1.pair_hash << std::endl;
                         break;
                     }
                 }
@@ -315,26 +313,26 @@ public:
                 uint32_t x3 = x_solution[i + 2];
                 uint32_t x4 = x_solution[i + 3];
 
-                int x1_group = x_bits_group.mapping[i / 2];
-                int x2_group = x_bits_group.mapping[i / 2 + 1];
+                size_t const x1_group = x_bits_group.mapping[i / 2];
+                size_t const x2_group = x_bits_group.mapping[i / 2 + 1];
                 std::cout << "x1 group: " << x1_group << ", x2 group: " << x2_group << std::endl;
 
                 bool found_l = false;
-                for (int l = 0; l < t1_match_groups[x1_group].size(); l++)
+                for (auto const& group : t1_match_groups[x1_group])
                 {
-                    if (t1_match_groups[x1_group][l].x1 == x1 && t1_match_groups[x1_group][l].x2 == x2)
+                    if (group.x1 == x1 && group.x2 == x2)
                     {
-                        std::cout << "Found match for x pair: " << x1 << ", " << x2 << " hash: " << t1_match_groups[x1_group][l].pair_hash << std::endl;
+                        std::cout << "Found match for x pair: " << x1 << ", " << x2 << " hash: " << group.pair_hash << std::endl;
                         found_l = true;
                     }
                 }
 
                 bool found_r = false;
-                for (int r = 0; r < t1_match_groups[x2_group].size(); r++)
+                for (auto const& group : t1_match_groups[x2_group])
                 {
-                    if (t1_match_groups[x2_group][r].x1 == x3 && t1_match_groups[x2_group][r].x2 == x4)
+                    if (group.x1 == x3 && group.x2 == x4)
                     {
-                        std::cout << "Found match for x pair: " << x3 << ", " << x4 << " hash: " << t1_match_groups[x2_group][r].pair_hash << std::endl;
+                        std::cout << "Found match for x pair: " << x3 << ", " << x4 << " hash: " << group.pair_hash << std::endl;
                         found_r = true;
                     }
                 }
@@ -778,10 +776,10 @@ public:
 
         for (T1_Match const& match : t1_matches)
         {
-            uint32_t x1_bit_dropped = match.x1 >> (num_k_bits - x1_bits);
-            int lookup_index = x_bit_group_mappings.lookup[x1_bit_dropped];
+            uint32_t const x1_bit_dropped = match.x1 >> (num_k_bits - x1_bits);
+            int const lookup_index = x_bit_group_mappings.lookup[x1_bit_dropped];
 #ifdef DEBUG_VERIFY
-            if ((lookup_index == -1) || (lookup_index >= NUM_X1S))
+            if ((lookup_index == -1) || (size_t(lookup_index) >= NUM_X1S))
             {
                 // error
                 std::cout << "x1_bit_dropped: " << x1_bit_dropped << " OUT OF BOUNDS to total_ranges: " << NUM_X1S << std::endl;
@@ -2052,9 +2050,9 @@ done:
 
         // TODO: could be multi-threaded
         timer.start("Setting bitmask hash");
-        for (size_t i = 0; i < x1_hashes.size(); i++)
+        for (auto const& x1 : x1_hashes)
         {
-            uint32_t hash = x1_hashes[i] >> bitmask_shift_;
+            uint32_t hash = x1 >> bitmask_shift_;
             int slot = hash >> 5;
             int bit = hash & 31;
             x1_bitmask[slot] |= (1 << bit);
