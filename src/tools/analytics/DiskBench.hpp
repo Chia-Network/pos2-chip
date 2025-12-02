@@ -41,7 +41,7 @@ namespace pretty {
     }
 
     template <typename T>
-    inline void printRow(const std::string& label, const T& value) {
+    void printRow(const std::string& label, const T& value) {
         std::cout << "| "
                   << std::left << std::setw(LABEL_WIDTH) << label
                   << " | "
@@ -92,7 +92,7 @@ namespace pretty {
     }
 
     template <typename T>
-    inline std::string num(T v, int precision = 2, bool fixed = true) {
+    std::string num(T v, int precision = 2, bool fixed = true) {
         std::ostringstream oss;
         if constexpr (std::is_floating_point<T>::value) {
             if (fixed) oss << std::fixed;
