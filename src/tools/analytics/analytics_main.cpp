@@ -50,9 +50,6 @@ try
         if (argc >= 7) {
             diskReadMBs = std::stod(argv[6]);
         }
-        //std::cout << "Disk usage simulation: Plot ID filter bits: " << plotIdFilter
-        //          << ", " << diskTB << " TB, Seek time: " << diskSeekMs << " ms, Read speed: " << diskReadMBs << " MB/s\n";
-        
         ProofParams proof_params(Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF").data(), 28, 2);
         DiskBench diskbench(proof_params);
         diskbench.simulateChallengeDiskReads(plotIdFilter, plotsInGroup, diskTB, diskSeekMs, diskReadMBs);

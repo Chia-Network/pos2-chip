@@ -51,8 +51,7 @@ struct ChunkedProofFragments {
         // Because t3_proof_fragments are sorted, we can just look at the last one
         uint64_t max_value = plot_data.t3_proof_fragments.back();
         uint64_t num_spans = max_value / range_per_chunk + 1;
-        std::cout << "Max value was: " << max_value << ", num_spans: " << num_spans << std::endl;
-
+        
         chunked_data.proof_fragments_chunks.resize(
             static_cast<std::size_t>(num_spans)
         );
@@ -68,9 +67,7 @@ struct ChunkedProofFragments {
                 current_span_end += range_per_chunk;
 
                 // safety: this should never trigger if num_spans was computed correctly
-                if (current_span >= num_spans) {
-                    throw std::runtime_error("span index out of range while bucketing fragments");
-                }
+                assert(current_span < num_spans);
             }
 
             chunked_data.proof_fragments_chunks[current_span].push_back(fragment);

@@ -22,11 +22,6 @@ TEST_CASE("plot-read-write")
     PlotData plot = plotter.run();
     timer.stop();
 
-    //ProofFragmentScanFilter filter(plotter.getProofParams(),
-    //                                BlakeHash::Result256{{0,0,0,0,0,0,0,0}},
-    //                                5);
-    //uint64_t scan_span = filter.getScanSpan();
-
     int CHUNK_SPAN_SCAN_RANGE_BITS = 16; // 65k entries per chunk
     uint64_t chunk_span = (1ULL << (plotter.getProofParams().get_k() + CHUNK_SPAN_SCAN_RANGE_BITS));
     ChunkedProofFragments partitioned_data = ChunkedProofFragments::convertToChunkedProofFragments(plot, chunk_span);

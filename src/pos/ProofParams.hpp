@@ -193,8 +193,6 @@ public:
 
     Range get_chaining_set_range(size_t chaining_set_index) const
     {
-        //uint32_t num_sets = get_num_chaining_sets();
-        //assert(chaining_set_index < num_sets);
         uint64_t range = (uint64_t) 1 << (k_ + get_chaining_set_bits());
         uint64_t start = chaining_set_index * range;
         uint64_t end = start + range - 1;

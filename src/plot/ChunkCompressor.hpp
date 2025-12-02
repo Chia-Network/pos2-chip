@@ -152,9 +152,10 @@ public:
                                          std::span<uint64_t const> const stubs,
                                          uint8_t const stub_bits)
     {
-        if (deltas.size() != stubs.size()) {
-            throw std::invalid_argument("ChunkCompressor::compress: deltas and stubs size mismatch");
-        }
+        // deltas and stubs must have the same size
+        assert(deltas.size() == stubs.size());
+        // stub bits must make sense
+        assert(stub_bits >= 0 && stub_bits < 56);
 
         const uint32_t num_values = static_cast<uint32_t>(deltas.size());
         if (num_values == 0) {
@@ -165,10 +166,6 @@ public:
             append_u32(chunk, 0); // fse_size
             append_u32(chunk, 0); // stub_bytes_size
             return chunk;
-        }
-
-        if (stub_bits == 0 || stub_bits >= 64) {
-            throw std::invalid_argument("ChunkCompressor::compress: stub_bits must be in [1, 63]");
         }
 
         // 1) FSE-compress the deltas
@@ -215,12 +212,8 @@ public:
                            std::vector<uint8_t>& out_deltas,
                            std::vector<uint64_t>& out_stubs)
     {
-        if (chunk.size() < 12) {
-            throw std::runtime_error("ChunkCompressor::decompress: chunk too small");
-        }
-        if (stub_bits == 0 || stub_bits >= 64) {
-            throw std::invalid_argument("ChunkCompressor::decompress: stub_bits must be in [1, 63]");
-        }
+        assert(chunk.size() > 12); // don't use tiny chunks
+        assert(stub_bits >= 0 && stub_bits < 56);
 
         const uint8_t* p = chunk.data();
         const uint8_t* const end = chunk.data() + chunk.size();
