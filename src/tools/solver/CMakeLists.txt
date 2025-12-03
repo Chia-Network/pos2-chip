@@ -11,7 +11,7 @@ endif()
 
 # Enable hardware AES on 64-bit ARM (e.g., Raspberry Pi 5)
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|armv8")
-    target_compile_options(analytics PRIVATE
+    target_compile_options(solver PRIVATE
         -march=armv8-a+crypto
         -mtune=cortex-a76
     )
