@@ -10,24 +10,26 @@
 class AesHash {
   public:
     // Construct from a pointer to at least 32 bytes of plot id material.
-    AesHash(const uint8_t* plot_id_bytes) {
+    AesHash(const uint8_t* plot_id_bytes, int k=28) : k_(k) {
         round_key_1 = load_plot_id_as_aes_key(plot_id_bytes);
         round_key_2 = load_plot_id_as_aes_key(plot_id_bytes + 16);
     }
 
     // Templated hash function that uses the preloaded AES keys.
     template<bool Soft>
-    uint32_t hash_x(uint32_t x, const int Rounds = 10) const {
+    uint32_t hash_x(uint32_t x, const int Rounds = 16) const {
         // place uint32_t x into lowest 32 bits of the vector
         rx_vec_i128 state = rx_set_int_vec_i128(/*i3*/0, /*i2*/0, /*i1*/0, /*i0*/static_cast<int>(x));
         for (int r = 0; r < Rounds; ++r) {
             state = aesenc<Soft>(state, round_key_1);
-            //state = aesenc<Soft>(state, round_key_2);
+            state = aesenc<Soft>(state, round_key_2);
         }
-        return static_cast<uint32_t>(rx_vec_i128_x(state));
+        // only get bottom k bits.
+        return static_cast<uint32_t>(rx_vec_i128_x(state)) & ((1u << k_) - 1u);
     }
 
   private:
+    int k_;
     rx_vec_i128 round_key_1;
     rx_vec_i128 round_key_2;
 

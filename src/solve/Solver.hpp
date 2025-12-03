@@ -2,6 +2,7 @@
 
 #include "common/Timer.hpp"
 #include "pos/ProofCore.hpp"
+#include "pos/aes/AesHash.hpp"
 
 #include "pos/ProofValidator.hpp"
 #include "ProofSolverTimings.hpp"
@@ -18,6 +19,7 @@
 #include <numeric> // for iota
 #include "common/ParallelForRange.hpp"
 
+
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
@@ -27,6 +29,8 @@
 #include <xmmintrin.h>
 #endif
 
+
+#define USE_AES_HASHING 1
 
 
 // #define DEBUG_VERIFY true
@@ -1418,18 +1422,191 @@ public:
         std::iota(thread_ids.begin(), thread_ids.end(), 0);
         std::atomic<bool> failed = false;
 
-        if (!use_prefetching_)
+        use_prefetching_ = true;
+
+        if (USE_AES_HASHING)
         {
-            timer.start("Chacha multi-threaded bitmask test");
+            std::cout << "Using AES hashing in filterX2Candidates()" << std::endl;
+            timer.start("AES multi-threaded bitmask test");
+            AesHash aes_hash(params_.get_plot_id_bytes());
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-                          {
+            {
+                int thread_matches = 0;
+                uint64_t start = uint64_t(t) * chunk_size;
+                uint64_t end = (t + 1 == (int)num_threads)
+                                       ? NUM_XS
+                                       : start + chunk_size;
+                    
+                std::cout << "Using AES hashing in filterX2Candidates()" << std::endl;
+                if (!use_prefetching_) {
+                    std::cout << "No prefetching" << std::endl;
+                    for (uint64_t x = start; x < end; x++) {
+                        uint32_t chacha_hash;
+                        if (HAVE_AES) {
+                            chacha_hash = aes_hash.hash_x<false>(uint32_t(x));
+                        }
+                        else {
+                            chacha_hash = aes_hash.hash_x<true>(uint32_t(x));
+                        }
+                        
+                        uint32_t bitmask_hash = chacha_hash >> this->bitmask_shift_;
+                        int slot = bitmask_hash >> 5;
+                        int bit = bitmask_hash & 31;
+                        if (x1_bitmask[slot] & (1u << bit))
+                        {
+                            assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
+                            size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
+                            x2_potential_match_xs[idx] = uint32_t(x);
+                            x2_potential_match_hashes[idx] = chacha_hash;
+                            ++thread_matches;
+                            if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
+                            {
+                                failed.store(true);
+                                goto done;
+                            }
+                        }
+                    }
+                } 
+                else {
+                    std::cout << "With prefetching" << std::endl;
+                    // Prefetching version
+                    constexpr int PREFETCH_DIST = 128;  // must be a power of 2 for the mask below
+
+                    if (end <= start) {
+                        goto done;
+                    }
+
+                    uint64_t count = end - start;
+
+                    // --- Prefetching pipeline ---
+                    uint32_t hash_buf[PREFETCH_DIST];
+                    uint32_t bitmask_hash_buf[PREFETCH_DIST];
+                    int      slot_buf[PREFETCH_DIST];
+
+                    // 1) Warm-up: compute and prefetch the first PREFETCH_DIST elements.
+                    //    We won't *use* them yet; we're just filling the pipeline.
+                    uint64_t x_pref = start;
+                    for (int i = 0; i < PREFETCH_DIST; ++i, ++x_pref) {
+                        uint32_t h;
+                        if (HAVE_AES) {
+                            h = aes_hash.hash_x<false>(uint32_t(x_pref));
+                        } else {
+                            h = aes_hash.hash_x<true>(uint32_t(x_pref));
+                        }
+
+                        hash_buf[i] = h;
+                        uint32_t bitmask_hash = h >> this->bitmask_shift_;
+                        bitmask_hash_buf[i] = bitmask_hash;
+
+                        int slot = bitmask_hash >> 5;
+                        slot_buf[i] = slot;
+
+                        //rx_prefetch_nta(&x1_bitmask[slot]);
+                        #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+                        _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[slot]), _MM_HINT_T0);
+                        #elif defined(__arm__) || defined(__aarch64__)
+                        __builtin_prefetch(&x1_bitmask[slot], 0, 0);
+                        #endif
+                    }
+
+                    // 2) Main pipelined loop.
+                    //
+                    //    For each x in [start, end - PREFETCH_DIST):
+                    //      - process the buffered entry for x
+                    //      - compute hash/slot for x + PREFETCH_DIST
+                    //      - prefetch x1_bitmask[slot(x + PREFETCH_DIST)]
+                    //
+                    uint64_t x      = start;
+                    uint64_t limit  = end - PREFETCH_DIST;        // last x that still has a future x+PREFETCH_DIST
+                    int      buf_ix = 0;                          // ring-buffer index
+
+                    for (; x < limit; ++x, buf_ix = (buf_ix + 1) & (PREFETCH_DIST - 1)) {
+                        // Process the element that was hashed & prefetched PREFETCH_DIST iterations ago.
+                        uint32_t chacha_hash = hash_buf[buf_ix];
+                        uint32_t bitmask_hash = bitmask_hash_buf[buf_ix];
+                        int slot = slot_buf[buf_ix];
+                        int bit  = bitmask_hash & 31;
+
+                        if (x1_bitmask[slot] & (1u << bit)) {
+                            assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
+                            size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
+                            x2_potential_match_xs[idx]     = uint32_t(x);
+                            x2_potential_match_hashes[idx] = chacha_hash;
+                            ++thread_matches;
+                            if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]] {
+                                failed.store(true);
+                                goto done;
+                            }
+                        }
+
+                        // Now compute and prefetch for the future element at x_pref = x + PREFETCH_DIST.
+                        uint64_t x_future = x + PREFETCH_DIST;
+
+                        uint32_t h;
+                        if (HAVE_AES) {
+                            h = aes_hash.hash_x<false>(uint32_t(x_future));
+                        } else {
+                            h = aes_hash.hash_x<true>(uint32_t(x_future));
+                        }
+
+                        hash_buf[buf_ix] = h;
+                        uint32_t future_bitmask_hash = h >> this->bitmask_shift_;
+                        bitmask_hash_buf[buf_ix] = future_bitmask_hash;
+
+                        int future_slot = future_bitmask_hash >> 5;
+                        slot_buf[buf_ix] = future_slot;
+
+                        //rx_prefetch_nta(&x1_bitmask[future_slot]);
+                        #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+                        _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[future_slot]), _MM_HINT_T0);
+                        #elif defined(__arm__) || defined(__aarch64__)
+                        __builtin_prefetch(&x1_bitmask[future_slot], 0, 0);
+                        #endif
+                    }
+
+                    // 3) Drain the remaining PREFETCH_DIST-1 buffered entries (no new prefetches).
+                    for (; x < end; ++x, buf_ix = (buf_ix + 1) & (PREFETCH_DIST - 1)) {
+                        uint32_t chacha_hash  = hash_buf[buf_ix];
+                        uint32_t bitmask_hash = bitmask_hash_buf[buf_ix];
+                        int slot = slot_buf[buf_ix];
+                        int bit  = bitmask_hash & 31;
+
+                        if (x1_bitmask[slot] & (1u << bit)) {
+                            assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
+                            size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
+                            x2_potential_match_xs[idx]     = uint32_t(x);
+                            x2_potential_match_hashes[idx] = chacha_hash;
+                            ++thread_matches;
+                            if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]] {
+                                failed.store(true);
+                                goto done;
+                            }
+                        }
+                    }
+                }
+            done:
+                matches_per_thread[t] = thread_matches; 
+            });
+            timings_.chachafilterx2sbybitmask += timer.stop();
+        }
+        else
+        {
+            std::cout << "Using ChaCha hashing in filterX2Candidates()" << std::endl;
+       
+            if (!use_prefetching_)
+            {
+                std::cout << "No prefetching" << std::endl;
+                timer.start("Chacha multi-threaded bitmask test");
+            
+                parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
+                {
                     int thread_matches = 0;
                     ProofCore proof_core(params_);
                     uint64_t start = uint64_t(t) * chunk_size;
                     uint64_t end = (t + 1 == (int)num_threads)
-                                       ? NUM_XS
-                                       : start + chunk_size;
-
+                                        ? NUM_XS
+                                        : start + chunk_size;
+                        
                     uint32_t local_out[16];
                     for (uint64_t x = start; x < end; x += 16)
                     {
@@ -1455,15 +1632,17 @@ public:
                             }
                         }
                     }
-done:
-                    matches_per_thread[t] = thread_matches; });
-            timings_.chachafilterx2sbybitmask += timer.stop();
-        }
-        else
-        {
-            timer.start("Chacha multi-threaded bitmask test with prefetching");
-            parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-                          {
+                    done:
+                    matches_per_thread[t] = thread_matches; 
+                });
+                timings_.chachafilterx2sbybitmask += timer.stop();
+            }
+            else
+            {
+                std::cout << "With prefetching" << std::endl;
+                timer.start("Chacha multi-threaded bitmask test with prefetching");
+                parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
+                {
                     int thread_matches = 0;
                     ProofCore proof_core(params_);
                     uint64_t start = uint64_t(t) * chunk_size;
@@ -1480,11 +1659,11 @@ done:
                     {
                         uint32_t bitmask_hash = prior[i] >> this->bitmask_shift_;
                         int slot = bitmask_hash >> 5;
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+                        #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
                         _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[slot]), _MM_HINT_T0);
-#elif defined(__arm__) || defined(__aarch64__)
+                        #elif defined(__arm__) || defined(__aarch64__)
                         __builtin_prefetch(&x1_bitmask[slot], 0, 0);
-#endif
+                        #endif
                     }
 
                     // main loop
@@ -1516,11 +1695,11 @@ done:
                         {
                             uint32_t bitmask_hash = local[i] >> this->bitmask_shift_;
                             int slot = bitmask_hash >> 5;
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+                            #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
                             _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[slot]), _MM_HINT_T0);
-#elif defined(__arm__) || defined(__aarch64__)
+                            #elif defined(__arm__) || defined(__aarch64__)
                             __builtin_prefetch(&x1_bitmask[slot], 0, 0);
-#endif
+                            #endif
                         }
                         std::copy(std::begin(local), std::end(local), std::begin(prior));
                     }
@@ -1545,9 +1724,11 @@ done:
                             }
                         }
                     }
-done:
-                    matches_per_thread[t] = thread_matches; });
-            timings_.chachafilterx2sbybitmask += timer.stop();
+                done:
+                    matches_per_thread[t] = thread_matches; 
+                });
+                timings_.chachafilterx2sbybitmask += timer.stop();
+            }
         }
 
         if (failed.load())
@@ -1561,6 +1742,7 @@ done:
         for (int m : matches_per_thread)
             total += m;
         timings_.misc += timer.stop();
+        std::cout << "TOTAL x2 potential matches: " << total << std::endl;
 
         timer.start("Compacting x2 potential matches");
         int write_pos = matches_per_thread[0];
@@ -1579,7 +1761,7 @@ done:
         timings_.misc += timer.stop();
     }
 
-    void filterX2CandidatesBiPartite(const std::vector<uint32_t> &x1_bitmask,
+   /* void filterX2CandidatesBiPartite(const std::vector<uint32_t> &x1_bitmask,
                                      std::vector<uint32_t> &x2_potential_match_xs,
                                      std::vector<uint32_t> &x2_potential_match_hashes)
     {
@@ -1631,7 +1813,6 @@ done:
         std::vector<int> thread_ids(num_threads);
         std::iota(thread_ids.begin(), thread_ids.end(), 0);
         std::atomic<bool> failed = false;
-
         if (!use_prefetching_)
         {
             timer.start("Chacha multi-threaded bitmask test (no prefetching)");
@@ -1689,7 +1870,7 @@ done:
                             }
                             ++num_checks;
                         }
-                    }
+                }
 done:
                     matches_per_thread[t] = thread_matches;
                     num_checks_per_thread[t] = num_checks; });
@@ -1835,7 +2016,7 @@ done:
         // std::cout << "Pass rate: " << (double)total / (double)total_checks << std::endl;
 
         timings_.misc += timer.stop();
-    }
+    }*/
 
     void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
                           int x1_bits,
@@ -1868,10 +2049,20 @@ done:
         std::vector<int> indices(NUM_X1S);
         std::iota(indices.begin(), indices.end(), 0);
 
+        if (USE_AES_HASHING) {
+            if (HAVE_AES) {
+                std::cout << "Using hardware AES for x1 hashing" << std::endl;
+            }
+            else {
+                std::cout << "Using software AES for x1 hashing" << std::endl;
+            }
+        }
+
         parallel_for_range(indices.begin(), indices.end(), [&](int x1_index)
                       {
                 // each thread in the pool runs this lambda
                 ProofCore proof_core(params_);
+                AesHash aes_hash(params_.get_plot_id_bytes());
                 uint32_t x_chachas[16];
 
                 uint32_t x1_bit_dropped =
@@ -1887,11 +2078,22 @@ done:
                      x < x1_range_start + x1_range_size;
                      ++x)
                 {
-                    if ((x & 15u) == 0u)
-                    {
-                        proof_core.hashing.g_range_16(x, x_chachas);
+                    uint32_t x_chacha;
+                    if (USE_AES_HASHING) {
+                        if (HAVE_AES) {
+                            x_chacha = aes_hash.hash_x<false>(uint32_t(x));
+                        }
+                        else {
+                            x_chacha = aes_hash.hash_x<true>(uint32_t(x));
+                        }
                     }
-                    uint32_t x_chacha = x_chachas[x & 15u];
+                    else {
+                        if ((x & 15u) == 0u)
+                        {
+                            proof_core.hashing.g_range_16(x, x_chachas);
+                        }
+                        x_chacha = x_chachas[x & 15u];
+                    }
 
                     // offset within this x1 range for writing per-match_key blocks
                     std::size_t offset = static_cast<std::size_t>(x - x1_range_start);

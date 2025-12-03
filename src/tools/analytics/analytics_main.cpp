@@ -33,7 +33,7 @@ int hashBench(int N, int rounds, int num_threads)
     uint64_t chacha_count = count / 16; // chacha does groups of 16.
 
     int total_tests = 4;
-    for (int test = 2; test < total_tests; test++)
+    for (int test = 0; test < total_tests; test++)
     {
         std::cout << "Doing test " << test << "/" << total_tests << "...\n";
         // show our input parameters
