@@ -4,6 +4,8 @@
 #include "common/Utils.hpp"
 #include "DiskBench.hpp"
 #include "pos/aes/AesHash.hpp"
+#include "pos/BlakeHash.hpp"
+#include "pos/ChachaHash.hpp"
 #include <thread>
 
 void printUsage()
@@ -26,10 +28,14 @@ int hashBench(int N, int rounds, int num_threads)
     out.resize(count);
 
     AesHash hasher(plot_id.data());
+    ChachaHash chacha_hasher(plot_id.data());
 
-    for (int test = 0; test < 2; test++)
+    uint64_t chacha_count = count / 16; // chacha does groups of 16.
+
+    int total_tests = 4;
+    for (int test = 2; test < total_tests; test++)
     {
-        std::cout << "Doing test " << test << "...\n";
+        std::cout << "Doing test " << test << "/" << total_tests << "...\n";
         // show our input parameters
         if (test == 0)
         {
@@ -48,15 +54,29 @@ int hashBench(int N, int rounds, int num_threads)
         {
             std::cout << "AES Software Hash Benchmark\n";
         }
+        else if (test == 2)
+        {
+            std::cout << "Blake Hash Benchmark\n";
+        }
+        else if (test == 3)
+        {
+            std::cout << "Chacha Hash Benchmark\n";
+        }
         std::cout << "------------------------------------\n";
         std::cout << "   Total hashes to compute : " << count << " (2^" << N << ")\n";
-        std::cout << "   AES Rounds              : " << rounds << "\n";
         std::cout << "   Threads                 : " << num_threads << "\n";
+        if (test == 0 || test == 1) {
+            std::cout << "   AES Rounds              : " << rounds << "\n";
+        }
         std::cout << "------------------------------------\n";
         std::vector<std::thread> threads;
         threads.reserve(num_threads);
         uint64_t base = 0;
         uint64_t chunk = count / num_threads;
+        if (test == 3) {
+            // chacha does groups of 16, so change the count.
+            chunk = chacha_count / num_threads;
+        }
         auto t0 = std::chrono::high_resolution_clock::now();
         for (int ti = 0; ti < num_threads; ++ti)
         {
@@ -78,6 +98,27 @@ int hashBench(int N, int rounds, int num_threads)
                                          for (uint64_t i = start; i < end; ++i)
                                          {
                                              out[i] = hasher.hash_x<true>(static_cast<uint32_t>(i), rounds);
+                                         } });
+            }
+            else if (test == 2)
+            {
+                threads.emplace_back([start, end, &out]()
+                                     {
+                                        uint32_t block_words[16] = {0};
+                                         for (uint64_t i = start; i < end; ++i)
+                                         {
+                                            block_words[0] = static_cast<uint32_t>(i);
+                                            out[i] = BlakeHash::hash_block_64(block_words).r[0];
+                                         } });
+            }
+            else if (test == 3)
+            {
+                end = (start + chunk);
+                threads.emplace_back([start, end, &out, &chacha_hasher]()
+                                     {
+                                         for (uint64_t i = start; i < end; ++i)
+                                         {
+                                            chacha_hasher.do_chacha16_range(static_cast<uint32_t>(i), &out[i]);
                                          } });
             }
         }
