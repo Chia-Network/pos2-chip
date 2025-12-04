@@ -14,6 +14,14 @@ if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|armv8")
     target_compile_options(solver PRIVATE
         -march=armv8-a+crypto
     )
+# Enable AES-NI on x86_64 (Intel/AMD, e.g., Ubuntu desktop)
+elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        # Explicitly enable AES-NI and friends
+        target_compile_options(analytics PRIVATE
+            -maes
+        )
+    endif()
 endif()
 
 
