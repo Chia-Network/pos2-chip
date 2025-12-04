@@ -28,6 +28,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4324) // structure padded due to alignment specifier (__m128i member)
+#endif
+
 #include <cstdint>
 #include "endian.h"
 #include <iostream>
