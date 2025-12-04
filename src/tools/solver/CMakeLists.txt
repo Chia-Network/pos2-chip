@@ -18,7 +18,7 @@ if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|armv8")
 elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         # Explicitly enable AES-NI and friends
-        target_compile_options(analytics PRIVATE
+        target_compile_options(solver PRIVATE
             -maes
         )
     endif()
