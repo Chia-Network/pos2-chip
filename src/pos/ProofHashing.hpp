@@ -7,7 +7,10 @@
 #include "ProofParams.hpp"
 #include "ChachaHash.hpp"
 #include "BlakeHash.hpp"
+#include "aes/AesHash.hpp"
 
+#define USE_AES_HASH_FOR_G 1 // 1 for AES, 0 for ChaCha
+#define USE_AES_HASH_FOR_PAIRING 0 // 1 for AES, 0 for Blake
 
 // A simple structure to hold the result of a pairing computation.
 struct PairingResult {
@@ -23,7 +26,8 @@ public:
     ProofHashing(const ProofParams& proof_params)
         : params_(proof_params),
           chacha_(proof_params.get_plot_id_bytes(), static_cast<int>(proof_params.get_k())),
-          blake_(proof_params.get_plot_id_bytes())
+          blake_(proof_params.get_plot_id_bytes()),
+          aes_(proof_params.get_plot_id_bytes(), static_cast<int>(proof_params.get_k()))
     {
     }
 
@@ -133,6 +137,7 @@ private:
     ProofParams params_;
     ChachaHash chacha_;
     BlakeHash blake_;
+    AesHash aes_;
 };
 
 inline uint32_t mask32(const int bits) {
@@ -146,14 +151,26 @@ inline uint32_t mask32(const int bits) {
 //
 
 inline uint32_t ProofHashing::g(uint32_t x) {
+    #if USE_AES_HASH_FOR_G
+        #if HAVE_AES
+            return aes_.hash_x<false>(x);
+        #else
+            return aes_.hash_x<true>(x);
+        #endif
+    #else
     uint32_t x_group = x >> 4;
     uint32_t out_hashes[16];
     chacha_.do_chacha16_range(x_group * 16, out_hashes);
     return out_hashes[x & 15];
+    #endif
 }
 
 inline void ProofHashing::g_range_16(uint32_t x, uint32_t* out_hashes) {
+    #if USE_AES_HASH_FOR_G
+        throw std::runtime_error("g_range_16 not supported with AES hash");
+    #else
     chacha_.do_chacha16_range(x, out_hashes);
+    #endif
 }
 
 inline uint32_t ProofHashing::matching_target(size_t table_id, uint32_t match_key,

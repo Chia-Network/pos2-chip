@@ -30,9 +30,6 @@
 #endif
 
 
-#define USE_AES_HASHING 1
-
-
 // #define DEBUG_VERIFY true
 
 // Needed for macOS
@@ -1424,11 +1421,11 @@ public:
 
         use_prefetching_ = true;
 
-        if (USE_AES_HASHING)
+        #if (USE_AES_HASH_FOR_G)
         {
             std::cout << "Using AES hashing in filterX2Candidates()" << std::endl;
             timer.start("AES multi-threaded bitmask test");
-            AesHash aes_hash(params_.get_plot_id_bytes());
+            AesHash aes_hash(params_.get_plot_id_bytes(), params_.get_k());
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
             {
                 int thread_matches = 0;
@@ -1589,7 +1586,7 @@ public:
             });
             timings_.chachafilterx2sbybitmask += timer.stop();
         }
-        else
+        #else
         {
             std::cout << "Using ChaCha hashing in filterX2Candidates()" << std::endl;
        
@@ -1730,6 +1727,7 @@ public:
                 timings_.chachafilterx2sbybitmask += timer.stop();
             }
         }
+        #endif
 
         if (failed.load())
         {
@@ -2049,20 +2047,20 @@ done:
         std::vector<int> indices(NUM_X1S);
         std::iota(indices.begin(), indices.end(), 0);
 
-        if (USE_AES_HASHING) {
+        #if (USE_AES_HASH_FOR_PAIRING)
             if (HAVE_AES) {
                 std::cout << "Using hardware AES for x1 hashing" << std::endl;
             }
             else {
                 std::cout << "Using software AES for x1 hashing" << std::endl;
             }
-        }
+        #endif
 
         parallel_for_range(indices.begin(), indices.end(), [&](int x1_index)
                       {
                 // each thread in the pool runs this lambda
                 ProofCore proof_core(params_);
-                AesHash aes_hash(params_.get_plot_id_bytes());
+                AesHash aes_hash(params_.get_plot_id_bytes(), params_.get_k());
                 uint32_t x_chachas[16];
 
                 uint32_t x1_bit_dropped =
@@ -2079,7 +2077,8 @@ done:
                      ++x)
                 {
                     uint32_t x_chacha;
-                    if (USE_AES_HASHING) {
+                    #if (USE_AES_HASH_FOR_G) 
+                    {
                         if (HAVE_AES) {
                             x_chacha = aes_hash.hash_x<false>(uint32_t(x));
                         }
@@ -2087,13 +2086,15 @@ done:
                             x_chacha = aes_hash.hash_x<true>(uint32_t(x));
                         }
                     }
-                    else {
+                    #else 
+                    {
                         if ((x & 15u) == 0u)
                         {
                             proof_core.hashing.g_range_16(x, x_chachas);
                         }
                         x_chacha = x_chachas[x & 15u];
                     }
+                    #endif
 
                     // offset within this x1 range for writing per-match_key blocks
                     std::size_t offset = static_cast<std::size_t>(x - x1_range_start);

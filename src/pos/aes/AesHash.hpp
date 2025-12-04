@@ -10,12 +10,13 @@
 class AesHash {
   public:
     // Construct from a pointer to at least 32 bytes of plot id material.
-    AesHash(const uint8_t* plot_id_bytes, int k=28) : k_(k) {
+    AesHash(const uint8_t* plot_id_bytes, int k) : k_(k) {
         round_key_1 = load_plot_id_as_aes_key(plot_id_bytes);
         round_key_2 = load_plot_id_as_aes_key(plot_id_bytes + 16);
     }
 
     // Templated hash function that uses the preloaded AES keys.
+    // Rounds of 16 are optimal for the Pi5 Solver performance yet still pressure a GPU into compute bound.
     template<bool Soft>
     uint32_t hash_x(uint32_t x, const int Rounds = 16) const {
         // place uint32_t x into lowest 32 bits of the vector
@@ -42,11 +43,3 @@ class AesHash {
         return rx_set_int_vec_i128(i3, i2, i1, i0);
     }
 };
-
-// Lightweight wrapper that keeps original-style calling pattern if you
-// prefer not to instantiate the class in call sites. Prefer using PlotHasher directly.
-template<bool Soft>
-inline uint32_t hash_x(uint32_t x, uint8_t *plot_id_bytes, const int Rounds = 10) {
-    AesHash hasher(plot_id_bytes);
-    return hasher.template hash_x<Soft>(x, Rounds);
-}

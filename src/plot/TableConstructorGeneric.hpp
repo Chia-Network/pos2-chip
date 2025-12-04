@@ -252,7 +252,15 @@ public:
         // We'll have 2^(k-4) groups, each group has 16 x-values
         // => total of 2^(k-4)*16 x-values
         
-        
+        #if USE_AES_HASH_FOR_G
+        uint64_t num_xs = (1ULL << params_.get_k());
+        x_candidates.reserve(num_xs);
+        for (uint32_t x = 0; x < num_xs; x++)
+        {
+            uint32_t match_info = proof_core_.hashing.g(x);
+            x_candidates.push_back({match_info, x});
+        }
+        #else
         uint64_t num_groups = (1ULL << (params_.get_k() - 4));
         
         // hack to make smaller plot for debugging
@@ -274,6 +282,7 @@ public:
                 x_candidates.push_back({match_info, x});
             }
         }
+        #endif
         RadixSort<Xs_Candidate, uint32_t> radix_sort;
         std::vector<Xs_Candidate> temp_buffer(x_candidates.size());
         // Create a span over the temporary buffer

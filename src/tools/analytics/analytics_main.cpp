@@ -27,7 +27,7 @@ int hashBench(int N, int rounds, int num_threads)
     std::vector<uint32_t> out;
     out.resize(count);
 
-    AesHash hasher(plot_id.data());
+    AesHash hasher(plot_id.data(), 28);
     ChachaHash chacha_hasher(plot_id.data());
 
     uint64_t chacha_count = count / 16; // chacha does groups of 16.
