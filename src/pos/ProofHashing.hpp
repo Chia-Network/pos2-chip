@@ -35,7 +35,9 @@ public:
     uint32_t g(uint32_t x);
 
     // Populates out_hashes (an array of 16 uint32_t) with hash words starting from x.
+    #if (!USE_AES_HASH_FOR_G)
     void g_range_16(uint32_t x, uint32_t* out_hashes);
+    #endif
 
     // Computes and returns the matching target using the Blake hash.
     // table_id: used as salt, match_key, meta: additional parameters.
@@ -165,13 +167,11 @@ inline uint32_t ProofHashing::g(uint32_t x) {
     #endif
 }
 
+#if !USE_AES_HASH_FOR_G
 inline void ProofHashing::g_range_16(uint32_t x, uint32_t* out_hashes) {
-    #if USE_AES_HASH_FOR_G
-        throw std::runtime_error("g_range_16 not supported with AES hash");
-    #else
     chacha_.do_chacha16_range(x, out_hashes);
-    #endif
 }
+#endif
 
 inline uint32_t ProofHashing::matching_target(size_t table_id, uint32_t match_key,
                                               uint64_t meta, int num_meta_bits, int num_target_bits) {

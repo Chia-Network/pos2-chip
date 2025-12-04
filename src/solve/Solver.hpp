@@ -1473,8 +1473,6 @@ public:
                         goto done;
                     }
 
-                    uint64_t count = end - start;
-
                     // --- Prefetching pipeline ---
                     uint32_t hash_buf[PREFETCH_DIST];
                     uint32_t bitmask_hash_buf[PREFETCH_DIST];
@@ -2061,7 +2059,9 @@ done:
                 // each thread in the pool runs this lambda
                 ProofCore proof_core(params_);
                 AesHash aes_hash(params_.get_plot_id_bytes(), params_.get_k());
+                #if !(USE_AES_HASH_FOR_G)
                 uint32_t x_chachas[16];
+                #endif
 
                 uint32_t x1_bit_dropped =
                     x_bits_list[static_cast<std::size_t>(x1_index)];
@@ -2121,7 +2121,7 @@ done:
     // k28 since it only has 4 sections with 0->2,1->3,2->1,3->0
     // means section 2 and 3 always both map to 0 and 1.
     // which means our bitmask only has to set section 0 and t2 filter will always check 0.
-    void hashX1CandidatesBiPartite(
+    /*void hashX1CandidatesBiPartite(
         const std::vector<uint32_t> &x_bits_list,
         int x1_bits,
         int x1_range_size,
@@ -2238,6 +2238,7 @@ done:
 
         timings_.hashing_x1s += timer.stop();
     }
+    */
 
     // Phase 4 helper: Build a bitmask from the sorted x1 hashes.
     void buildX1Bitmask(const std::vector<uint32_t> &x1_hashes,
