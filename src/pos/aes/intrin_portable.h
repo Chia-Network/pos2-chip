@@ -113,9 +113,9 @@ typedef __m128d rx_vec_f128;
 #define rx_div_vec_f128 _mm_div_pd
 #define rx_sqrt_vec_f128 _mm_sqrt_pd
 
-FORCE_INLINE rx_vec_f128 rx_swap_vec_f128(rx_vec_f128 a) {
-	return _mm_shuffle_pd(a, a, 1);
-}
+// FORCE_INLINE rx_vec_f128 rx_swap_vec_f128(rx_vec_f128 a) {
+// 	return _mm_shuffle_pd(a, a, 1);
+// }
 
 FORCE_INLINE rx_vec_f128 rx_set_vec_f128(uint64_t x1, uint64_t x0) {
 	return _mm_castsi128_pd(_mm_set_epi64x(x1, x0));
@@ -159,10 +159,11 @@ FORCE_INLINE int rx_vec_i128_w(rx_vec_i128 a) {
 #define rx_load_vec_i128 _mm_load_si128
 #define rx_store_vec_i128 _mm_store_si128
 
-FORCE_INLINE rx_vec_f128 rx_cvt_packed_int_vec_f128(const void* addr) {
-	__m128i ix = _mm_loadl_epi64((const __m128i*)addr);
-	return _mm_cvtepi32_pd(ix);
-}
+// FORCE_INLINE rx_vec_f128 rx_cvt_packed_int_vec_f128(const void* addr) {
+//	__m128i ix = _mm_loadl_epi64((const __m128i*)addr);
+//	return _mm_cvtepi32_pd(ix);
+//}
+
 
 constexpr uint32_t rx_mxcsr_default = 0x9FC0; //Flush to zero, denormals are zero, default rounding mode, all exceptions disabled
 
@@ -235,9 +236,9 @@ FORCE_INLINE void rx_store_vec_f128(double* mem_addr, rx_vec_f128 a) {
 #endif
 }
 
-FORCE_INLINE rx_vec_f128 rx_swap_vec_f128(rx_vec_f128 a) {
-	return (rx_vec_f128)vec_perm((__m128i)a,(__m128i)a,(__m128i){8,9,10,11,12,13,14,15,0,1,2,3,4,5,6,7});
-}
+// FORCE_INLINE rx_vec_f128 rx_swap_vec_f128(rx_vec_f128 a) {
+// 	return (rx_vec_f128)vec_perm((__m128i)a,(__m128i)a,(__m128i){8,9,10,11,12,13,14,15,0,1,2,3,4,5,6,7});
+// }
 
 FORCE_INLINE rx_vec_f128 rx_add_vec_f128(rx_vec_f128 a, rx_vec_f128 b) {
 	return (rx_vec_f128)vec_add(a,b);
@@ -374,12 +375,12 @@ FORCE_INLINE void rx_store_vec_i128(rx_vec_i128 *p, rx_vec_i128 b) {
 #endif
 }
 
-FORCE_INLINE rx_vec_f128 rx_cvt_packed_int_vec_f128(const void* addr) {
-	vec_u x;
-	x.d64[0] = (double)unsigned32ToSigned2sCompl(load32((const uint8_t*)addr + 0));
-	x.d64[1] = (double)unsigned32ToSigned2sCompl(load32((const uint8_t*)addr + 4));
-	return (rx_vec_f128)x.d;
-}
+// FORCE_INLINE rx_vec_f128 rx_cvt_packed_int_vec_f128(const void* addr) {
+// 	vec_u x;
+// 	x.d64[0] = (double)unsigned32ToSigned2sCompl(load32((const uint8_t*)addr + 0));
+// 	x.d64[1] = (double)unsigned32ToSigned2sCompl(load32((const uint8_t*)addr + 4));
+// 	return (rx_vec_f128)x.d;
+// }
 
 #define RANDOMX_DEFAULT_FENV
 
@@ -418,12 +419,12 @@ FORCE_INLINE void rx_store_vec_f128(double* mem_addr, rx_vec_f128 val) {
 	vst1q_f64((float64_t*)mem_addr, val);
 }
 
-FORCE_INLINE rx_vec_f128 rx_swap_vec_f128(rx_vec_f128 a) {
-	float64x2_t temp;
-	temp = vcopyq_laneq_f64(temp, 1, a, 1);
-	a = vcopyq_laneq_f64(a, 1, a, 0);
-	return vcopyq_laneq_f64(a, 0, temp, 1);
-}
+// FORCE_INLINE rx_vec_f128 rx_swap_vec_f128(rx_vec_f128 a) {
+//	float64x2_t temp;
+//	temp = vcopyq_laneq_f64(temp, 1, a, 1);
+//	a = vcopyq_laneq_f64(a, 1, a, 0);
+//	return vcopyq_laneq_f64(a, 0, temp, 1);
+//}
 
 FORCE_INLINE rx_vec_f128 rx_set_vec_f128(uint64_t x1, uint64_t x0) {
 	uint64x2_t temp0 = vdupq_n_u64(x0);
@@ -507,14 +508,14 @@ FORCE_INLINE void rx_store_vec_i128(rx_vec_i128* mem_addr, rx_vec_i128 val) {
 	vst1q_u8((uint8_t*)mem_addr, val);
 }
 
-FORCE_INLINE rx_vec_f128 rx_cvt_packed_int_vec_f128(const void* addr) {
-	double lo = unsigned32ToSigned2sCompl(load32((uint8_t*)addr + 0));
-	double hi = unsigned32ToSigned2sCompl(load32((uint8_t*)addr + 4));
-	rx_vec_f128 x;
-	x = vsetq_lane_f64(lo, x, 0);
-	x = vsetq_lane_f64(hi, x, 1);
-	return x;
-}
+// FORCE_INLINE rx_vec_f128 rx_cvt_packed_int_vec_f128(const void* addr) {
+//	double lo = unsigned32ToSigned2sCompl(load32((uint8_t*)addr + 0));
+//	double hi = unsigned32ToSigned2sCompl(load32((uint8_t*)addr + 4));
+//	rx_vec_f128 x;
+//	x = vsetq_lane_f64(lo, x, 0);
+//	x = vsetq_lane_f64(hi, x, 1);
+//	return x;
+//}
 
 #define RANDOMX_DEFAULT_FENV
 
@@ -557,12 +558,12 @@ FORCE_INLINE void rx_store_vec_f128(double* mem_addr, rx_vec_f128 a) {
 	store64(mem_addr + 1, a.i.u64[1]);
 }
 
-FORCE_INLINE rx_vec_f128 rx_swap_vec_f128(rx_vec_f128 a) {
-	double temp = a.hi;
-	a.hi = a.lo;
-	a.lo = temp;
-	return a;
-}
+// FORCE_INLINE rx_vec_f128 rx_swap_vec_f128(rx_vec_f128 a) {
+// 	double temp = a.hi;
+// 	a.hi = a.lo;
+// 	a.lo = temp;
+// 	return a;
+//}
 
 FORCE_INLINE rx_vec_f128 rx_add_vec_f128(rx_vec_f128 a, rx_vec_f128 b) {
 	rx_vec_f128 x;
@@ -707,12 +708,12 @@ FORCE_INLINE void rx_store_vec_i128(rx_vec_i128 *p, rx_vec_i128 b) {
 #endif
 }
 
-FORCE_INLINE rx_vec_f128 rx_cvt_packed_int_vec_f128(const void* addr) {
-	rx_vec_f128 x;
-	x.lo = (double)unsigned32ToSigned2sCompl(load32((const uint8_t*)addr + 0));
-	x.hi = (double)unsigned32ToSigned2sCompl(load32((const uint8_t*)addr + 4));
-	return x;
-}
+// FORCE_INLINE rx_vec_f128 rx_cvt_packed_int_vec_f128(const void* addr) {
+// 	rx_vec_f128 x;
+// 	x.lo = (double)unsigned32ToSigned2sCompl(load32((const uint8_t*)addr + 0));
+// 	x.hi = (double)unsigned32ToSigned2sCompl(load32((const uint8_t*)addr + 4));
+// 	return x;
+//}
 
 #define RANDOMX_DEFAULT_FENV
 

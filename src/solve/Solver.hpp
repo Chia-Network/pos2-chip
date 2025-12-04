@@ -1423,7 +1423,6 @@ public:
 
         #if (USE_AES_HASH_FOR_G)
         {
-            std::cout << "Using AES hashing in filterX2Candidates()" << std::endl;
             timer.start("AES multi-threaded bitmask test");
             AesHash aes_hash(params_.get_plot_id_bytes(), params_.get_k());
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
@@ -1434,9 +1433,7 @@ public:
                                        ? NUM_XS
                                        : start + chunk_size;
                     
-                std::cout << "Using AES hashing in filterX2Candidates()" << std::endl;
                 if (!use_prefetching_) {
-                    std::cout << "No prefetching" << std::endl;
                     for (uint64_t x = start; x < end; x++) {
                         uint32_t chacha_hash;
                         if (HAVE_AES) {
@@ -1465,7 +1462,6 @@ public:
                     }
                 } 
                 else {
-                    std::cout << "With prefetching" << std::endl;
                     // Prefetching version
                     constexpr int PREFETCH_DIST = 128;  // must be a power of 2 for the mask below
 
