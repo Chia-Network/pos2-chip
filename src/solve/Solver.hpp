@@ -202,7 +202,7 @@ public:
         std::cout << "x1 range size: " << x1_range_size << std::endl;
         std::cout << "num_match_keys: " << num_match_keys << std::endl;
 
-        std::cout << "num_match_target_hashes: " << num_match_target_hashes << std::endl;
+        std::cout << "num_match_target_hashes: " << num_match_target_hashes << " (num_unique_x_pairs: " << num_unique_x_pairs << " x " << x1_range_size << " x " << num_match_keys << ")" << std::endl;
         std::cout << "unique_x1_list size: " << x_bits_group.unique_x_bits_list.size() << std::endl;
 
         std::cout << "bitmask shift: " << this->bitmask_shift_ << std::endl;
