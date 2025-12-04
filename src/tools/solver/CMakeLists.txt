@@ -13,7 +13,6 @@ endif()
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|armv8")
     target_compile_options(solver PRIVATE
         -march=armv8-a+crypto
-        -mtune=cortex-a76
     )
 endif()
 
@@ -21,12 +20,6 @@ endif()
 target_include_directories(solver PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/../..
 )
-
-# required for Pi / 32-bit ARM
-# TODO: detect 32 bit ARM
-#target_link_libraries(solver PRIVATE
-#  atomic
-#)
 
 # Ensure solver can include and link FSE (PlotFile.hpp includes fse.h)
 target_link_libraries(solver PRIVATE fse)
