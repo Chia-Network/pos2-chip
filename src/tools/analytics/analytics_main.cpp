@@ -6,7 +6,7 @@
 #include "pos/aes/AesHash.hpp"
 #include "pos/BlakeHash.hpp"
 #include "pos/ChachaHash.hpp"
-#include <thread>
+#include "common/thread.hpp"
 
 void printUsage()
 {
@@ -69,7 +69,7 @@ int hashBench(int N, int rounds, int num_threads)
             std::cout << "   AES Rounds              : " << rounds << "\n";
         }
         std::cout << "------------------------------------\n";
-        std::vector<std::thread> threads;
+        std::vector<thread> threads;
         threads.reserve(num_threads);
         uint64_t base = 0;
         uint64_t chunk = count / num_threads;
@@ -123,8 +123,8 @@ int hashBench(int N, int rounds, int num_threads)
             }
         }
 
-        for (auto &th : threads)
-            th.join();
+        // join via destructor by clearing the vector
+        threads.clear();
 
         auto t1 = std::chrono::high_resolution_clock::now();
 

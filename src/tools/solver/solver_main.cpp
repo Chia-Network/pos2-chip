@@ -20,26 +20,16 @@ int benchmark(uint8_t k, uint8_t plot_strength)
     }
 
     std::cout << "Running benchmark for:" << std::endl;
-#ifdef NON_BIPARTITE_BEFORE_T3
-    std::cout << "NON_BIPARTITE_BEFORE_T3" << std::endl;
-#else
-    std::cout << "BIPARTITE" << std::endl;
-#endif
 
     ProofParams params(plot_id.data(), k, plot_strength);
     params.show();
 
     Solver solver(params);
     solver.setBitmaskShift(0); // with large chaining of 16 bitmask shift doesn't help much (if at all).
-#ifdef NON_BIPARTITE_BEFORE_T3
+
     solver.setUsePrefetching(true);
     // std::cout << "Not using prefetching." << std::endl;
     std::cout << "Using prefetching." << std::endl;
-#else
-    solver.setUsePrefetching(false);
-    // std::cout << "Using prefetching." << std::endl;
-    std::cout << "Not using prefetching." << std::endl;
-#endif
 
     std::vector<uint32_t> x_bits_list_vector;
     for (int i = 0; i < TOTAL_T1_PAIRS_IN_PROOF; i++)
@@ -50,17 +40,6 @@ int benchmark(uint8_t k, uint8_t plot_strength)
     std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> all_proofs = solver.solve(std::span<uint32_t const, TOTAL_T1_PAIRS_IN_PROOF>(x_bits_list_vector), x_solution);
 
     solver.timings().printSummary();
-
-    /*std::cout << "Found " << all_proofs.size() << " proofs." << std::endl;
-    for (size_t i = 0; i < all_proofs.size(); i++)
-    {
-        std::cout << "Proof " << i << ": ";
-        for (size_t j = 0; j < all_proofs[i].size(); j++)
-        {
-            std::cout << all_proofs[i][j] << " ";
-        }
-        std::cout << std::endl;
-    }*/
 
     return 0;
 }
@@ -75,13 +54,9 @@ int xbits(const std::string &plot_id_hex, const std::vector<uint32_t> &x_bits_li
 
     Solver solver(params);
     solver.setBitmaskShift(0); // with large chaining of 16 bitmask shift doesn't help much (if at all).
-#ifdef NON_BIPARTITE_BEFORE_T3
+
     solver.setUsePrefetching(true);
     std::cout << "Using prefetching." << std::endl;
-#else
-    solver.setUsePrefetching(false);
-    std::cout << "Not using prefetching." << std::endl;
-#endif
 
     const std::vector<uint32_t> x_solution;
     std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> all_proofs = solver.solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF/2>(x_bits_list), x_solution);

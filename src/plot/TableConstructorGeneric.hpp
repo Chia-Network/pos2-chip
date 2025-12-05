@@ -151,7 +151,6 @@ public:
 
         for (uint32_t section = 0; section < params_.get_num_sections(); section++)
         {
-            #ifdef NON_BIPARTITE_BEFORE_T3
             uint32_t section_l = section;
             uint32_t section_r = proof_core_.matching_section(section_l);
             if (table_id_ > 3) {
@@ -160,13 +159,6 @@ public:
                     std::swap(section_l, section_r);
                 }
             }
-            #else
-            // TODO: as section_l is always lower, we can speedup plotting by re-using the same section_r hashes
-            // for each section_l (two total) they compare against.
-            uint32_t other_section = proof_core_.matching_section(section);
-            uint32_t section_l = std::min(section, other_section);
-            uint32_t section_r = std::max(section, other_section);
-            #endif
 
             // l_start..l_end in the previous_table_pairs
             uint64_t l_start = pairing_candidates_offsets[section_l][0];

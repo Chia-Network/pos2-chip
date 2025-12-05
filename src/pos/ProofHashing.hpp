@@ -10,7 +10,6 @@
 #include "aes/AesHash.hpp"
 
 #define USE_AES_HASH_FOR_G 1 // 1 for AES, 0 for ChaCha
-#define USE_AES_HASH_FOR_PAIRING 0 // 1 for AES, 0 for Blake
 
 // A simple structure to hold the result of a pairing computation.
 struct PairingResult {
@@ -26,8 +25,10 @@ public:
     ProofHashing(const ProofParams& proof_params)
         : params_(proof_params),
           chacha_(proof_params.get_plot_id_bytes(), static_cast<int>(proof_params.get_k())),
-          blake_(proof_params.get_plot_id_bytes()),
-          aes_(proof_params.get_plot_id_bytes(), static_cast<int>(proof_params.get_k()))
+          blake_(proof_params.get_plot_id_bytes())
+          #if USE_AES_HASH_FOR_G
+          , aes_(proof_params.get_plot_id_bytes(), static_cast<int>(proof_params.get_k()))
+          #endif
     {
     }
 
@@ -139,7 +140,9 @@ private:
     ProofParams params_;
     ChachaHash chacha_;
     BlakeHash blake_;
+    #if USE_AES_HASH_FOR_G
     AesHash aes_;
+    #endif
 };
 
 inline uint32_t mask32(const int bits) {

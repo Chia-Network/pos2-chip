@@ -20,7 +20,8 @@ class AesHash {
     template<bool Soft>
     uint32_t hash_x(uint32_t x, const int Rounds = 16) const {
         // place uint32_t x into lowest 32 bits of the vector
-        rx_vec_i128 state = rx_set_int_vec_i128(/*i3*/0, /*i2*/0, /*i1*/0, /*i0*/static_cast<int>(x));
+        int i0 = unsigned32ToSigned2sCompl(x);
+        rx_vec_i128 state = rx_set_int_vec_i128(/*i3*/0, /*i2*/0, /*i1*/0, /*i0*/i0);
         for (int r = 0; r < Rounds; ++r) {
             state = aesenc<Soft>(state, round_key_1);
             state = aesenc<Soft>(state, round_key_2);

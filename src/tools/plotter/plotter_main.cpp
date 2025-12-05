@@ -99,9 +99,6 @@ int main(int argc, char *argv[]) try
         #ifdef RETAIN_X_VALUES_TO_T3
         filename += "_xvalues";
         #endif
-        #ifndef NON_BIPARTITE_BEFORE_T3
-        filename += "_bipartite";
-        #endif
         filename += '_' + plot_id_hex + ".bin";
         timer.start("Writing plot file: " + filename);
         size_t bytes_written = PlotFile::writeData(filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
