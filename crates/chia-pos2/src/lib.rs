@@ -10,37 +10,13 @@ mod bits;
 
 pub const NUM_CHAIN_LINKS: usize = 16;
 
-pub const OUTSIDE_FRAGMENT_IS_LR: u8 = 0; // outside t3 index is RL
-pub const OUTSIDE_FRAGMENT_IS_RR: u8 = 1; // outside t3 index is RR
-
-#[repr(C)]
-#[derive(Default, Clone)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-struct Result256 {
-    r: [u32; 8],
-}
-
-#[repr(C)]
-#[derive(Default, Clone)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-struct QualityLink {
-    // there are 2 patterns: either LR or RR is included in the fragment, but never both.
-    // our 3 proof fragments that form a chain, always in order: LL, LR, RL, RR
-    fragments: [u64; 3],
-    // Either OUTSIDE_FRAGMENT_IS_LR or OUTSIDE_FRAGMENT_IS_RR
-    pattern: u64,
-    outside_t3_index: u64,
-}
-
 #[repr(C)]
 #[derive(Default, Clone)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 /// This object contains a quality proof along with metadata required to look
 /// up the remaining proof fragments from the plot, to form a partial proof
 pub struct QualityChain {
-    chain_links: [QualityLink; NUM_CHAIN_LINKS],
-    chain_hash: Result256,
-    strength: u8,
+    pub chain_links: [u64; NUM_CHAIN_LINKS],
 }
 
 unsafe extern "C" {
@@ -116,7 +92,7 @@ pub fn validate_proof_v2(
     challenge: &Bytes32,
     strength: u8,
     proof: &[u8],
-) -> Option<[u8; 385]> {
+) -> Option<QualityChain> {
     let x_values = bits::expand_bits(proof, size)?;
 
     if x_values.len() != NUM_CHAIN_LINKS * 32 {
@@ -124,10 +100,7 @@ pub fn validate_proof_v2(
         return None;
     }
 
-    let mut quality = QualityChain {
-        strength,
-        ..Default::default()
-    };
+    let mut quality = QualityChain::default();
     // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
     // plot_id must point to 32 bytes
     // challenge must point to 32 bytes
@@ -142,11 +115,7 @@ pub fn validate_proof_v2(
             &mut quality,
         )
     };
-    if valid {
-        Some(quality.serialize())
-    } else {
-        None
-    }
+    if valid { Some(quality) } else { None }
 }
 
 pub fn create_v2_plot(
@@ -185,27 +154,26 @@ pub fn create_v2_plot(
     }
 }
 
-impl QualityChain {
-    /// out must point to exactly 385 bytes
-    /// serializes the QualityProof into the form that will be hashed together with
-    /// the challenge to determine the quality of ths proof. The quality is used to
-    /// check if it passes the current difficulty. The format is:
-    /// 1 byte: plot strength
-    /// repeat 16 * 3 times:
-    ///   8 bytes: little-endian proof fragment
-    pub fn serialize(&self) -> [u8; 385] {
-        let mut ret = [0_u8; 385];
+/// out must point to exactly 129 bytes
+/// serializes the QualityProof into the form that will be hashed together with
+/// the challenge to determine the quality of ths proof. The quality is used to
+/// check if it passes the current difficulty. The format is:
+/// 1 byte: plot strength
+/// repeat 16 times:
+///   8 bytes: little-endian proof fragment
+pub fn serialize_quality(
+    fragments: &[u64; NUM_CHAIN_LINKS],
+    strength: u8,
+) -> [u8; NUM_CHAIN_LINKS * 8 + 1] {
+    let mut ret = [0_u8; 129];
 
-        ret[0] = self.strength;
-        let mut idx = 1;
-        for cl in &self.chain_links {
-            for f in &cl.fragments {
-                ret[idx..(idx + 8)].clone_from_slice(&f.to_le_bytes());
-                idx += 8;
-            }
-        }
-        ret
+    ret[0] = strength;
+    let mut idx = 1;
+    for cl in fragments {
+        ret[idx..(idx + 8)].clone_from_slice(&cl.to_le_bytes());
+        idx += 8;
     }
+    ret
 }
 
 /// Farmer wide state for prover
@@ -333,7 +301,7 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    fn serialize_quality(
+    fn test_serialize_quality(
         #[values(1, 0xff00, 0x777777)] step_size: u64,
         #[values(0, 0xffffffff00000000, 0xff00ff00ff00ff00)] fragment_start: u64,
         #[values(
@@ -341,23 +309,18 @@ mod tests {
         )]
         strength: u8,
     ) {
-        let mut quality = QualityChain {
-            strength,
-            ..Default::default()
-        };
+        let mut quality = QualityChain::default();
 
         let mut idx = fragment_start;
         for link in &mut quality.chain_links {
-            for frag in &mut link.fragments {
-                *frag = idx;
-                idx += step_size;
-            }
+            *link = idx;
+            idx += step_size;
         }
 
-        let quality_str = quality.serialize();
+        let quality_str = serialize_quality(&quality.chain_links, strength);
         assert_eq!(quality_str[0], strength);
         idx = fragment_start;
-        for i in (1..(NUM_CHAIN_LINKS * 3 * 8 + 1)).step_by(8) {
+        for i in (1..(NUM_CHAIN_LINKS * 8 + 1)).step_by(8) {
             assert_eq!(
                 u64::from_le_bytes(quality_str[i..(i + 8)].try_into().unwrap()),
                 idx

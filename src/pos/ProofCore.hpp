@@ -34,7 +34,6 @@ using QualityChainLinks = std::array<ProofFragment, NUM_CHAIN_LINKS>;
 struct QualityChain
 {
     QualityChainLinks chain_links;
-    uint8_t strength;
 };
 
 // chaining
