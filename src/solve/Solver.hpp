@@ -1341,13 +1341,12 @@ public:
                     
                 if (!use_prefetching_) {
                     for (uint64_t x = start; x < end; x++) {
-                        uint32_t chacha_hash;
-                        if (HAVE_AES) {
-                            chacha_hash = aes_hash.hash_x<false>(uint32_t(x));
-                        }
-                        else {
-                            chacha_hash = aes_hash.hash_x<true>(uint32_t(x));
-                        }
+                        
+                        #if (HAVE_AES)
+                        uint32_t chacha_hash = aes_hash.hash_x<false>(uint32_t(x));
+                        #else
+                        uint32_t chacha_hash = aes_hash.hash_x<true>(uint32_t(x));
+                        #endif
                         
                         uint32_t bitmask_hash = chacha_hash >> this->bitmask_shift_;
                         int slot = bitmask_hash >> 5;
@@ -1384,12 +1383,12 @@ public:
                     //    We won't *use* them yet; we're just filling the pipeline.
                     uint64_t x_pref = start;
                     for (int i = 0; i < PREFETCH_DIST; ++i, ++x_pref) {
-                        uint32_t h;
-                        if (HAVE_AES) {
-                            h = aes_hash.hash_x<false>(uint32_t(x_pref));
-                        } else {
-                            h = aes_hash.hash_x<true>(uint32_t(x_pref));
-                        }
+                        
+                        #if (HAVE_AES)
+                        uint32_t h = aes_hash.hash_x<false>(uint32_t(x_pref));
+                        #else
+                        uint32_t h = aes_hash.hash_x<true>(uint32_t(x_pref));
+                        #endif
 
                         hash_buf[i] = h;
                         uint32_t bitmask_hash = h >> this->bitmask_shift_;
@@ -1439,12 +1438,12 @@ public:
                         // Now compute and prefetch for the future element at x_pref = x + PREFETCH_DIST.
                         uint64_t x_future = x + PREFETCH_DIST;
 
-                        uint32_t h;
-                        if (HAVE_AES) {
-                            h = aes_hash.hash_x<false>(uint32_t(x_future));
-                        } else {
-                            h = aes_hash.hash_x<true>(uint32_t(x_future));
-                        }
+                        
+                        #if (HAVE_AES)
+                        uint32_t h = aes_hash.hash_x<false>(uint32_t(x_future));
+                        #else
+                        uint32_t h = aes_hash.hash_x<true>(uint32_t(x_future));
+                        #endif
 
                         hash_buf[buf_ix] = h;
                         uint32_t future_bitmask_hash = h >> this->bitmask_shift_;
@@ -1686,15 +1685,6 @@ public:
         std::vector<int> indices(NUM_X1S);
         std::iota(indices.begin(), indices.end(), 0);
 
-        #if (USE_AES_HASH_FOR_PAIRING)
-            if (HAVE_AES) {
-                std::cout << "Using hardware AES for x1 hashing" << std::endl;
-            }
-            else {
-                std::cout << "Using software AES for x1 hashing" << std::endl;
-            }
-        #endif
-
         parallel_for_range(indices.begin(), indices.end(), [&](int x1_index)
                       {
                 // each thread in the pool runs this lambda
@@ -1720,12 +1710,11 @@ public:
                     uint32_t x_chacha;
                     #if (USE_AES_HASH_FOR_G) 
                     {
-                        if (HAVE_AES) {
-                            x_chacha = aes_hash.hash_x<false>(uint32_t(x));
-                        }
-                        else {
-                            x_chacha = aes_hash.hash_x<true>(uint32_t(x));
-                        }
+                        #if (HAVE_AES)
+                        x_chacha = aes_hash.hash_x<false>(uint32_t(x));
+                        #else
+                        x_chacha = aes_hash.hash_x<true>(uint32_t(x));
+                        #endif
                     }
                     #else 
                     {
