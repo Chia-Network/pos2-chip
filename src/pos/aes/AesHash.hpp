@@ -20,7 +20,7 @@ class AesHash {
     template<bool Soft>
     uint32_t hash_x(uint32_t x, const int Rounds = 16) const {
         // place uint32_t x into lowest 32 bits of the vector
-        int i0 = unsigned32ToSigned2sCompl(x);
+        int32_t i0 = static_cast<int32_t>(x);
         rx_vec_i128 state = rx_set_int_vec_i128(/*i3*/0, /*i2*/0, /*i1*/0, /*i0*/i0);
         for (int r = 0; r < Rounds; ++r) {
             state = aesenc<Soft>(state, round_key_1);
@@ -37,10 +37,10 @@ class AesHash {
 
     // Load 16 bytes into rx_vec_i128 (little-endian 32-bit words)
     static FORCE_INLINE rx_vec_i128 load_plot_id_as_aes_key(const uint8_t* plot_id_bytes) {
-        int i0 = unsigned32ToSigned2sCompl(load32(plot_id_bytes + 0));
-        int i1 = unsigned32ToSigned2sCompl(load32(plot_id_bytes + 4));
-        int i2 = unsigned32ToSigned2sCompl(load32(plot_id_bytes + 8));
-        int i3 = unsigned32ToSigned2sCompl(load32(plot_id_bytes + 12));
+        int i0 = static_cast<int32_t>(load32(plot_id_bytes + 0));
+        int i1 = static_cast<int32_t>(load32(plot_id_bytes + 4));
+        int i2 = static_cast<int32_t>(load32(plot_id_bytes + 8));
+        int i3 = static_cast<int32_t>(load32(plot_id_bytes + 12));
         return rx_set_int_vec_i128(i3, i2, i1, i0);
     }
 };
