@@ -27,7 +27,11 @@ TEST_CASE("plot-k18-strength2-4-5")
         {
         case 0:
             plot_strength = 2;
+            #if (USE_AES_HASH_FOR_G)
+            challenge_hex = "e303000000000000000000000000000000000000000000000000000000000000";
+            #else
             challenge_hex = "d703000000000000000000000000000000000000000000000000000000000000";
+            #endif
             break;
         case 1:
             plot_strength = 4;

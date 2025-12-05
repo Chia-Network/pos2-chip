@@ -151,7 +151,6 @@ public:
 
         for (uint32_t section = 0; section < params_.get_num_sections(); section++)
         {
-            #ifdef NON_BIPARTITE_BEFORE_T3
             uint32_t section_l = section;
             uint32_t section_r = proof_core_.matching_section(section_l);
             if (table_id_ > 3) {
@@ -160,13 +159,6 @@ public:
                     std::swap(section_l, section_r);
                 }
             }
-            #else
-            // TODO: as section_l is always lower, we can speedup plotting by re-using the same section_r hashes
-            // for each section_l (two total) they compare against.
-            uint32_t other_section = proof_core_.matching_section(section);
-            uint32_t section_l = std::min(section, other_section);
-            uint32_t section_r = std::max(section, other_section);
-            #endif
 
             // l_start..l_end in the previous_table_pairs
             uint64_t l_start = pairing_candidates_offsets[section_l][0];
@@ -252,7 +244,15 @@ public:
         // We'll have 2^(k-4) groups, each group has 16 x-values
         // => total of 2^(k-4)*16 x-values
         
-        
+        #if USE_AES_HASH_FOR_G
+        uint64_t num_xs = (1ULL << params_.get_k());
+        x_candidates.reserve(num_xs);
+        for (uint32_t x = 0; x < num_xs; x++)
+        {
+            uint32_t match_info = proof_core_.hashing.g(x);
+            x_candidates.push_back({match_info, x});
+        }
+        #else
         uint64_t num_groups = (1ULL << (params_.get_k() - 4));
         
         // hack to make smaller plot for debugging
@@ -274,6 +274,7 @@ public:
                 x_candidates.push_back({match_info, x});
             }
         }
+        #endif
         RadixSort<Xs_Candidate, uint32_t> radix_sort;
         std::vector<Xs_Candidate> temp_buffer(x_candidates.size());
         // Create a span over the temporary buffer

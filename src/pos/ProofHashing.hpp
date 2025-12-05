@@ -7,7 +7,9 @@
 #include "ProofParams.hpp"
 #include "ChachaHash.hpp"
 #include "BlakeHash.hpp"
+#include "aes/AesHash.hpp"
 
+#define USE_AES_HASH_FOR_G 1 // 1 for AES, 0 for ChaCha
 
 // A simple structure to hold the result of a pairing computation.
 struct PairingResult {
@@ -24,6 +26,9 @@ public:
         : params_(proof_params),
           chacha_(proof_params.get_plot_id_bytes(), static_cast<int>(proof_params.get_k())),
           blake_(proof_params.get_plot_id_bytes())
+          #if USE_AES_HASH_FOR_G
+          , aes_(proof_params.get_plot_id_bytes(), static_cast<int>(proof_params.get_k()))
+          #endif
     {
     }
 
@@ -31,7 +36,9 @@ public:
     uint32_t g(uint32_t x);
 
     // Populates out_hashes (an array of 16 uint32_t) with hash words starting from x.
+    #if (!USE_AES_HASH_FOR_G)
     void g_range_16(uint32_t x, uint32_t* out_hashes);
+    #endif
 
     // Computes and returns the matching target using the Blake hash.
     // table_id: used as salt, match_key, meta: additional parameters.
@@ -133,6 +140,9 @@ private:
     ProofParams params_;
     ChachaHash chacha_;
     BlakeHash blake_;
+    #if USE_AES_HASH_FOR_G
+    AesHash aes_;
+    #endif
 };
 
 inline uint32_t mask32(const int bits) {
@@ -146,15 +156,25 @@ inline uint32_t mask32(const int bits) {
 //
 
 inline uint32_t ProofHashing::g(uint32_t x) {
+    #if USE_AES_HASH_FOR_G
+        #if HAVE_AES
+            return aes_.hash_x<false>(x);
+        #else
+            return aes_.hash_x<true>(x);
+        #endif
+    #else
     uint32_t x_group = x >> 4;
     uint32_t out_hashes[16];
     chacha_.do_chacha16_range(x_group * 16, out_hashes);
     return out_hashes[x & 15];
+    #endif
 }
 
+#if !USE_AES_HASH_FOR_G
 inline void ProofHashing::g_range_16(uint32_t x, uint32_t* out_hashes) {
     chacha_.do_chacha16_range(x, out_hashes);
 }
+#endif
 
 inline uint32_t ProofHashing::matching_target(size_t table_id, uint32_t match_key,
                                               uint64_t meta, int num_meta_bits, int num_target_bits) {
