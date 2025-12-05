@@ -39,16 +39,13 @@ int hashBench(int N, int rounds, int num_threads)
         // show our input parameters
         if (test == 0)
         {
-            if (HAVE_AES)
-            {
-                std::cout << "AES Hardware Hash Benchmark\n";
-            }
-            else
-            {
-                std::cout << "AES Hardware not supported on this platform.\n";
-                std::cout << "Skipping hardware AES benchmark.\n";
-                continue;
-            }
+            #if (HAVE_AES)
+            std::cout << "AES Hardware Hash Benchmark\n";
+            #else
+            std::cout << "AES Hardware not supported on this platform.\n";
+            std::cout << "Skipping hardware AES benchmark.\n";
+            continue;
+            #endif
         }
         else if (test == 1)
         {
