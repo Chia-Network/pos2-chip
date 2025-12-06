@@ -93,9 +93,8 @@ public:
     uint32_t matching_target(size_t table_id, uint64_t meta, uint32_t match_key)
     {
         size_t num_match_target_bits = params_.get_num_match_target_bits(table_id);
-        size_t num_meta_bits = params_.get_num_meta_bits(table_id);
+        //size_t num_meta_bits = params_.get_num_meta_bits(table_id);
         return hashing.matching_target(table_id, match_key, meta,
-                                       static_cast<int>(num_meta_bits),
                                        static_cast<int>(num_match_target_bits));
     }
 

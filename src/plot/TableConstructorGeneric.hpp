@@ -9,11 +9,14 @@
 #include <unordered_set>
 #include <iomanip>
 #include <bitset>
+#include <mutex>
 
 #include "pos/ProofParams.hpp"
 #include "pos/ProofCore.hpp"
 #include "pos/ProofValidator.hpp"
 #include "RadixSort.hpp"
+#include "common/ParallelForRange.hpp"
+#include "common/Timer.hpp"
 
 template <typename PairingCandidate, typename T_Pairing, typename T_Result>
 class TableConstructorGeneric
@@ -141,24 +144,147 @@ public:
         throw std::runtime_error("handle_pair not implemented");
     }
 
+    struct SplitRange {
+        std::size_t l_begin;
+        std::size_t l_end;
+        std::size_t r_begin;
+        std::size_t r_end;
+    };
+    // Make T split ranges for (l_candidates, r_candidates) for use in T threads.
+    // Strategy:
+    //  1) Split L evenly by index.
+    //  2) For each internal boundary, move it DOWN so we don't split equal keys in L.
+    //  3) For each L-boundary, map to an approximate position in R by proportion,
+    //     then scan up/down locally until we find the matching key in R.
+    std::vector<SplitRange> make_splits_simple(
+        std::span<const PairingCandidate> l_candidates,
+        std::span<const PairingCandidate> r_candidates,
+        unsigned num_threads,
+        uint32_t match_target_mask
+    ) {
+        using std::size_t;
+
+        std::vector<SplitRange> result;
+
+        const size_t l_size = l_candidates.size();
+        const size_t r_size = r_candidates.size();
+
+        if (l_size == 0 || r_size == 0 || num_threads == 0) {
+            return result;
+        }
+
+        // Clamp thread count
+        num_threads = std::min<unsigned>(num_threads,
+                                        static_cast<unsigned>(l_size));
+        if (num_threads == 0) {
+            return result;
+        }
+
+        auto key = [match_target_mask](const PairingCandidate& c) -> uint32_t {
+            return c.match_info & match_target_mask;
+        };
+
+        // 1) Build L split indices: l_splits[0..num_splits], where
+        //    l_splits[0] = 0, l_splits[num_splits] = l_size.
+        const unsigned num_splits = num_threads; // one chunk per thread
+        std::vector<size_t> l_splits(num_splits + 1);
+        l_splits[0] = 0;
+        l_splits[num_splits] = l_size;
+
+        // Base even split size
+        const size_t base_chunk = l_size / num_splits;
+
+        for (unsigned i = 1; i < num_splits; ++i) {
+            // Initial even index
+            size_t idx = i * base_chunk;
+            if (idx >= l_size) idx = l_size - 1; // clamp just in case
+
+            // 2) Move DOWN if we are in the middle of a run of equal keys in L.
+            uint32_t k = key(l_candidates[idx]);
+            while (idx > 0 && key(l_candidates[idx - 1]) == k) {
+                --idx;
+            }
+
+            // Ensure monotonicity
+            if (idx < l_splits[i - 1]) {
+                idx = l_splits[i - 1];
+            }
+
+            l_splits[i] = idx;
+        }
+
+        // 3) Build corresponding R split indices: r_splits[0..num_splits]
+        std::vector<size_t> r_splits(num_splits + 1);
+        r_splits[0] = 0;
+        r_splits[num_splits] = r_size;
+
+        for (unsigned i = 1; i < num_splits; ++i) {
+            size_t l_idx = l_splits[i];
+            // r_idx starts at proportional position to split
+            size_t r_idx = r_size * i / num_splits;
+
+            // If this L boundary is at the very end, R boundary is also at the end.
+            if (l_idx >= l_size) {
+                r_splits[i] = r_size;
+                continue;
+            }
+
+            // if l size is less than r side, then scan down from r side
+            while (l_candidates[l_idx].match_info < (r_candidates[r_idx].match_info & match_target_mask)) {
+                if (r_idx == 0) {
+                    break;
+                }
+                --r_idx;
+            }
+            // if they are same, then scan r down to the first of that key
+            if (l_candidates[l_idx].match_info == (r_candidates[r_idx].match_info & match_target_mask)) {
+                while (r_idx > 0 &&
+                       (r_candidates[r_idx - 1].match_info & match_target_mask) ==
+                       l_candidates[l_idx].match_info) {
+                    --r_idx;
+                }
+            }
+            // if l size is greater than r side, then scan up from r side
+            while (l_candidates[l_idx].match_info > (r_candidates[r_idx].match_info & match_target_mask)) {
+                if (r_idx == r_size) {
+                    break;
+                }
+                ++r_idx;
+            }
+            // end result is R is always >= L side match key.
+            r_splits[i] = r_idx;
+        }
+
+        // 4) Build per-thread ranges
+        result.reserve(num_splits);
+        for (unsigned i = 0; i < num_splits; ++i) {
+            size_t l_begin = l_splits[i];
+            size_t l_end   = l_splits[i + 1];
+            size_t r_begin = r_splits[i];
+            size_t r_end   = r_splits[i + 1];
+
+            result.push_back(SplitRange{ l_begin, l_end, r_begin, r_end });
+        }
+
+        return result;
+    }
+
+
     T_Result construct(const std::vector<PairingCandidate> &previous_table_pairs)
     {
         auto pairing_candidates_offsets = find_candidates_prefixes(previous_table_pairs);
 
         std::vector<T_Pairing> new_table_pairs;
+        std::mutex new_table_pairs_mutex;
 
         const size_t num_match_keys = params_.get_num_match_keys(table_id_);
 
-        for (uint32_t section = 0; section < params_.get_num_sections(); section++)
+        // parallel across sections
+        //parallel_for_range(uint64_t(0), uint64_t(params_.get_num_sections()), [&](uint64_t section)
+        for (uint32_t section = 0; section < params_.get_num_sections(); section++) 
         {
             uint32_t section_l = section;
             uint32_t section_r = proof_core_.matching_section(section_l);
-            if (table_id_ > 3) {
-                if (section_r < section_l) {
-                    // swap
-                    std::swap(section_l, section_r);
-                }
-            }
 
             // l_start..l_end in the previous_table_pairs
             uint64_t l_start = pairing_candidates_offsets[section_l][0];
@@ -170,36 +296,91 @@ public:
                 uint64_t r_start = pairing_candidates_offsets[section_r][match_key_r];
                 uint64_t r_end = pairing_candidates_offsets[section_r][match_key_r + 1];
 
+                //std::cout << "Range is: " << r_start << " to " << r_end <<  " length " << (r_end - r_start) << std::endl;
+
                 // copy out the R slice
+                timer_.start("Copy R candidates");
                 std::vector<PairingCandidate> r_candidates;
                 r_candidates.reserve(r_end - r_start);
                 for (uint64_t i = r_start; i < r_end; i++)
                 {
                     r_candidates.push_back(previous_table_pairs[i]);
                 }
+                timings.misc_time_ms += timer_.stop();
 
                 // Build the L candidates by calling matching_target
+                timer_.start("Build L candidates");
                 std::vector<PairingCandidate> l_candidates;
-                l_candidates.reserve(l_end - l_start);
-                for (uint64_t i = l_start; i < l_end; i++)
-                {
-                    // matching_target(...) is virtual => implemented by each subclass
-                    l_candidates.push_back(matching_target(previous_table_pairs[i], match_key_r));
-                }
+                l_candidates.resize(l_end - l_start);
+                timings.setup_time_ms += timer_.stop();
+                timer_.start("Hash matching L candidates");
+                parallel_for_range(
+                    uint64_t(0),
+                    uint64_t(l_end - l_start),
+                    [this, &l_candidates, &previous_table_pairs, l_start, match_key_r](uint64_t idx)
+                    {
+                        l_candidates[idx] = matching_target(previous_table_pairs[l_start + idx], match_key_r);
+                    }
+                );
+                timings.hash_time_ms += timer_.stop();
 
                 // sort by match_target (default setting for RadixSort)
                 // RadixSort<T_Target, decltype(&T_Target::match_target)> radix_sort(&T_Target::match_target);
                 RadixSort<PairingCandidate, uint32_t> radix_sort;
 
+                timer_.start("Setup temp sort buffer");
                 // create a temporary buffer as before:
                 std::vector<PairingCandidate> temp_buffer(l_candidates.size());
                 std::span<PairingCandidate> buffer(temp_buffer.data(), temp_buffer.size());
+                timings.setup_time_ms += timer_.stop();
+                timer_.start("Sorting L candidates");
                 radix_sort.sort(l_candidates, buffer);
+                timings.sort_time_ms += timer_.stop();
 
-                // Now pair them
-                auto found_pairs = find_pairs(l_candidates, r_candidates);
-                // Append found_pairs to new_table_pairs
-                new_table_pairs.insert(new_table_pairs.end(), found_pairs.begin(), found_pairs.end());
+                int num_threads = std::thread::hardware_concurrency();
+                if (num_threads > 1)
+                {
+                    timer_.start("Make Splits Simple");
+                    auto splits = make_splits_simple(
+                        l_candidates, r_candidates,
+                        num_threads,
+                        (1 << params_.get_num_match_target_bits(table_id_)) - 1
+                    );
+                    timings.misc_time_ms += timer_.stop();
+                    timer_.start("Finding pairs (parallel)");
+                    // Now parallel across splits
+                    parallel_for_range(
+                        uint64_t(0),
+                        uint64_t(splits.size()),
+                        [this, &splits, &l_candidates, &r_candidates, &new_table_pairs, &new_table_pairs_mutex](uint64_t split_idx)
+                        {
+                            const auto& split = splits[split_idx];
+                            auto found_pairs = find_pairs(
+                                std::span<const PairingCandidate>(
+                                    l_candidates.data() + split.l_begin,
+                                    split.l_end - split.l_begin),
+                                std::span<const PairingCandidate>(
+                                    r_candidates.data() + split.r_begin,
+                                    split.r_end - split.r_begin));
+                            // mutex to add to new_table_pairs
+                            {
+                                std::lock_guard<std::mutex> lock(new_table_pairs_mutex);
+                                new_table_pairs.insert(new_table_pairs.end(), found_pairs.begin(), found_pairs.end());
+                            }
+                        });
+                    timings.find_pairs_time_ms += timer_.stop();     
+                }
+                else
+                {
+                    // Now pair them
+                    timer_.start("Finding pairs");
+                    auto found_pairs = find_pairs(l_candidates, r_candidates);                    
+        
+                    // Append found_pairs to new_table_pairs
+                    new_table_pairs.insert(new_table_pairs.end(), found_pairs.begin(), found_pairs.end());
+                    
+                    timings.find_pairs_time_ms += timer_.stop();
+                }
             }
         }
 
@@ -207,7 +388,7 @@ public:
     }
 
     // called following construct method - typically sort operations
-    virtual T_Result post_construct(std::vector<T_Pairing> &/*pairings*/) const
+    virtual T_Result post_construct(std::vector<T_Pairing> &/*pairings*/)
     {
         throw std::runtime_error("post_construct not implemented");
     }
@@ -215,10 +396,33 @@ public:
 protected:
     int table_id_;
     ProofParams params_;
+    Timer timer_;
 
 public:
     // Provide direct access to the underlying ProofCore if needed:
     ProofCore proof_core_;
+    struct Timings {
+        double hash_time_ms = 0.0;
+        double setup_time_ms = 0.0;
+        double sort_time_ms = 0.0;
+        double find_pairs_time_ms = 0.0;
+        double misc_time_ms = 0.0;
+        double post_sort_time_ms = 0.0;
+
+        void show(std::string header) const {
+            std::cout << header << std::endl;
+            std::cout << "  Hash time: " << hash_time_ms << " ms" << std::endl;
+            std::cout << "  Setup time: " << setup_time_ms << " ms" << std::endl;
+            std::cout << "  Sort time: " << sort_time_ms << " ms" << std::endl;
+            std::cout << "  Find pairs time: " << find_pairs_time_ms << " ms" << std::endl;
+            std::cout << "  Post-sort time: " << post_sort_time_ms << " ms" << std::endl;
+            std::cout << "  Misc time: " << misc_time_ms << " ms" << std::endl;
+            double total = hash_time_ms + setup_time_ms + sort_time_ms +
+                           find_pairs_time_ms + post_sort_time_ms + misc_time_ms;
+                           std::cout << "  ------------" << std::endl;
+            std::cout << "  Total time: " << total << " ms" << std::endl;
+        }
+    } timings;
 };
 
 struct Xs_Candidate
@@ -246,43 +450,83 @@ public:
         
         #if USE_AES_HASH_FOR_G
         uint64_t num_xs = (1ULL << params_.get_k());
-        x_candidates.reserve(num_xs);
-        for (uint32_t x = 0; x < num_xs; x++)
-        {
-            uint32_t match_info = proof_core_.hashing.g(x);
-            x_candidates.push_back({match_info, x});
-        }
+        x_candidates.resize(num_xs);
+
+        Timer timer;
+        timer.start("Hashing Xs_Candidate");
+
+        parallel_for_range(
+            uint64_t(0),
+            num_xs,
+            [this, &x_candidates](uint64_t x_val)
+            {
+                uint32_t x = static_cast<uint32_t>(x_val);
+                uint32_t match_info = this->proof_core_.hashing.g(x);
+                x_candidates[x_val] = Xs_Candidate{match_info, x};
+            }
+        );
         #else
         uint64_t num_groups = (1ULL << (params_.get_k() - 4));
         
         // hack to make smaller plot for debugging
         //num_groups = (uint64_t) ((double) num_groups * 0.75);
 
-        x_candidates.reserve(num_groups * 16ULL);
+        // total xs is fixed = num_groups * 16
+        uint64_t total_xs = num_groups * 16ULL;
+        x_candidates.resize(total_xs);
 
-        for (uint32_t x_group = 0; x_group < num_groups; x_group++)
-        {
-            uint32_t base_x = x_group * 16;
-            uint32_t out_hashes[16];
-
-            proof_core_.hashing.g_range_16(base_x, out_hashes);
-            for (uint32_t i = 0; i < 16; i++)
+        parallel_for_range(
+            uint64_t(0),
+            num_groups,
+            [this, &x_candidates](uint64_t g)
             {
-                uint32_t x = base_x + i;
-                uint32_t match_info = out_hashes[i];
-                // Store [ x, match_info ]
-                x_candidates.push_back({match_info, x});
+                uint32_t base_x = static_cast<uint32_t>(g * 16ULL);
+                uint32_t out_hashes[16];
+                this->proof_core_.hashing.g_range_16(base_x, out_hashes);
+
+                uint64_t base_index = g * 16ULL;
+                for (uint32_t i = 0; i < 16; ++i)
+                {
+                    uint32_t x = base_x + i;
+                    uint32_t match_info = out_hashes[i];
+                    x_candidates[base_index + i] = Xs_Candidate{match_info, x};
+                }
             }
-        }
+        );
         #endif
+        timings.hash_time_ms = timer.stop();
+
+        timer.start("Setup RadixSort");
         RadixSort<Xs_Candidate, uint32_t> radix_sort;
         std::vector<Xs_Candidate> temp_buffer(x_candidates.size());
         // Create a span over the temporary buffer
         std::span<Xs_Candidate> buffer(temp_buffer.data(), temp_buffer.size());
+        timer.stop();
+        timings.setup_time_ms = timer.stop();
+
+        timer.start("Sorting Xs_Candidate");
         radix_sort.sort(x_candidates, buffer);
+        timer.stop();
+        timings.sort_time_ms = timer.stop();
 
         return x_candidates;
     }
+
+    struct Timings {
+        double hash_time_ms = 0.0;
+        double setup_time_ms = 0.0;
+        double sort_time_ms = 0.0;
+
+        void show() const {
+            std::cout << "XsConstructor Timings:" << std::endl;
+            std::cout << "  Hash time: " << hash_time_ms << " ms" << std::endl;
+            std::cout << "  Setup time: " << setup_time_ms << " ms" << std::endl;
+            std::cout << "  Sort time: " << sort_time_ms << " ms" << std::endl;
+            std::cout << "  ------------" << std::endl;
+            double total = hash_time_ms + setup_time_ms + sort_time_ms;
+            std::cout << "  Total time: " << total << " ms" << std::endl;
+        }
+    } timings;
 
 protected:
     ProofParams params_;
@@ -326,15 +570,19 @@ public:
         }
     }
 
-    std::vector<T1Pairing> post_construct(std::vector<T1Pairing> &pairings) const override
+    std::vector<T1Pairing> post_construct(std::vector<T1Pairing> &pairings) override
     {
         RadixSort<T1Pairing, uint32_t> radix_sort;
+        timer_.start("Setup temp sort buffer for T1Pairing");
         std::vector<T1Pairing> temp_buffer(pairings.size());
         // Create a span over the temporary buffer
         std::span<T1Pairing> buffer(temp_buffer.data(), temp_buffer.size());
+        timings.setup_time_ms += timer_.stop();
 
         // sort by match_info (default)
+        timer_.start("Sorting T1Pairing");
         radix_sort.sort(pairings, buffer);
+        timings.post_sort_time_ms += timer_.stop();
 
         return pairings;
     }
@@ -393,15 +641,19 @@ public:
         }
     }
 
-    std::vector<T2Pairing> post_construct(std::vector<T2Pairing> &pairings) const override
+    std::vector<T2Pairing> post_construct(std::vector<T2Pairing> &pairings) override
     {
         RadixSort<T2Pairing, uint32_t> radix_sort;
+        timer_.start("Setup temp sort buffer for T2Pairing");
         std::vector<T2Pairing> temp_buffer(pairings.size());
         // Create a span over the temporary buffer
         std::span<T2Pairing> buffer(temp_buffer.data(), temp_buffer.size());
-
+        timings.setup_time_ms += timer_.stop();
+        
         // sort by match_info (default)
+        timer_.start("Sorting T2Pairing");
         radix_sort.sort(pairings, buffer);
+        timings.post_sort_time_ms += timer_.stop();
 
         return pairings;
     }
@@ -455,16 +707,21 @@ public:
         }
     }
 
-    std::vector<T3Pairing> post_construct(std::vector<T3Pairing> &pairings) const override
+    std::vector<T3Pairing> post_construct(std::vector<T3Pairing> &pairings) override
     {
         // do a radix sort on fragments
         RadixSort<T3Pairing, uint64_t, decltype(&T3Pairing::proof_fragment)> radix_sort(&T3Pairing::proof_fragment);
 
+        timer_.start("Setup temp sort buffer for T3Pairing");
         // 1) sort by fragments
         std::vector<T3Pairing> temp_buffer(pairings.size());
         // Create a span over the temporary buffer
         std::span<T3Pairing> buffer(temp_buffer.data(), temp_buffer.size());
+        timings.setup_time_ms += timer_.stop();
+
+        timer_.start("Sorting T3Pairing");
         radix_sort.sort(pairings, buffer, params_.get_k() * 2); // don't forget to sort full 2k bits
+        timings.post_sort_time_ms += timer_.stop();
 
         return pairings;
     }

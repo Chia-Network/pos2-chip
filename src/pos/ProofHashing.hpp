@@ -10,6 +10,8 @@
 #include "aes/AesHash.hpp"
 
 #define USE_AES_HASH_FOR_G 1 // 1 for AES, 0 for ChaCha
+#define USE_AES_HASH_FOR_PAIRING 1 // 1 for AES, 0 for Blake3
+#define USE_AES_HASH_FOR_MATCHING_TARGET 1 // 1 for AES, 0 for Blake3
 
 // A simple structure to hold the result of a pairing computation.
 struct PairingResult {
@@ -42,10 +44,8 @@ public:
 
     // Computes and returns the matching target using the Blake hash.
     // table_id: used as salt, match_key, meta: additional parameters.
-    // num_meta_bits: number of bits used for meta data.
     // num_target_bits: the number of bits to return from the hash.
-    uint32_t matching_target(size_t table_id, uint32_t match_key, uint64_t meta,
-                             int num_meta_bits, int num_target_bits);
+    uint32_t matching_target(size_t table_id, uint32_t match_key, uint64_t meta, int num_target_bits);
 
     // Prepares Blake hash data for pairing and computes the pairing result.
     // in_meta_bits: the number of bits for the input meta data.
@@ -135,7 +135,7 @@ public:
 
 private:
     // Prepares Blake hash data for computing the matching target.
-    void _set_data_for_matching_target(uint32_t salt, uint32_t match_key, uint64_t meta, int num_meta_bits);
+    void _set_data_for_matching_target(uint32_t salt, uint32_t match_key, uint64_t meta);
 
     ProofParams params_;
     ChachaHash chacha_;
@@ -177,28 +177,26 @@ inline void ProofHashing::g_range_16(uint32_t x, uint32_t* out_hashes) {
 #endif
 
 inline uint32_t ProofHashing::matching_target(size_t table_id, uint32_t match_key,
-                                              uint64_t meta, int num_meta_bits, int num_target_bits) {
-    // Use table_id as the salt.
-    _set_data_for_matching_target(static_cast<uint32_t>(table_id), match_key, meta, num_meta_bits);
+                                              uint64_t meta, int num_target_bits) {
+    #if USE_AES_HASH_FOR_MATCHING_TARGET
+    #if HAVE_AES
+    return aes_.matching_target<false>(static_cast<uint32_t>(table_id), match_key, meta) & mask32(num_target_bits);
+    #else
+    return aes_.matching_target<true>(static_cast<uint32_t>(table_id), match_key, meta) & mask32(num_target_bits);
+    #endif
+    #else
+    _set_data_for_matching_target(static_cast<uint32_t>(table_id), match_key, meta);
     return blake_.generate_hash_32() & mask32(num_target_bits);
+    #endif
 }
 
 inline void ProofHashing::_set_data_for_matching_target(uint32_t salt, uint32_t match_key,
-                                                         uint64_t meta, int num_meta_bits) {
+                                                         uint64_t meta) {
     blake_.set_data(0, salt);
     blake_.set_data(1, match_key);
-    int zero_data_from = 0;
-    if (num_meta_bits <= 32) {
-        blake_.set_data(2, static_cast<uint32_t>(meta));
-        zero_data_from = 3;
-    } else if (num_meta_bits <= 64) {
-        blake_.set_data(2, static_cast<uint32_t>(meta & 0xFFFFFFFFULL));
-        blake_.set_data(3, static_cast<uint32_t>((meta >> 32) & 0xFFFFFFFFULL));
-        zero_data_from = 4;
-    } else {
-        throw std::invalid_argument("Unsupported num_meta_bits");
-    }
-    for (int i = zero_data_from; i < 8; i++) {
+    blake_.set_data(2, static_cast<uint32_t>(meta & 0xFFFFFFFFULL));
+    blake_.set_data(3, static_cast<uint32_t>((meta >> 32) & 0xFFFFFFFFULL));
+    for (int i = 4; i < 8; i++) {
         blake_.set_data(i, 0);
     }
 }
@@ -235,8 +233,16 @@ inline void ProofHashing::set_data_for_pairing(uint32_t salt, uint64_t meta_l, u
 inline PairingResult ProofHashing::pairing(int table_id, uint64_t meta_l, uint64_t meta_r,
                                            int in_meta_bits, int num_match_info_bits,
                                            int out_num_meta_bits, int num_test_bits) {
+    #if USE_AES_HASH_FOR_PAIRING
+        #if HAVE_AES
+            AesHash::Result128 res = aes_.pairing<false>(meta_l, meta_r);
+        #else
+            AesHash::Result128 res = aes_.pairing<true>(meta_l, meta_r);
+        #endif
+    #else
     set_data_for_pairing(static_cast<uint32_t>(table_id), meta_l, meta_r, in_meta_bits);
     BlakeHash::Result128 res = blake_.generate_hash();
+    #endif
 
     PairingResult pr = {0, 0, 0};
 

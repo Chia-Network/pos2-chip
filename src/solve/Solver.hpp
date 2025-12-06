@@ -893,17 +893,13 @@ public:
         std::vector<T1_Match> t1_matches(max_matches);
         std::atomic<int> t1_num_matches{0};
 
-        // 3) build index array [0..NUM_SECTIONS-1]
-        std::vector<int> sections(NUM_SECTIONS);
-        std::iota(sections.begin(), sections.end(), 0);
-
         // 4) parallel match over each section
         timer.start("Matching x1 and x2 sorted lists");
         if (true)
         {
             // this section splits execution into NUM_SECTIONS tasks
             // performs better when small number of cpu's.
-            parallel_for_range(sections.begin(), sections.end(), [&](int section)
+            parallel_for_range(0, NUM_SECTIONS, [&](int section)
                                {
                     ProofCore proof_core(params_);
 
@@ -1681,11 +1677,7 @@ public:
             "Hashing " + std::to_string(total_outputs) + " x1's groups " + std::to_string(NUM_X1S) + " with range size (" + std::to_string(x1_range_size) +
             ") and num match keys (" + std::to_string(num_match_keys) + ")");
 
-        // Build an index array [0, 1, 2, ..., NUM_X1S-1]
-        std::vector<int> indices(NUM_X1S);
-        std::iota(indices.begin(), indices.end(), 0);
-
-        parallel_for_range(indices.begin(), indices.end(), [&](int x1_index)
+        parallel_for_range(0, NUM_X1S, [&](int x1_index)
                       {
                 // each thread in the pool runs this lambda
                 ProofCore proof_core(params_);
