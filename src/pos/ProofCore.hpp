@@ -121,9 +121,7 @@ public:
             abort();
         }
 
-        PairingResult pair = hashing.pairing(1, x_l, x_r,
-                                             static_cast<int>(params_.get_k()),
-                                             static_cast<int>(params_.get_k()));
+        PairingResult pair = hashing.pairing(x_l, x_r, static_cast<int>(params_.get_k()));
 
         T1Pairing result =
             {
@@ -142,11 +140,10 @@ public:
         if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
                             static_cast<uint32_t>(meta_r & 0xFFFFU)))
             return std::nullopt;
-        uint64_t in_meta_bits = params_.get_num_pairing_meta_bits();
-        PairingResult pair = hashing.pairing(2, meta_l, meta_r,
-                                             static_cast<int>(in_meta_bits),
+        uint64_t out_meta_bits = params_.get_num_pairing_meta_bits();
+        PairingResult pair = hashing.pairing(meta_l, meta_r,
                                              static_cast<int>(params_.get_k()),
-                                             static_cast<int>(in_meta_bits));
+                                             static_cast<int>(out_meta_bits));
         T2Pairing result;
         result.match_info = pair.match_info_result;
         result.meta = pair.meta_result;
@@ -172,8 +169,7 @@ public:
             return std::nullopt;
         */
 
-        PairingResult pair = hashing.pairing(3, meta_l, meta_r,
-                                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
+        PairingResult pair = hashing.pairing(meta_l, meta_r,
                                                              0,
                                                              0,
                                                              num_test_bits);
