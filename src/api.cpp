@@ -31,7 +31,6 @@ bool validate_proof(
         return false;
     }
     quality->chain_links = quality_links.value();
-    quality->strength = strength;
     return true;
 }
 catch (std::exception const& e) {
