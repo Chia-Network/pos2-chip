@@ -4,7 +4,9 @@
 #include <stdexcept>
 #include <span>
 
+#include "ProofConstants.hpp"
 #include "ProofParams.hpp"
+#include "ProofCore.hpp"
 #include "ChachaHash.hpp"
 #include "BlakeHash.hpp"
 #include "aes/AesHash.hpp"
@@ -61,8 +63,10 @@ public:
     // Prepares Blake hash data for pairing.
     void set_data_for_pairing(uint64_t meta_l, uint64_t meta_r);
 
-    BlakeHash::Result256 challengeWithPlotIdHash(const std::span<uint8_t const, 32> challenge) const
+    std::array<uint64_t, NUM_CHAIN_LINKS> chainingChallengeWithPlotIdHash(const std::span<uint8_t const, 32> challenge) const
     {
+        std::array<uint64_t, NUM_CHAIN_LINKS> result;
+
         uint32_t block_words[16];
         const uint8_t *plot_id_bytes = params_.get_plot_id_bytes();
         // Fill the first 8 words with the plot ID.
@@ -84,7 +88,27 @@ public:
                 (static_cast<uint32_t>(challenge[i * 4 + 3]) << 24);
         }
         
-        return BlakeHash::hash_block_256(block_words);
+        auto blake = BlakeHash::hash_block_256(block_words);
+        result[0] = blake.r[0] + ((uint64_t)blake.r[1] << 32);
+        result[1] = blake.r[2] + ((uint64_t)blake.r[3] << 32);
+        result[2] = blake.r[4] + ((uint64_t)blake.r[5] << 32);
+        result[3] = blake.r[6] + ((uint64_t)blake.r[7] << 32);
+
+        // do hashes for rest of chain links
+        assert(NUM_CHAIN_LINKS % 4 == 0);
+        for (int c = 1; c < NUM_CHAIN_LINKS/4; c++) {
+            // set up block words (note: first 8 words are still from plot id)
+            for (int i = 0; i < 8; i++) {
+                block_words[i+8] = blake.r[i];
+            }
+            blake = BlakeHash::hash_block_256(block_words);
+            result[c*4 + 0] = blake.r[0] + ((uint64_t)blake.r[1] << 32);
+            result[c*4 + 1] = blake.r[2] + ((uint64_t)blake.r[3] << 32);
+            result[c*4 + 2] = blake.r[4] + ((uint64_t)blake.r[5] << 32);
+            result[c*4 + 3] = blake.r[6] + ((uint64_t)blake.r[7] << 32);
+        }
+
+        return result;
     }
 
     BlakeHash::Result256 challengeWithGroupedPlotIdHash(const std::span<uint8_t const, 32> challenge) const
@@ -110,25 +134,6 @@ public:
                 (static_cast<uint32_t>(challenge[i * 4 + 3]) << 24);
         }
         
-        return BlakeHash::hash_block_256(block_words);
-    }
-
-    static BlakeHash::Result256 linkHash(BlakeHash::Result256 const& challenge, uint64_t proof_fragment, uint32_t iteration)
-    {
-        uint32_t block_words[16];
-        for (int i = 0; i < 8; i++) {
-            block_words[i] = challenge.r[i];
-        }
-        block_words[8] = static_cast<uint32_t>(proof_fragment & 0xFFFFFFFF);
-        block_words[9] = static_cast<uint32_t>(proof_fragment >> 32);
-        block_words[9] = iteration;
-        block_words[10] = 0;
-        block_words[11] = 0;
-        block_words[12] = 0;
-        block_words[13] = 0;
-        block_words[14] = 0;
-        block_words[15] = 0;
-
         return BlakeHash::hash_block_256(block_words);
     }
 
