@@ -448,7 +448,6 @@ public:
         // We'll have 2^(k-4) groups, each group has 16 x-values
         // => total of 2^(k-4)*16 x-values
         
-        #if USE_AES_HASH_FOR_G
         uint64_t num_xs = (1ULL << params_.get_k());
         x_candidates.resize(num_xs);
 
@@ -465,35 +464,6 @@ public:
                 x_candidates[x_val] = Xs_Candidate{match_info, x};
             }
         );
-        #else
-        uint64_t num_groups = (1ULL << (params_.get_k() - 4));
-        
-        // hack to make smaller plot for debugging
-        //num_groups = (uint64_t) ((double) num_groups * 0.75);
-
-        // total xs is fixed = num_groups * 16
-        uint64_t total_xs = num_groups * 16ULL;
-        x_candidates.resize(total_xs);
-
-        parallel_for_range(
-            uint64_t(0),
-            num_groups,
-            [this, &x_candidates](uint64_t g)
-            {
-                uint32_t base_x = static_cast<uint32_t>(g * 16ULL);
-                uint32_t out_hashes[16];
-                this->proof_core_.hashing.g_range_16(base_x, out_hashes);
-
-                uint64_t base_index = g * 16ULL;
-                for (uint32_t i = 0; i < 16; ++i)
-                {
-                    uint32_t x = base_x + i;
-                    uint32_t match_info = out_hashes[i];
-                    x_candidates[base_index + i] = Xs_Candidate{match_info, x};
-                }
-            }
-        );
-        #endif
         timings.hash_time_ms = timer.stop();
 
         timer.start("Setup RadixSort");
