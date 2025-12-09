@@ -588,7 +588,7 @@ std::array<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> matchT2Candidates(
             //    num_R_collisions++;
             //}
         }
-        std::cout << "Num R collisions: " << num_R_collisions << std::endl;
+        //std::cout << "Num R collisions: " << num_R_collisions << std::endl;
 
         timings_.t2_sort_short_list += sub_timer.stop(); // reuse this bucket for index build time
 
