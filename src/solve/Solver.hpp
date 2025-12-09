@@ -549,7 +549,7 @@ std::array<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> matchT2Candidates(
     // Process adjacent groups: group 0 with 1, 2 with 3, etc.
     for (size_t t2_group = 0; t2_group < t2_matches.size(); ++t2_group)
     {
-        num_R_collisions = 0;
+        // num_R_collisions = 0;
         size_t group_mapping_index_l = t2_group * 2;
         size_t group_mapping_index_r = group_mapping_index_l + 1;
         int t1_group_l = x_bits_group.mapping[group_mapping_index_l];
