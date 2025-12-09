@@ -26,13 +26,6 @@ constexpr int TOTAL_PROOF_FRAGMENTS_IN_PROOF = 16;
 // #define RETAIN_X_VALUES_TO_T3 true
 // #define RETAIN_X_VALUES true
 
-// bipartite is optional. Some notes as to which mode is best:
-// - The solver's performance seems slightly better without bipartite
-// - plotting could be optimized to be faster using bipartite
-// - bipartite may mix less well, and needs more analysis for T4 Partition Attack
-// NOTE: when chip goes into review should remove this macro and use the final chosen branched code.
-#define NON_BIPARTITE_BEFORE_T3 true
-
 constexpr int NUM_CHAIN_LINKS = 16;
 constexpr int AVERAGE_PROOFS_PER_CHALLENGE_BITS = 5; // expected proofs per challenge is 1/2^5 = 1/32.
 
@@ -41,7 +34,6 @@ using QualityChainLinks = std::array<ProofFragment, NUM_CHAIN_LINKS>;
 struct QualityChain
 {
     QualityChainLinks chain_links;
-    uint8_t strength;
 };
 
 // chaining
@@ -204,44 +196,14 @@ public:
     {
         uint32_t section_l = params_.extract_section_from_match_info(table_id, match_info_l);
         uint32_t section_r = params_.extract_section_from_match_info(table_id, match_info_r);
-        // For this version, we ignore bipartite logic.
-#ifdef NON_BIPARTITE_BEFORE_T3
-        if (table_id <= 3)
+        
+        uint32_t match_section = matching_section(section_l);
+        if (section_r != match_section)
         {
-            uint32_t match_section = matching_section(section_l);
-            if (section_r != match_section)
-            {
                 // std::cout << "section_l " << section_l << " != match_section " << match_section << std::endl
                 //           << "    meta_l: " << meta_l << " match_info_l: " << match_info_l << " match_info_r: " << match_info_r << std::endl;
-                return false;
-            }
-        }
-        else
-        {
-            // use bipartite logic for T4 and T5
-            uint32_t section_1;
-            uint32_t section_2;
-            get_matching_sections(section_l, section_1, section_2);
-
-            if (section_r != section_1 && section_r != section_2)
-            {
-                // std::cout << "section_r " << section_r << " != section_1 " << section_1 << " and section_2 " << section_2 << std::endl
-                //           << "    meta_l: " << meta_l << " match_info_l: " << match_info_l << " match_info_r: " << match_info_r << std::endl;
-                return false;
-            }
-        }
-#else
-        uint32_t section_1;
-        uint32_t section_2;
-        get_matching_sections(section_l, section_1, section_2);
-
-        if (section_r != section_1 && section_r != section_2)
-        {
-            // std::cout << "bipartite section_r " << section_r << " != section_1 " << section_1 << " and section_2 " << section_2 << std::endl
-            //           << "    meta_l: " << meta_l << " match_info_l: " << match_info_l << " match_info_r: " << match_info_r << std::endl;
             return false;
         }
-#endif
 
         uint32_t match_key_r = params_.extract_match_key_from_match_info(table_id, match_info_r);
         uint32_t match_target_r = params_.extract_match_target_from_match_info(table_id, match_info_r);

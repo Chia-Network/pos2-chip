@@ -2,6 +2,7 @@
 
 #include "common/Timer.hpp"
 #include "pos/ProofCore.hpp"
+#include "pos/aes/AesHash.hpp"
 
 #include "pos/ProofValidator.hpp"
 #include "ProofSolverTimings.hpp"
@@ -18,6 +19,7 @@
 #include <numeric> // for iota
 #include "common/ParallelForRange.hpp"
 
+
 #ifdef __cpp_lib_execution
 #include <execution>
 #endif
@@ -26,7 +28,6 @@
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 #include <xmmintrin.h>
 #endif
-
 
 
 // #define DEBUG_VERIFY true
@@ -148,7 +149,7 @@ public:
     // Input: an array of 256 x1 candidates.
     //        x_solution is an dev-mode test array that the solver should solve to and test against (debug and verify).
     // Returns: a vector of complete proofs (each proof is an array of TOTAL_XS_IN_PROOF uint32_t x-values).
-    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF/2> const x_bits_list, const std::vector<uint32_t> &x_solution = {})
+    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF/2> const x_bits_list, std::span<uint32_t const> const x_solution = {})
     {
         XBitGroupMappings x_bits_group = compress_with_lookup(x_bits_list, params_.get_k() / 2);
 #ifdef DEBUG_VERIFY
@@ -201,7 +202,7 @@ public:
         std::cout << "x1 range size: " << x1_range_size << std::endl;
         std::cout << "num_match_keys: " << num_match_keys << std::endl;
 
-        std::cout << "num_match_target_hashes: " << num_match_target_hashes << std::endl;
+        std::cout << "num_match_target_hashes: " << num_match_target_hashes << " (num_unique_x_pairs: " << num_unique_x_pairs << " x " << x1_range_size << " x " << num_match_keys << ")" << std::endl;
         std::cout << "unique_x1_list size: " << x_bits_group.unique_x_bits_list.size() << std::endl;
 
         std::cout << "bitmask shift: " << this->bitmask_shift_ << std::endl;
@@ -215,11 +216,7 @@ public:
         timings_.allocating += timer.stop();
 
 // Phase 2: Hash x1 candidates for comparing match info's
-#ifdef NON_BIPARTITE_BEFORE_T3
         hashX1Candidates(x_bits_group.unique_x_bits_list, x1_bits, x1_range_size, x1s, x1_hashes);
-#else
-        hashX1CandidatesBiPartite(x_bits_group.unique_x_bits_list, x1_bits, x1_range_size, x1s, x1_hashes);
-#endif
 
         timer.start("Allocating buffer for sort");
         std::vector<uint32_t> x1s_sort_buffer(x1_hashes.size());
@@ -239,11 +236,8 @@ public:
         // Phase 5: Filter x2 candidates using the x1 bitmask.
         std::vector<uint32_t> x2_potential_match_xs;
         std::vector<uint32_t> x2_potential_match_hashes;
-#ifdef NON_BIPARTITE_BEFORE_T3
+
         filterX2Candidates(x1_bitmask, num_unique_x_pairs, x2_potential_match_xs, x2_potential_match_hashes);
-#else
-        filterX2CandidatesBiPartite(x1_bitmask, x2_potential_match_xs, x2_potential_match_hashes);
-#endif
 
         // Phase 6: Sort the filtered x2 candidates.
         timer.start("Sorting matches (" + std::to_string(x2_potential_match_xs.size()) + ")");
@@ -597,7 +591,7 @@ public:
                         uint64_t meta = (uint64_t(lm.x1) << num_k_bits) | lm.x2;
                         uint32_t L_hash = thread_core.matching_target(2, meta, match_key);
                         uint32_t sec_bits = lm.pair_hash >> (num_k_bits - num_section_bits);
-#ifdef NON_BIPARTITE_BEFORE_T3
+
                         uint32_t R_sec = thread_core.matching_section(sec_bits);
                         uint32_t final_hash =
                             (R_sec << (num_k_bits - num_section_bits)) | (match_key << num_T2_match_target_bits) | L_hash;
@@ -607,30 +601,6 @@ public:
                         {
                             local_matches.push_back({lm.x1, lm.x2, final_hash});
                         }
-#else
-                        uint32_t section1 = thread_core.matching_section(sec_bits);
-                        uint32_t section2 = thread_core.inverse_matching_section(sec_bits);
-                       
-                        uint32_t final_hash =
-                            (section1 << (num_k_bits - num_section_bits)) | (match_key << num_T2_match_target_bits) | L_hash;
-                        uint32_t reduced = final_hash >> (num_k_bits - HASHES_BITMASK_SIZE_BITS);
-                        
-                        if (hashes_bitmask[reduced >> 5] & (1u << (reduced & 31)))
-                        {
-                            local_matches.push_back({lm.x1, lm.x2, final_hash});
-                        }
-                        
-                        // now do for 2nd possible matching section
-                        final_hash =
-                            (section2 << (num_k_bits - num_section_bits)) | (match_key << num_T2_match_target_bits) | L_hash;
-
-                        reduced = final_hash >> (num_k_bits - HASHES_BITMASK_SIZE_BITS);
-
-                        if (hashes_bitmask[reduced >> 5] & (1u << (reduced & 31)))
-                        {
-                            local_matches.push_back({lm.x1, lm.x2, final_hash});
-                        }
-#endif
                     }
 
                     // merge thread-local results into shared vector
@@ -798,23 +768,20 @@ public:
     }
 
     std::vector<T1_Match> matchT1Candidates(
-        const std::vector<uint32_t> &x1_hashes,
-        const std::vector<uint32_t> &x1s,
-        const std::vector<uint32_t> &x2_match_hashes,
-        const std::vector<uint32_t> &x2_match_xs,
-        int num_match_target_hashes)
+        const std::span<uint32_t const> x1_hashes,
+        const std::span<uint32_t const> x1s,
+        const std::span<uint32_t const> x2_match_hashes,
+        const std::span<uint32_t const> x2_match_xs,
+        const int num_match_target_hashes)
     {
         // 1) compute section boundaries
         Timer timer;
         timer.start("Computing section boundaries");
 
-#ifdef NON_BIPARTITE_BEFORE_T3
-        auto section_boundaries_x1 = computeSectionBoundaries(x1_hashes);
-        auto section_boundaries_x2 = computeSectionBoundaries(x2_match_hashes);
-#else
-        auto section_boundaries_x1 = computeSectionBoundariesBiPartite(x1_hashes);
-        auto section_boundaries_x2 = computeSectionBoundariesBiPartite(x2_match_hashes);
-#endif
+
+        const auto section_boundaries_x1 = computeSectionBoundaries(x1_hashes);
+        const auto section_boundaries_x2 = computeSectionBoundaries(x2_match_hashes);
+
         /*if (test_section_boundaries_x1 != section_boundaries_x1)
         {
             std::cout << "test_section_boundaries_x1 != section_boundaries_x1" << std::endl;
@@ -858,21 +825,21 @@ public:
             std::cout << "x1_hashes size: " << x1_hashes.size() << std::endl;
             std::cout << "x2_match_hashes size: " << x2_match_hashes.size() << std::endl;
 
-            int k = params_.get_k();
-            int num_section_bits = params_.get_num_section_bits();
+            const int k = params_.get_k();
+            const int num_section_bits = params_.get_num_section_bits();
             // verify section boundaries have section bits as part of hash range for section
             for (size_t i = 0; i < section_boundaries_x1.size(); i++)
             {
-                int start_section = section_boundaries_x1[i];
-                int end_section = (i + 1 == section_boundaries_x1.size())
+                const int start_section = section_boundaries_x1[i];
+                const int end_section = (i + 1 == section_boundaries_x1.size())
                                       ? num_match_target_hashes
                                       : section_boundaries_x1[i + 1];
                 std::cout << "section_boundaries_x1 section:" << i << " start_section: " << start_section << " end_section: " << end_section << std::endl;
                 for (int j = start_section; j < end_section; j++)
                 {
                     // std::cout << "x1 hash[" << j << "]: " << std::bitset<20>(x1_hashes[j]) << std::endl;
-                    uint32_t hash = x1_hashes[j];
-                    uint32_t section_bits = hash >> (k - num_section_bits);
+                    const uint32_t hash = x1_hashes[j];
+                    const uint32_t section_bits = hash >> (k - num_section_bits);
                     if (section_bits != i)
                     {
                         std::cout << "Section bits: " << section_bits << " != " << i << std::endl;
@@ -888,14 +855,14 @@ public:
             }
             for (size_t i = 0; i < section_boundaries_x2.size(); i++)
             {
-                int start_section = section_boundaries_x2[i];
-                int end_section = (i + 1 == section_boundaries_x2.size())
+                const int start_section = section_boundaries_x2[i];
+                const int end_section = (i + 1 == section_boundaries_x2.size())
                                       ? static_cast<int>(x2_match_hashes.size())
                                       : section_boundaries_x2[i + 1];
                 for (int j = start_section; j < end_section; j++)
                 {
-                    uint32_t hash = x2_match_hashes[j];
-                    uint32_t section_bits = hash >> (k - num_section_bits);
+                    const uint32_t hash = x2_match_hashes[j];
+                    const uint32_t section_bits = hash >> (k - num_section_bits);
                     if (section_bits != i)
                     {
                         std::cout << "Section bits: " << section_bits << " != " << i << std::endl;
@@ -1000,15 +967,15 @@ public:
 
             for (int section = 0; section < NUM_SECTIONS; ++section)
             {
-                int x1_start = section_boundaries_x1[section];
-                int x1_end = (section + 1 == NUM_SECTIONS)
+                const int x1_start = section_boundaries_x1[section];
+                const int x1_end = (section + 1 == NUM_SECTIONS)
                                  ? num_match_target_hashes
                                  : section_boundaries_x1[section + 1];
-                int x2_start = section_boundaries_x2[section];
-                int x2_end = (section + 1 == NUM_SECTIONS)
+                const int x2_start = section_boundaries_x2[section];
+                const int x2_end = (section + 1 == NUM_SECTIONS)
                                  ? static_cast<int>(x2_match_hashes.size())
                                  : section_boundaries_x2[section + 1];
-                auto task_boundaries_x1 = makeTaskBoundariesSimple(
+                const auto task_boundaries_x1 = makeTaskBoundariesSimple(
                     x1_start, x1_end,
                     x1_hashes,
                     num_task_bit_splits);
@@ -1059,18 +1026,18 @@ public:
                               {
                         ProofCore proof_core(params_);
 
-                        int x1_start = task_boundaries_x1[task_id];
-                        int x1_end = task_boundaries_x1[task_id + 1];
-                        int x2_start = task_boundaries_x2[task_id];
-                        int x2_end = task_boundaries_x2[task_id + 1];
+                        const int x1_start = task_boundaries_x1[task_id];
+                        const int x1_end = task_boundaries_x1[task_id + 1];
+                        const int x2_start = task_boundaries_x2[task_id];
+                        const int x2_end = task_boundaries_x2[task_id + 1];
 
                         // std::cout << "Task " << task_id << ": x1 [" << x1_start << ", " << x1_end << "), x2 [" << x2_start << ", " << x2_end << ") length: " << (x1_end - x1_start) << ", " << (x2_end - x2_start) << std::endl;
 
                         int i = x1_start, j = x2_start;
                         while (i < x1_end && j < x2_end)
                         {
-                            uint32_t h1 = x1_hashes[i];
-                            uint32_t h2 = x2_match_hashes[j];
+                            const uint32_t h1 = x1_hashes[i];
+                            const uint32_t h2 = x2_match_hashes[j];
 
                             if (h1 == h2)
                             {
@@ -1078,13 +1045,13 @@ public:
                                 int ti = i;
                                 while (ti < x1_end && x1_hashes[ti] == h2)
                                 {
-                                    uint32_t xx1 = x1s[ti];
-                                    uint32_t xx2 = x2_match_xs[j];
+                                    const uint32_t xx1 = x1s[ti];
+                                    const uint32_t xx2 = x2_match_xs[j];
 
                                     auto pairing = proof_core.pairing_t1(xx1, xx2);
                                     if (pairing.has_value())
                                     {
-                                        int pos = t1_num_matches.fetch_add(1, std::memory_order_relaxed);
+                                        const int pos = t1_num_matches.fetch_add(1, std::memory_order_relaxed);
                                         if (pos >= max_matches)
                                         {
                                             std::cerr << "ERROR: Too many matches\n";
@@ -1114,7 +1081,7 @@ public:
         timings_.match_x1_x2_sorted_lists += timer.stop();
 
         // 5) trim to actual match count and return
-        int total = t1_num_matches.load(std::memory_order_relaxed);
+        const int total = t1_num_matches.load(std::memory_order_relaxed);
         t1_matches.resize(total);
 
         return t1_matches;
@@ -1217,7 +1184,7 @@ public:
     // see: makeTaskBoundariesFast above, but it doesn't always yield correct results.
     std::vector<int> makeTaskBoundariesSimple(
         int x1_start, int x1_end,
-        const std::vector<uint32_t> &hashes,
+        const std::span<uint32_t const> hashes,
         int num_split_bits)
     {
         int num_k_bits = params_.get_k();
@@ -1245,23 +1212,26 @@ public:
     }
 
     std::vector<int>
-    computeSectionBoundaries(const std::vector<uint32_t> &hashes)
+    computeSectionBoundaries(std::span<uint32_t const> const hashes)
     {
         const int NUM_SECTIONS = params_.get_num_sections();
         const int num_k_bits = params_.get_k();
         const int num_section_bits = params_.get_num_section_bits();
         const int shift = num_k_bits - num_section_bits;
 
-        int N = (int)hashes.size();
-        int chunk = N / NUM_SECTIONS; // ideal block size
+        const int N = numeric_cast<int>(hashes.size());
+        const int chunk = N / NUM_SECTIONS; // ideal block size
 
         std::vector<int> bounds(NUM_SECTIONS);
+
+        if (N == 0)
+            return bounds;
 
         for (int s = 0; s < NUM_SECTIONS; ++s)
         {
             // 1) jump to the “ideal” index
             int idx = std::min(s * chunk, N - 1);
-            uint32_t sec = hashes[idx] >> shift;
+            uint32_t const sec = hashes[idx] >> shift;
 
             // 2) if we’re too early, scan *forward* until we hit section s
             if (sec < (uint32_t)s)
@@ -1299,67 +1269,7 @@ public:
         return bounds;
     }
 
-    std::vector<int>
-    computeSectionBoundariesBiPartite(const std::vector<uint32_t> &hashes)
-    {
-        const int NUM_SECTIONS = params_.get_num_sections();
-        const int num_k_bits = params_.get_k();
-        const int num_section_bits = params_.get_num_section_bits();
-        const int shift = num_k_bits - num_section_bits;
-
-        int N = (int)hashes.size();
-        int chunk = N / (NUM_SECTIONS / 2); // ideal block size
-
-        std::vector<int> bounds(NUM_SECTIONS);
-
-        // first half of sections shouldn't have any values.
-        for (int s = 0; s < NUM_SECTIONS / 2; ++s)
-        {
-            bounds[s] = -1;
-        }
-        for (int s = NUM_SECTIONS / 2; s < NUM_SECTIONS; ++s)
-        {
-            // 1) jump to the “ideal” index
-            int idx = std::min((s - NUM_SECTIONS / 2) * chunk, N - 1);
-            uint32_t sec = hashes[idx] >> shift;
-
-            // 2) if we’re too early, scan *forward* until we hit section s
-            if (sec < (uint32_t)s)
-            {
-                while (idx < N && (hashes[idx] >> shift) < (uint32_t)s)
-                {
-                    ++idx;
-                }
-            }
-            // 3) if we’re too late, scan *backward* until we drop below s,
-            //    then step forward one to land on the first s
-            else if (sec > (uint32_t)s)
-            {
-                while (idx > 0 && (hashes[idx] >> shift) > (uint32_t)s)
-                {
-                    --idx;
-                }
-                if ((hashes[idx] >> shift) < (uint32_t)s)
-                {
-                    ++idx;
-                }
-            }
-            // 4) if we’re already inside section s, scan backward to its first hit
-            else
-            { // sec == s
-                while (idx > 0 && ((hashes[idx - 1] >> shift) == (uint32_t)s))
-                {
-                    --idx;
-                }
-            }
-
-            bounds[s] = idx;
-        }
-
-        return bounds;
-    }
-
-    void filterX2Candidates(const std::vector<uint32_t> &x1_bitmask,
+    void filterX2Candidates(std::span<uint32_t const> const x1_bitmask,
                             size_t num_x_pairs,
                             std::vector<uint32_t> &x2_potential_match_xs,
                             std::vector<uint32_t> &x2_potential_match_hashes)
@@ -1418,18 +1328,184 @@ public:
         std::iota(thread_ids.begin(), thread_ids.end(), 0);
         std::atomic<bool> failed = false;
 
-        if (!use_prefetching_)
+        use_prefetching_ = true;
+
+        #if (USE_AES_HASH_FOR_G)
         {
-            timer.start("Chacha multi-threaded bitmask test");
+            timer.start("AES multi-threaded bitmask test");
+            AesHash aes_hash(params_.get_plot_id_bytes(), params_.get_k());
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-                          {
+            {
+                int thread_matches = 0;
+                uint64_t start = uint64_t(t) * chunk_size;
+                uint64_t end = (t + 1 == (int)num_threads)
+                                       ? NUM_XS
+                                       : start + chunk_size;
+                    
+                if (!use_prefetching_) {
+                    for (uint64_t x = start; x < end; x++) {
+                        
+                        #if (HAVE_AES)
+                        uint32_t chacha_hash = aes_hash.hash_x<false>(uint32_t(x));
+                        #else
+                        uint32_t chacha_hash = aes_hash.hash_x<true>(uint32_t(x));
+                        #endif
+                        
+                        uint32_t bitmask_hash = chacha_hash >> this->bitmask_shift_;
+                        int slot = bitmask_hash >> 5;
+                        int bit = bitmask_hash & 31;
+                        if (x1_bitmask[slot] & (1u << bit))
+                        {
+                            assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
+                            size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
+                            x2_potential_match_xs[idx] = uint32_t(x);
+                            x2_potential_match_hashes[idx] = chacha_hash;
+                            ++thread_matches;
+                            if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
+                            {
+                                failed.store(true);
+                                goto done;
+                            }
+                        }
+                    }
+                } 
+                else {
+                    // Prefetching version
+                    constexpr int PREFETCH_DIST = 128;  // must be a power of 2 for the mask below
+
+                    if (end <= start) {
+                        goto done;
+                    }
+
+                    // --- Prefetching pipeline ---
+                    uint32_t hash_buf[PREFETCH_DIST];
+                    uint32_t bitmask_hash_buf[PREFETCH_DIST];
+                    int      slot_buf[PREFETCH_DIST];
+
+                    // 1) Warm-up: compute and prefetch the first PREFETCH_DIST elements.
+                    //    We won't *use* them yet; we're just filling the pipeline.
+                    uint64_t x_pref = start;
+                    for (int i = 0; i < PREFETCH_DIST; ++i, ++x_pref) {
+                        
+                        #if (HAVE_AES)
+                        uint32_t h = aes_hash.hash_x<false>(uint32_t(x_pref));
+                        #else
+                        uint32_t h = aes_hash.hash_x<true>(uint32_t(x_pref));
+                        #endif
+
+                        hash_buf[i] = h;
+                        uint32_t bitmask_hash = h >> this->bitmask_shift_;
+                        bitmask_hash_buf[i] = bitmask_hash;
+
+                        int slot = bitmask_hash >> 5;
+                        slot_buf[i] = slot;
+
+                        //rx_prefetch_nta(&x1_bitmask[slot]);
+                        #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+                        _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[slot]), _MM_HINT_T0);
+                        #elif defined(__arm__) || defined(__aarch64__)
+                        __builtin_prefetch(&x1_bitmask[slot], 0, 0);
+                        #endif
+                    }
+
+                    // 2) Main pipelined loop.
+                    //
+                    //    For each x in [start, end - PREFETCH_DIST):
+                    //      - process the buffered entry for x
+                    //      - compute hash/slot for x + PREFETCH_DIST
+                    //      - prefetch x1_bitmask[slot(x + PREFETCH_DIST)]
+                    //
+                    uint64_t x      = start;
+                    uint64_t limit  = end - PREFETCH_DIST;        // last x that still has a future x+PREFETCH_DIST
+                    int      buf_ix = 0;                          // ring-buffer index
+
+                    for (; x < limit; ++x, buf_ix = (buf_ix + 1) & (PREFETCH_DIST - 1)) {
+                        // Process the element that was hashed & prefetched PREFETCH_DIST iterations ago.
+                        uint32_t chacha_hash = hash_buf[buf_ix];
+                        uint32_t bitmask_hash = bitmask_hash_buf[buf_ix];
+                        int slot = slot_buf[buf_ix];
+                        int bit  = bitmask_hash & 31;
+
+                        if (x1_bitmask[slot] & (1u << bit)) {
+                            assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
+                            size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
+                            x2_potential_match_xs[idx]     = uint32_t(x);
+                            x2_potential_match_hashes[idx] = chacha_hash;
+                            ++thread_matches;
+                            if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]] {
+                                failed.store(true);
+                                goto done;
+                            }
+                        }
+
+                        // Now compute and prefetch for the future element at x_pref = x + PREFETCH_DIST.
+                        uint64_t x_future = x + PREFETCH_DIST;
+
+                        
+                        #if (HAVE_AES)
+                        uint32_t h = aes_hash.hash_x<false>(uint32_t(x_future));
+                        #else
+                        uint32_t h = aes_hash.hash_x<true>(uint32_t(x_future));
+                        #endif
+
+                        hash_buf[buf_ix] = h;
+                        uint32_t future_bitmask_hash = h >> this->bitmask_shift_;
+                        bitmask_hash_buf[buf_ix] = future_bitmask_hash;
+
+                        int future_slot = future_bitmask_hash >> 5;
+                        slot_buf[buf_ix] = future_slot;
+
+                        //rx_prefetch_nta(&x1_bitmask[future_slot]);
+                        #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+                        _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[future_slot]), _MM_HINT_T0);
+                        #elif defined(__arm__) || defined(__aarch64__)
+                        __builtin_prefetch(&x1_bitmask[future_slot], 0, 0);
+                        #endif
+                    }
+
+                    // 3) Drain the remaining PREFETCH_DIST-1 buffered entries (no new prefetches).
+                    for (; x < end; ++x, buf_ix = (buf_ix + 1) & (PREFETCH_DIST - 1)) {
+                        uint32_t chacha_hash  = hash_buf[buf_ix];
+                        uint32_t bitmask_hash = bitmask_hash_buf[buf_ix];
+                        int slot = slot_buf[buf_ix];
+                        int bit  = bitmask_hash & 31;
+
+                        if (x1_bitmask[slot] & (1u << bit)) {
+                            assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
+                            size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
+                            x2_potential_match_xs[idx]     = uint32_t(x);
+                            x2_potential_match_hashes[idx] = chacha_hash;
+                            ++thread_matches;
+                            if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]] {
+                                failed.store(true);
+                                goto done;
+                            }
+                        }
+                    }
+                }
+            done:
+                matches_per_thread[t] = thread_matches; 
+            });
+            timings_.chachafilterx2sbybitmask += timer.stop();
+        }
+        #else
+        {
+            std::cout << "Using ChaCha hashing in filterX2Candidates()" << std::endl;
+       
+            if (!use_prefetching_)
+            {
+                std::cout << "No prefetching" << std::endl;
+                timer.start("Chacha multi-threaded bitmask test");
+            
+                parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
+                {
                     int thread_matches = 0;
                     ProofCore proof_core(params_);
                     uint64_t start = uint64_t(t) * chunk_size;
                     uint64_t end = (t + 1 == (int)num_threads)
-                                       ? NUM_XS
-                                       : start + chunk_size;
-
+                                        ? NUM_XS
+                                        : start + chunk_size;
+                        
                     uint32_t local_out[16];
                     for (uint64_t x = start; x < end; x += 16)
                     {
@@ -1455,15 +1531,17 @@ public:
                             }
                         }
                     }
-done:
-                    matches_per_thread[t] = thread_matches; });
-            timings_.chachafilterx2sbybitmask += timer.stop();
-        }
-        else
-        {
-            timer.start("Chacha multi-threaded bitmask test with prefetching");
-            parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-                          {
+                    done:
+                    matches_per_thread[t] = thread_matches; 
+                });
+                timings_.chachafilterx2sbybitmask += timer.stop();
+            }
+            else
+            {
+                std::cout << "With prefetching" << std::endl;
+                timer.start("Chacha multi-threaded bitmask test with prefetching");
+                parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
+                {
                     int thread_matches = 0;
                     ProofCore proof_core(params_);
                     uint64_t start = uint64_t(t) * chunk_size;
@@ -1480,11 +1558,11 @@ done:
                     {
                         uint32_t bitmask_hash = prior[i] >> this->bitmask_shift_;
                         int slot = bitmask_hash >> 5;
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+                        #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
                         _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[slot]), _MM_HINT_T0);
-#elif defined(__arm__) || defined(__aarch64__)
+                        #elif defined(__arm__) || defined(__aarch64__)
                         __builtin_prefetch(&x1_bitmask[slot], 0, 0);
-#endif
+                        #endif
                     }
 
                     // main loop
@@ -1516,11 +1594,11 @@ done:
                         {
                             uint32_t bitmask_hash = local[i] >> this->bitmask_shift_;
                             int slot = bitmask_hash >> 5;
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+                            #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
                             _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[slot]), _MM_HINT_T0);
-#elif defined(__arm__) || defined(__aarch64__)
+                            #elif defined(__arm__) || defined(__aarch64__)
                             __builtin_prefetch(&x1_bitmask[slot], 0, 0);
-#endif
+                            #endif
                         }
                         std::copy(std::begin(local), std::end(local), std::begin(prior));
                     }
@@ -1545,10 +1623,13 @@ done:
                             }
                         }
                     }
-done:
-                    matches_per_thread[t] = thread_matches; });
-            timings_.chachafilterx2sbybitmask += timer.stop();
+                done:
+                    matches_per_thread[t] = thread_matches; 
+                });
+                timings_.chachafilterx2sbybitmask += timer.stop();
+            }
         }
+        #endif
 
         if (failed.load())
         {
@@ -1561,6 +1642,7 @@ done:
         for (int m : matches_per_thread)
             total += m;
         timings_.misc += timer.stop();
+        std::cout << "TOTAL x2 potential matches: " << total << std::endl;
 
         timer.start("Compacting x2 potential matches");
         int write_pos = matches_per_thread[0];
@@ -1579,267 +1661,9 @@ done:
         timings_.misc += timer.stop();
     }
 
-    void filterX2CandidatesBiPartite(const std::vector<uint32_t> &x1_bitmask,
-                                     std::vector<uint32_t> &x2_potential_match_xs,
-                                     std::vector<uint32_t> &x2_potential_match_hashes)
-    {
-        const size_t num_x_pairs = TOTAL_T1_PAIRS_IN_PROOF;
-
-        const int num_k_bits = params_.get_k();
-        const int num_section_bits = params_.get_num_section_bits();
-        const size_t last_section_l = params_.get_num_sections() / 2 - 1;
-        const uint64_t NUM_XS = (1ULL << num_k_bits);
-
-        // Determine “num_threads” much like TBB did
-        unsigned num_threads = std::thread::hardware_concurrency();
-        if (num_threads == 0)
-            num_threads = 4; // fallback
-        const uint64_t per_thread = NUM_XS / num_threads;
-        // round down to a multiple of 16
-        const uint64_t chunk_size = per_thread - (per_thread % 16);
-
-        const int x1_bits = num_k_bits / 2;
-        const int x1_range_size = 1 << (num_k_bits - x1_bits);
-        const size_t num_match_keys = params_.get_num_match_keys(1);
-        const size_t num_match_target_hashes =
-            num_x_pairs * x1_range_size * num_match_keys;
-
-        const double hit_probability =
-            double(num_match_target_hashes) /
-            double(NUM_XS >> this->bitmask_shift_);
-
-        // add extra safety margin for each reduction in k from 28
-        const double extra_margin = (num_k_bits < 28) ? 1.0 + 0.01 * double(28 - num_k_bits) : 1.0;
-        const uint64_t estimated_matches =
-            uint64_t(hit_probability * static_cast<double>(NUM_XS) * extra_margin);
-
-        // round down to multiple of 16
-        const size_t MAX_RESULTS_PER_THREAD = (2 * estimated_matches / num_threads) & ~size_t(0xf);
-
-        // --- allocate output buffers just once ---
-        Timer timer;
-        timer.start("Allocating local potential matches");
-        x2_potential_match_xs.resize(num_threads * MAX_RESULTS_PER_THREAD);
-        x2_potential_match_hashes.resize(num_threads * MAX_RESULTS_PER_THREAD);
-        timings_.allocating += timer.stop();
-
-        // per-thread match counts
-        std::vector<int> matches_per_thread(num_threads, 0);
-        std::vector<int> num_checks_per_thread(num_threads, 0);
-
-        // build [0,1,2…num_threads-1]
-        std::vector<int> thread_ids(num_threads);
-        std::iota(thread_ids.begin(), thread_ids.end(), 0);
-        std::atomic<bool> failed = false;
-
-        if (!use_prefetching_)
-        {
-            timer.start("Chacha multi-threaded bitmask test (no prefetching)");
-            parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-                          {
-                    int thread_matches = 0;
-                    int num_checks = 0;
-                    ProofCore proof_core(params_);
-                    uint64_t start = uint64_t(t) * chunk_size;
-                    uint64_t end = (t + 1 == (int)num_threads)
-                                       ? NUM_XS
-                                       : start + chunk_size;
-
-                    uint32_t local_out[16];
-                    for (uint64_t x = start; x < end; x += 16)
-                    {
-                        proof_core.hashing.g_range_16(uint32_t(x), local_out);
-                        for (int i = 0; i < 16; ++i)
-                        {
-                            uint32_t chacha_hash = local_out[i];
-                            uint32_t section = chacha_hash >> (num_k_bits - num_section_bits);
-
-                            if (section <= last_section_l)
-                            {
-                                // std::cout << "skipping section: " << section << std::endl;
-                                //  skip this section
-                                continue;
-                            }
-                            else if (section > params_.get_num_sections())
-                            {
-                                std::cerr << "ERROR: section out of bounds: " << section << std::endl;
-                                std::cout << "  k:" << num_k_bits << "  num_sections_bits: " << num_section_bits << std::endl;
-                                // show chacha_hash as 32 bit binary
-                                std::cout << "  chacha_hash: " << std::bitset<32>(chacha_hash) << std::endl;
-                                // show section as 32 bit binary
-                                std::cout << "  section: " << std::bitset<32>(section) << std::endl;
-                                exit(23);
-                            }
-
-                            uint32_t bitmask_hash = chacha_hash >> this->bitmask_shift_;
-                            int slot = bitmask_hash >> 5;
-                            int bit = bitmask_hash & 31;
-                            if (x1_bitmask[slot] & (1u << bit))
-                            {
-                                assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
-                                size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
-                                x2_potential_match_xs[idx] = uint32_t(x + i);
-                                x2_potential_match_hashes[idx] = chacha_hash;
-                                ++thread_matches;
-                                if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
-                                {
-                                    failed.store(true);
-                                    goto done;
-                                }
-                            }
-                            ++num_checks;
-                        }
-                    }
-done:
-                    matches_per_thread[t] = thread_matches;
-                    num_checks_per_thread[t] = num_checks; });
-            timings_.chachafilterx2sbybitmask += timer.stop();
-        }
-        else
-        {
-            timer.start("Chacha multi-threaded bitmask test with prefetching");
-            parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-                          {
-                    int thread_matches = 0;
-                    ProofCore proof_core(params_);
-                    uint64_t start = uint64_t(t) * chunk_size;
-                    uint64_t end = (t + 1 == (int)num_threads)
-                                       ? NUM_XS
-                                       : start + chunk_size;
-
-                    constexpr int BATCH = 16;
-                    uint32_t prior[BATCH], local[BATCH];
-
-                    // initial batch
-                    proof_core.hashing.g_range_16(uint32_t(start), prior);
-                    for (int i = 0; i < BATCH; ++i)
-                    {
-                        uint32_t chacha_hash = prior[i];
-                        uint32_t section = chacha_hash >> (num_k_bits - num_section_bits);
-                        if (section <= last_section_l)
-                        {
-                            // skip this section
-                            continue;
-                        }
-                        uint32_t bitmask_hash = chacha_hash >> this->bitmask_shift_;
-                        int slot = bitmask_hash >> 5;
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
-                        _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[slot]), _MM_HINT_T0);
-#elif defined(__arm__) || defined(__aarch64__)
-                        __builtin_prefetch(&x1_bitmask[slot], 0, 0);
-#endif
-                    }
-
-                    // main loop
-                    for (uint64_t x = start + BATCH; x < end; x += BATCH)
-                    {
-                        proof_core.hashing.g_range_16(uint32_t(x), local);
-                        // consume prior[]
-                        for (int i = 0; i < BATCH; ++i)
-                        {
-                            uint32_t chacha_hash = prior[i];
-                            uint32_t bitmash_hash = chacha_hash >> this->bitmask_shift_;
-                            int slot = bitmash_hash >> 5, bit = bitmash_hash & 31;
-                            if (x1_bitmask[slot] & (1u << bit))
-                            {
-                                assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
-                                size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
-                                x2_potential_match_xs[idx] = uint32_t((x - BATCH) + i);
-                                x2_potential_match_hashes[idx] = chacha_hash;
-                                ++thread_matches;
-                                if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
-                                {
-                                    failed.store(true);
-                                    goto done;
-                                }
-                            }
-                        }
-                        // prefetch for next round
-                        for (int i = 0; i < BATCH; ++i)
-                        {
-                            uint32_t chacha_hash = local[i];
-                            uint32_t section = chacha_hash >> (num_k_bits - num_section_bits);
-                            if (section <= last_section_l)
-                            {
-                                // skip this section
-                                continue;
-                            }
-                            uint32_t bitmask_hash = chacha_hash >> this->bitmask_shift_;
-                            int slot = bitmask_hash >> 5;
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
-                            _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[slot]), _MM_HINT_T0);
-#elif defined(__arm__) || defined(__aarch64__)
-                            __builtin_prefetch(&x1_bitmask[slot], 0, 0);
-#endif
-                        }
-                        std::copy(std::begin(local), std::end(local), std::begin(prior));
-                    }
-
-                    // final consume
-                    for (int i = 0; i < BATCH; ++i)
-                    {
-                        uint32_t chacha_hash = prior[i];
-                        uint32_t bitmask_hash = chacha_hash >> this->bitmask_shift_;
-                        int slot = bitmask_hash >> 5, bit = bitmask_hash & 31;
-                        if (x1_bitmask[slot] & (1u << bit))
-                        {
-                            assert(thread_matches < static_cast<int>(MAX_RESULTS_PER_THREAD));
-                            size_t idx = size_t(t) * MAX_RESULTS_PER_THREAD + thread_matches;
-                            x2_potential_match_xs[idx] = uint32_t((end - BATCH) + i);
-                            x2_potential_match_hashes[idx] = chacha_hash;
-                            ++thread_matches;
-                            if (thread_matches == static_cast<int>(MAX_RESULTS_PER_THREAD)) [[unlikely]]
-                            {
-                                failed.store(true);
-                                goto done;
-                            }
-                        }
-                    }
-done:
-                    matches_per_thread[t] = thread_matches; });
-            timings_.chachafilterx2sbybitmask += timer.stop();
-        }
-
-        if (failed.load())
-        {
-            throw std::runtime_error("Too many matches. This is unlikely to happen, so we won't be solving this");
-        }
-
-        // now sum up, compact, and resize just as before…
-        timer.start("Counting total matches across threads");
-        int total = 0;
-        for (int m : matches_per_thread)
-            total += m;
-        timings_.misc += timer.stop();
-
-        //int total_checks = 0;
-        //for (int m : num_checks_per_thread)
-        //    total_checks += m;
-
-        timer.start("Compacting x2 potential matches");
-        int write_pos = matches_per_thread[0];
-        for (unsigned t = 1; t < num_threads; ++t)
-        {
-            int cnt = matches_per_thread[t];
-            auto src_x = x2_potential_match_xs.begin() + t * MAX_RESULTS_PER_THREAD;
-            auto src_h = x2_potential_match_hashes.begin() + t * MAX_RESULTS_PER_THREAD;
-            std::copy(src_x, src_x + cnt, x2_potential_match_xs.begin() + write_pos);
-            std::copy(src_h, src_h + cnt, x2_potential_match_hashes.begin() + write_pos);
-            write_pos += cnt;
-        }
-        x2_potential_match_xs.resize(total);
-        x2_potential_match_hashes.resize(total);
-
-        // std::cout << "x2 potential matches: " << total << std::endl;
-        // std::cout << "x2 total checks: " << total_checks << std::endl;
-        // std::cout << "Pass rate: " << (double)total / (double)total_checks << std::endl;
-
-        timings_.misc += timer.stop();
-    }
-
-    void hashX1Candidates(const std::vector<uint32_t> &x_bits_list,
-                          int x1_bits,
-                          int x1_range_size,
+    void hashX1Candidates(std::span<uint32_t const> const x_bits_list,
+                          int const x1_bits,
+                          int const x1_range_size,
                           std::vector<uint32_t> &x1s,
                           std::vector<uint32_t> &x1_hashes)
     {
@@ -1850,14 +1674,10 @@ done:
         const int NUM_X1S = static_cast<int>(x_bits_list.size());
 
         // Pre-size output arrays:
-        std::size_t total_outputs =
+        const std::size_t total_outputs =
             std::size_t(NUM_X1S) * x1_range_size * num_match_keys;
         x1s.resize(total_outputs);
         x1_hashes.resize(total_outputs);
-
-#ifndef NON_BIPARTITE_BEFORE_T3
-        const int last_section_l = params_.get_num_sections() / 2 - 1;
-#endif
 
         Timer timer;
         timer.start(
@@ -1872,7 +1692,10 @@ done:
                       {
                 // each thread in the pool runs this lambda
                 ProofCore proof_core(params_);
+                AesHash aes_hash(params_.get_plot_id_bytes(), params_.get_k());
+                #if !(USE_AES_HASH_FOR_G)
                 uint32_t x_chachas[16];
+                #endif
 
                 uint32_t x1_bit_dropped =
                     x_bits_list[static_cast<std::size_t>(x1_index)];
@@ -1887,11 +1710,24 @@ done:
                      x < x1_range_start + x1_range_size;
                      ++x)
                 {
-                    if ((x & 15u) == 0u)
+                    uint32_t x_chacha;
+                    #if (USE_AES_HASH_FOR_G) 
                     {
-                        proof_core.hashing.g_range_16(x, x_chachas);
+                        #if (HAVE_AES)
+                        x_chacha = aes_hash.hash_x<false>(uint32_t(x));
+                        #else
+                        x_chacha = aes_hash.hash_x<true>(uint32_t(x));
+                        #endif
                     }
-                    uint32_t x_chacha = x_chachas[x & 15u];
+                    #else 
+                    {
+                        if ((x & 15u) == 0u)
+                        {
+                            proof_core.hashing.g_range_16(x, x_chachas);
+                        }
+                        x_chacha = x_chachas[x & 15u];
+                    }
+                    #endif
 
                     // offset within this x1 range for writing per-match_key blocks
                     std::size_t offset = static_cast<std::size_t>(x - x1_range_start);
@@ -1915,129 +1751,8 @@ done:
         timings_.hashing_x1s += timer.stop();
     }
 
-    // k28 since it only has 4 sections with 0->2,1->3,2->1,3->0
-    // means section 2 and 3 always both map to 0 and 1.
-    // which means our bitmask only has to set section 0 and t2 filter will always check 0.
-    void hashX1CandidatesBiPartite(
-        const std::vector<uint32_t> &x_bits_list,
-        int x1_bits,
-        int x1_range_size,
-        std::vector<uint32_t> &x1s,
-        std::vector<uint32_t> &x1_hashes)
-    {
-        const size_t num_match_keys = params_.get_num_match_keys(1);
-        const int num_k_bits = params_.get_k();
-        const int num_section_bits = params_.get_num_section_bits();
-        const int num_match_key_bits = params_.get_num_match_key_bits(1);
-        const size_t NUM_X1S = x_bits_list.size();
-        const uint32_t last_section_l = params_.get_num_sections() / 2 - 1;
-
-        Timer timer;
-        timer.start(
-            "Hashing x1's with range size (" +
-            std::to_string(x1_range_size) +
-            ") and num match keys (" +
-            std::to_string(num_match_keys) +
-            ")");
-
-        // Prepare per‐x1_index temporary storage
-        // Each thread writes exclusively into its own slot here,
-        // so no synchronization is needed.
-        std::vector<std::vector<uint32_t>> tmp_x1s(NUM_X1S);
-        std::vector<std::vector<uint32_t>> tmp_hashes(NUM_X1S);
-
-        // Reserve a rough upper bound so we avoid repeated reallocations.
-        for (size_t i = 0; i < NUM_X1S; ++i)
-        {
-            tmp_x1s[i].reserve(x1_range_size * num_match_keys);
-            tmp_hashes[i].reserve(x1_range_size * num_match_keys);
-        }
-
-        // Build an index array [0,1,2,…,NUM_X1S-1]
-        std::vector<int> indices(NUM_X1S);
-        std::iota(indices.begin(), indices.end(), 0);
-
-        // Parallel loop
-        parallel_for_range(indices.begin(), indices.end(), [&](int x1_index)
-                      {
-                ProofCore proof_core(params_);
-                uint32_t x_chachas[16];
-
-                uint32_t x1_bit_dropped = x_bits_list[x1_index];
-                uint32_t x1_range_start = x1_bit_dropped << (num_k_bits - x1_bits);
-
-                auto &local_x1s = tmp_x1s[x1_index];
-                auto &local_hashs = tmp_hashes[x1_index];
-
-                for (uint32_t match_key = 0; match_key < numeric_cast<uint32_t>(num_match_keys); ++match_key)
-                {
-                    for (uint32_t x = x1_range_start;
-                         x < x1_range_start + x1_range_size;
-                         ++x)
-                    {
-                        if ((x & 15) == 0)
-                        {
-                            proof_core.hashing.g_range_16(x, x_chachas);
-                        }
-                        uint32_t x_chacha = x_chachas[x & 15];
-
-                        // apply section filter
-                        uint32_t section =
-                            (x_chacha >> (num_k_bits - num_section_bits)) & ((1u << num_section_bits) - 1);
-
-                        if (section > last_section_l)
-                        {
-                            continue;
-                        }
-
-                        // compute the full hash
-                        uint32_t hash = proof_core.matching_target(1, x, match_key);
-
-                        uint32_t matching_section =
-                            proof_core.matching_section(section);
-                        uint32_t other_matching_section =
-                            proof_core.inverse_matching_section(section);
-
-                        // have to push to both sections
-                        uint32_t matching_section_shifted =
-                            matching_section << (num_k_bits - num_section_bits);
-                        uint32_t match_key_shifted =
-                            numeric_cast<uint32_t>(match_key << (num_k_bits - num_section_bits - num_match_key_bits));
-                        uint32_t new_hash = matching_section_shifted | match_key_shifted | hash;
-
-                        local_x1s.push_back(x);
-                        local_hashs.push_back(new_hash);
-
-                        matching_section_shifted = other_matching_section << (num_k_bits - num_section_bits);
-                        new_hash = matching_section_shifted | match_key_shifted | hash;
-
-                        local_x1s.push_back(x);
-                        local_hashs.push_back(new_hash);
-                    }
-                } });
-
-        // Now flatten all the per-thread buffers into the shared vectors
-        size_t total = 0;
-        for (auto &v : tmp_x1s)
-            total += v.size();
-        x1s.clear();
-        x1_hashes.clear();
-        x1s.reserve(total);
-        x1_hashes.reserve(total);
-
-        for (size_t i = 0; i < NUM_X1S; ++i)
-        {
-            auto &vx = tmp_x1s[i];
-            auto &vh = tmp_hashes[i];
-            x1s.insert(x1s.end(), vx.begin(), vx.end());
-            x1_hashes.insert(x1_hashes.end(), vh.begin(), vh.end());
-        }
-
-        timings_.hashing_x1s += timer.stop();
-    }
-
     // Phase 4 helper: Build a bitmask from the sorted x1 hashes.
-    void buildX1Bitmask(const std::vector<uint32_t> &x1_hashes,
+    void buildX1Bitmask(std::span<uint32_t const> const x1_hashes,
                         std::vector<uint32_t> &x1_bitmask)
     {
         const int num_k_bits = params_.get_k();

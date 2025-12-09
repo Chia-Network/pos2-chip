@@ -56,7 +56,7 @@ public:
     //   plot_id_bytes: pointer to 32 bytes (the plot ID).
     //   k_size: desired bit-size (default 32). When k_size is 32 the full 32-bit values are used.
     //           Otherwise the output hash values are masked to k_size bits.
-    ChachaHash(const uint8_t* plot_id_bytes, int k_size = 32)
+    ChachaHash(const uint8_t* plot_id_bytes, int k_size = 28)
         : k_size_(k_size)
     {
         if (!plot_id_bytes)

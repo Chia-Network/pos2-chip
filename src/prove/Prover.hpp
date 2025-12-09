@@ -21,9 +21,9 @@
 // the challenge to determine the quality of ths proof. The quality is used to
 // check if it passes the current difficulty. The format is:
 // 1 byte: plot strength
-// repeat 16 * 3 times:
+// repeat 16 times:
 //   8 bytes: little-endian proof fragment
-inline std::vector<uint8_t> serializeQualityProof(QualityChain const& qp) {
+inline std::vector<uint8_t> serializeQualityProof(QualityChain const& qp, uint8_t const strength) {
 
     static_assert(sizeof(ProofFragment) == 8, "proof fragments are expected to be 64 bits");
 
@@ -33,7 +33,7 @@ inline std::vector<uint8_t> serializeQualityProof(QualityChain const& qp) {
     std::vector<uint8_t> blob(1 + NUM_CHAIN_LINKS * 8, 0);
 
     size_t idx = 0;
-    blob[idx++] = qp.strength;
+    blob[idx++] = strength;
 
     for (const ProofFragment& fragment : qp.chain_links) {
 /*
@@ -96,7 +96,6 @@ public:
         for (const Chain& chain : chains) {
             QualityChain qc;
             qc.chain_links = chain.fragments;
-            qc.strength = plot_proof_params.get_strength();
             quality_chains.push_back(qc);
         }
         return quality_chains;
