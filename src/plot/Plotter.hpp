@@ -115,7 +115,8 @@ public:
 
         #ifdef RETAIN_X_VALUES
         if (validate_) {
-            for (const auto& xs_array : t3_results.xs_correlating_to_proof_fragments) {
+            for (const auto& t3_pair : t3_results) {
+                const auto& xs_array = t3_pair.xs;
                 auto result = validator_.validate_table_3_pairs(xs_array.data());
                 if (!result.has_value()) {
                     std::cerr << "Validation failed for Table 3 pair: ["

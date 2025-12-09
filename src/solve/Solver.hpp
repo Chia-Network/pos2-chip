@@ -551,6 +551,7 @@ public:
 
             timings_.t2_sort_short_list += sub_timer.stop();
 
+            // r-size will be about 2^14 entries for k=28
             for (size_t j = 0; j < R_sorted.size(); ++j)
             {
                 uint32_t hash_reduced = R_sorted[j].pair_hash >> (num_k_bits - HASHES_BITMASK_SIZE_BITS);
@@ -612,7 +613,7 @@ public:
 
             // --- sort potential matches ---
             sub_timer.start();
-            // sort parallel
+            // sort parallel (note: doesn't work on macs)
             std::sort(
 #ifdef __cpp_lib_execution
                 std::execution::par_unseq,
@@ -648,8 +649,11 @@ public:
                             R_sorted[R_pos].x1,
                             R_sorted[R_pos].x2};
 
+                        ProofCore pc(params_);
+
                         // 4-bit filter
-                        /*uint16_t lowL = uint16_t(x_values[1] & 0xFFFF);
+                        #ifdef USE_T2_FAST_FILTER
+                        uint16_t lowL = uint16_t(x_values[1] & 0xFFFF);
                         uint16_t lowR = uint16_t(x_values[3] & 0xFFFF);
                         if (params_.get_k() < 16)
                         {
@@ -657,20 +661,28 @@ public:
                             uint64_t mr = (uint64_t(x_values[2]) << num_k_bits) | x_values[3];
                             lowL = uint16_t(ml & 0xFFFF);
                             lowR = uint16_t(mr & 0xFFFF);
-                        }*/
-                        ProofCore pc(params_);
+                        }
+                        if (pc.match_filter_4(lowL, lowR))
+                        #else
+                        ProofValidator validator(params_);
+
+                        auto pairing = validator.validate_table_2_pairs(x_values);
                         // do test bits hash
-                        int num_test_bits = num_T2_match_key_bits;
-                        uint64_t meta_l = (uint64_t(L_short_list[i].x1) << num_k_bits) | L_short_list[i].x2;
-                        uint64_t meta_r = (uint64_t(R_sorted[R_pos].x1) << num_k_bits) | R_sorted[R_pos].x2;
+                        /*int num_test_bits = num_T2_match_key_bits;
+                        uint64_t meta_l = L_short_list[i].meta; //((uint64_t(L_short_list[i].x1) << num_k_bits) | L_short_list[i].x2);
+                        uint64_t meta_r = R_sorted[R_pos].meta; //((uint64_t(R_sorted[R_pos].x1) << num_k_bits) | R_sorted[R_pos].x2);
                         PairingResult pair = pc.hashing.pairing(meta_l, meta_r,
                                                              0,
                                                              0,
                                                              num_test_bits);
                         // does it pass test bits?
-                        if (pair.test_result == 0)
-                        //if (pc.match_filter_4(lowL, lowR))
+                        if (pair.test_result == 0)*/
+                        if (pairing.has_value())
+                        #endif
                         {
+                            std::cout << "Found T2 match for x values: "
+                                      << x_values[0] << ", " << x_values[1] << ", "
+                                      << x_values[2] << ", " << x_values[3] << std::endl;
                             ProofValidator validator(params_);
                             if (auto pairing = validator.validate_table_2_pairs(x_values))
                             {

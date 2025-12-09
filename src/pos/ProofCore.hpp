@@ -13,6 +13,8 @@
 #include "ProofHashing.hpp"
 #include "ProofFragment.hpp"
 
+//#define USE_T2_FAST_FILTER true
+
 
 //------------------------------------------------------------------------------
 // Structs for pairing results
@@ -20,8 +22,8 @@
 
 // use retain x values to make a plot and save x values to disk for analysis
 // use BOTH includes to for deeper validation of results
-// #define RETAIN_X_VALUES_TO_T3 true
-// #define RETAIN_X_VALUES true
+//#define RETAIN_X_VALUES_TO_T3 true
+//#define RETAIN_X_VALUES true
 
 
 using QualityChainLinks = std::array<ProofFragment, NUM_CHAIN_LINKS>;
@@ -60,7 +62,7 @@ struct T3Pairing
 {
     ProofFragment proof_fragment;  // 2k-bit encrypted x-values.
 #ifdef RETAIN_X_VALUES_TO_T3
-    uint32_t xs[8];
+    std::array<uint32_t,8> xs;
 #endif
 };
 
@@ -130,6 +132,7 @@ public:
     // Returns: a T2Pairing with match_info (k bits), meta (2k bits), and x_bits (k bits).
     std::optional<T2Pairing> pairing_t2(const uint64_t meta_l, uint64_t meta_r)
     {
+        #ifdef USE_T2_FAST_FILTER
         assert(params_.get_num_match_key_bits(2) == 2);
         if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
                             static_cast<uint32_t>(meta_r & 0xFFFFU)))
@@ -138,6 +141,18 @@ public:
         PairingResult pair = hashing.pairing(meta_l, meta_r,
                                              static_cast<int>(params_.get_k()),
                                              static_cast<int>(out_meta_bits));
+        #else
+        int num_test_bits = params_.get_num_match_key_bits(2); // synonymous with get_strength()
+        uint64_t out_meta_bits = params_.get_num_pairing_meta_bits();
+        PairingResult pair = hashing.pairing(meta_l, meta_r,
+                                                            static_cast<int>(params_.get_k()),
+                                                            static_cast<int>(out_meta_bits),
+                                                            num_test_bits);
+        if (pair.test_result != 0)
+        {
+            return std::nullopt;
+        }
+        #endif
         T2Pairing result;
         result.match_info = pair.match_info_result;
         result.meta = pair.meta_result;
