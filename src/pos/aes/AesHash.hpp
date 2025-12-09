@@ -15,6 +15,16 @@ class AesHash {
         round_key_2 = load_plot_id_as_aes_key(plot_id_bytes + 16);
     }
 
+    struct Result64
+    {
+        uint32_t r[2];
+    };
+
+    struct Result128
+    {
+        uint32_t r[4];
+    };
+
     // Templated hash function that uses the preloaded AES keys.
     // Rounds of 16 are optimal for the Pi5 Solver performance yet still pressure a GPU into compute bound.
     template<bool Soft>
@@ -28,6 +38,42 @@ class AesHash {
         }
         // only get bottom k bits.
         return static_cast<uint32_t>(rx_vec_i128_x(state)) & ((1u << k_) - 1u);
+    }
+
+    template<bool Soft>
+    uint32_t matching_target(uint32_t salt, uint32_t match_key,
+                             uint64_t meta) const {
+        // load table id, match_key, and meta into AES state
+        int32_t i0 = static_cast<int32_t>(salt);
+        int32_t i1 = static_cast<int32_t>(match_key);
+        int32_t i2 = static_cast<int32_t>(meta & 0xFFFFFFFFULL);
+        int32_t i3 = static_cast<int32_t>((meta >> 32) & 0xFFFFFFFFULL);
+        rx_vec_i128 state = rx_set_int_vec_i128(i3, i2, i1, i0);
+        for (int r = 0; r < 16; ++r) {
+            state = aesenc<Soft>(state, round_key_1);
+            state = aesenc<Soft>(state, round_key_2);
+        }
+        return static_cast<uint32_t>(rx_vec_i128_x(state));
+    }
+
+    template<bool Soft>
+    Result128 pairing(uint64_t meta_l, uint64_t meta_r) const {
+        // load table id, meta_l, meta_r into AES state
+        int32_t i0 = static_cast<int32_t>(meta_l & 0xFFFFFFFFULL);
+        int32_t i1 = static_cast<int32_t>((meta_l >> 32) & 0xFFFFFFFFULL);
+        int32_t i2 = static_cast<int32_t>(meta_r & 0xFFFFFFFFULL);
+        int32_t i3 = static_cast<int32_t>((meta_r >> 32) & 0xFFFFFFFFULL);
+        rx_vec_i128 state = rx_set_int_vec_i128(i3, i2, i1, i0);
+        for (int r = 0; r < 16; ++r) {
+            state = aesenc<Soft>(state, round_key_1);
+            state = aesenc<Soft>(state, round_key_2);
+        }
+        Result128 result;
+        result.r[0] = static_cast<uint32_t>(rx_vec_i128_x(state));
+        result.r[1] = static_cast<uint32_t>(rx_vec_i128_y(state));
+        result.r[2] = static_cast<uint32_t>(rx_vec_i128_z(state));
+        result.r[3] = static_cast<uint32_t>(rx_vec_i128_w(state));
+        return result;
     }
 
   private:

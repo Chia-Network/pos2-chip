@@ -20,21 +20,27 @@ public:
 
     // Execute the plotting pipeline
     PlotData run() {
+        Timer totalPlotTimer;
+        totalPlotTimer.start();
         std::cout << "Starting plotter..." << std::endl;
         proof_params_.debugPrint();
 
+        #if HAVE_AES
+        std::cout << "Using AES hardware acceleration for hashing." << std::endl;
+        #else
+        std::cout << "AES hardware acceleration not available. Using software hashing." << std::endl;
+        #endif
+
         // 1) Construct Xs candidates
         XsConstructor xs_gen_ctor(proof_params_);
-        timer_.start("Constructing Xs candidates");
         auto xs_candidates = xs_gen_ctor.construct();
-        timer_.stop();
+        xs_gen_ctor.timings.show();
         std::cout << "Constructed " << xs_candidates.size() << " Xs candidates." << std::endl;
 
         // 2) Table1 generic
         Table1Constructor t1_ctor(proof_params_);
-        timer_.start("Constructing Table 1");
         auto t1_pairs = t1_ctor.construct(xs_candidates);
-        timer_.stop();
+        t1_ctor.timings.show("Table 1 Timings:");
         std::cout << "Constructed " << t1_pairs.size() << " Table 1 pairs." << std::endl;
 
         #ifdef RETAIN_X_VALUES
@@ -56,9 +62,8 @@ public:
 
         // 3) Table2 generic
         Table2Constructor t2_ctor(proof_params_);
-        timer_.start("Constructing Table 2");
         auto t2_pairs = t2_ctor.construct(t1_pairs);
-        timer_.stop();
+        t2_ctor.timings.show("Table 2 Timings:");
         std::cout << "Constructed " << t2_pairs.size() << " Table 2 pairs." << std::endl;
 
         #ifdef RETAIN_X_VALUES
@@ -77,10 +82,36 @@ public:
 
         // 4) Table3 generic
         Table3Constructor t3_ctor(proof_params_);
-        timer_.start("Constructing Table 3");
         std::vector<T3Pairing> t3_results = t3_ctor.construct(t2_pairs);
-        timer_.stop();
+        t3_ctor.timings.show("Table 3 Timings:");
         std::cout << "Constructed " << t3_results.size() << " Table 3 entries." << std::endl;
+
+        decltype(t1_ctor)::Timings total_timings;
+        total_timings.hash_time_ms = xs_gen_ctor.timings.hash_time_ms +
+                                     t1_ctor.timings.hash_time_ms +
+                                     t2_ctor.timings.hash_time_ms +
+                                     t3_ctor.timings.hash_time_ms;
+        total_timings.setup_time_ms = xs_gen_ctor.timings.setup_time_ms +
+                                      t1_ctor.timings.setup_time_ms +
+                                      t2_ctor.timings.setup_time_ms +
+                                      t3_ctor.timings.setup_time_ms;
+        total_timings.sort_time_ms = xs_gen_ctor.timings.sort_time_ms +
+                                     t1_ctor.timings.sort_time_ms + 
+                                     t2_ctor.timings.sort_time_ms +
+                                     t3_ctor.timings.sort_time_ms;
+        total_timings.find_pairs_time_ms = t1_ctor.timings.find_pairs_time_ms +
+                                           t2_ctor.timings.find_pairs_time_ms +
+                                           t3_ctor.timings.find_pairs_time_ms;
+        total_timings.post_sort_time_ms = t1_ctor.timings.post_sort_time_ms +
+                                          t2_ctor.timings.post_sort_time_ms +
+                                          t3_ctor.timings.post_sort_time_ms;
+        total_timings.misc_time_ms = t1_ctor.timings.misc_time_ms +
+                                    t2_ctor.timings.misc_time_ms +
+                                    t3_ctor.timings.misc_time_ms;
+        total_timings.show("Total Plotting Timings:");
+        
+
+        std::cout << "Total plotting time: " << totalPlotTimer.stop() << " ms." << std::endl;
 
         #ifdef RETAIN_X_VALUES
         if (validate_) {
