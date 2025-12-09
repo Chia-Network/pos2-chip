@@ -1220,6 +1220,9 @@ public:
 
         std::vector<int> bounds(NUM_SECTIONS);
 
+        if (N == 0)
+            return bounds;
+
         for (int s = 0; s < NUM_SECTIONS; ++s)
         {
             // 1) jump to the “ideal” index
