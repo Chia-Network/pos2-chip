@@ -48,8 +48,8 @@ public:
             std::vector<ProofFragment> fragments;      // chosen fragments so far
         };
 
-        BlakeHash::Result256 initial_challenge =
-            proof_core_.hashing.challengeWithPlotIdHash(challenge_);
+        auto challenge_round_keys = proof_core_.hashing.chainingChallengeWithPlotIdHash(challenge_);
+
 
         #ifdef DEBUG_CHAINER
         std::cout << "Chainer: Initial challenge: "
@@ -103,9 +103,10 @@ public:
                 (st.iteration % 2 == 0) ? fragments_A : fragments_B;
 
             // Try extending the chain with each value from the current list.
+            uint64_t const mixing_challenge = st.fast_challenge ^ challenge_round_keys[st.iteration];
             for (ProofFragment fragment : current_list)
             {
-                uint64_t const new_fast_challenge = splitmix64(st.fast_challenge ^ fragment ^ get_round_bits(initial_challenge, st.iteration));
+                uint64_t const new_fast_challenge = splitmix64(fragment ^ mixing_challenge);
                 num_hashes++;
 
                 #ifdef DEBUG_CHAINER
@@ -173,6 +174,7 @@ public:
     }
     
 
+    // TODO: make this round bits cryptographic: e.g. another blake.
     static uint64_t get_round_bits(const BlakeHash::Result256 &challenge, unsigned r) {
         uint32_t w0 = challenge.r[r & 7];          // first word
         uint32_t w1 = challenge.r[(r + 3) & 7];    // second word, offset by odd constant
@@ -211,15 +213,13 @@ public:
             }
         }
 
-        BlakeHash::Result256 challenge =
-            proof_core_.hashing.challengeWithPlotIdHash(challenge_);
+        auto challenge_round_keys = proof_core_.hashing.chainingChallengeWithPlotIdHash(challenge_);
         
-        uint64_t fast_challenge = 0;
-
+        uint64_t challenge = 0;
         for (int i = 0; i < NUM_CHAIN_LINKS; i++)
         {
-            fast_challenge = splitmix64(fast_challenge ^ chain.fragments[i] ^ get_round_bits(challenge, i));
-            if (!passes_fast_filter(fast_challenge, i))
+            challenge = splitmix64(challenge ^ chain.fragments[i] ^ challenge_round_keys[i]);
+            if (!passes_fast_filter(challenge, i))
             {
                 return false;
             }

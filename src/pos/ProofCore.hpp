@@ -8,15 +8,12 @@
 #include <limits>
 #include <vector>
 
+#include "ProofConstants.hpp"
 #include "ProofParams.hpp"
 #include "ProofHashing.hpp"
 #include "ProofFragment.hpp"
 
-constexpr int TOTAL_XS_IN_PROOF = 128;
-constexpr int TOTAL_T1_PAIRS_IN_PROOF = 64;
-constexpr int TOTAL_T2_PAIRS_IN_PROOF = 32;
-constexpr int TOTAL_T3_PAIRS_IN_PROOF = 16;
-constexpr int TOTAL_PROOF_FRAGMENTS_IN_PROOF = 16;
+
 //------------------------------------------------------------------------------
 // Structs for pairing results
 //------------------------------------------------------------------------------
@@ -26,8 +23,6 @@ constexpr int TOTAL_PROOF_FRAGMENTS_IN_PROOF = 16;
 // #define RETAIN_X_VALUES_TO_T3 true
 // #define RETAIN_X_VALUES true
 
-constexpr int NUM_CHAIN_LINKS = 16;
-constexpr int AVERAGE_PROOFS_PER_CHALLENGE_BITS = 5; // expected proofs per challenge is 1/2^5 = 1/32.
 
 using QualityChainLinks = std::array<ProofFragment, NUM_CHAIN_LINKS>;
 
@@ -92,9 +87,8 @@ public:
     uint32_t matching_target(size_t table_id, uint64_t meta, uint32_t match_key)
     {
         size_t num_match_target_bits = params_.get_num_match_target_bits(table_id);
-        size_t num_meta_bits = params_.get_num_meta_bits(table_id);
+        //size_t num_meta_bits = params_.get_num_meta_bits(table_id);
         return hashing.matching_target(table_id, match_key, meta,
-                                       static_cast<int>(num_meta_bits),
                                        static_cast<int>(num_match_target_bits));
     }
 
@@ -121,9 +115,7 @@ public:
             abort();
         }
 
-        PairingResult pair = hashing.pairing(1, x_l, x_r,
-                                             static_cast<int>(params_.get_k()),
-                                             static_cast<int>(params_.get_k()));
+        PairingResult pair = hashing.pairing(x_l, x_r, static_cast<int>(params_.get_k()));
 
         T1Pairing result =
             {
@@ -142,11 +134,10 @@ public:
         if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
                             static_cast<uint32_t>(meta_r & 0xFFFFU)))
             return std::nullopt;
-        uint64_t in_meta_bits = params_.get_num_pairing_meta_bits();
-        PairingResult pair = hashing.pairing(2, meta_l, meta_r,
-                                             static_cast<int>(in_meta_bits),
+        uint64_t out_meta_bits = params_.get_num_pairing_meta_bits();
+        PairingResult pair = hashing.pairing(meta_l, meta_r,
                                              static_cast<int>(params_.get_k()),
-                                             static_cast<int>(in_meta_bits));
+                                             static_cast<int>(out_meta_bits));
         T2Pairing result;
         result.match_info = pair.match_info_result;
         result.meta = pair.meta_result;
@@ -172,8 +163,7 @@ public:
             return std::nullopt;
         */
 
-        PairingResult pair = hashing.pairing(3, meta_l, meta_r,
-                                                             static_cast<int>(params_.get_num_pairing_meta_bits()),
+        PairingResult pair = hashing.pairing(meta_l, meta_r,
                                                              0,
                                                              0,
                                                              num_test_bits);
