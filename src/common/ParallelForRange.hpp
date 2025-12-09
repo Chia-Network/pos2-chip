@@ -60,7 +60,7 @@ parallel_for_range(It first, It last, Fn fn, unsigned max_threads)
 
 // Numeric index range [start, stop)
 template <typename T, typename Fn>
-std::enable_if_t<std::is_integral<T>::value, void>
+std::enable_if_t<std::is_integral_v<T>, void>
 parallel_for_range(T start, T stop, Fn fn, unsigned max_threads = std::thread::hardware_concurrency())
 {
     using diff_t = T;
