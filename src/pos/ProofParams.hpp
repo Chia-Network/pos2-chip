@@ -63,13 +63,11 @@ public:
     inline int get_num_match_key_bits(size_t table_id) const
     {
         assert(table_id >= 1);
-        assert(table_id <= 5);
-        if (table_id == 3) {
-            return strength_;
-        }
-        else {
+        assert(table_id <= 3);
+        if (table_id == 1) {
             return 2;
         }
+        return strength_;
     }
 
     uint8_t get_strength() const {

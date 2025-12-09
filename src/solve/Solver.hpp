@@ -30,7 +30,7 @@
 #endif
 
 
-// #define DEBUG_VERIFY true
+#define DEBUG_VERIFY true
 
 // Needed for macOS
 typedef unsigned int uint;
@@ -54,11 +54,6 @@ struct T2_match
 struct T3_match
 {
     std::array<uint32_t, 8> x_values;
-};
-
-struct T4_match
-{
-    std::array<uint32_t, 16> x_values;
 };
 
 //
@@ -654,7 +649,7 @@ public:
                             R_sorted[R_pos].x2};
 
                         // 4-bit filter
-                        uint16_t lowL = uint16_t(x_values[1] & 0xFFFF);
+                        /*uint16_t lowL = uint16_t(x_values[1] & 0xFFFF);
                         uint16_t lowR = uint16_t(x_values[3] & 0xFFFF);
                         if (params_.get_k() < 16)
                         {
@@ -662,10 +657,19 @@ public:
                             uint64_t mr = (uint64_t(x_values[2]) << num_k_bits) | x_values[3];
                             lowL = uint16_t(ml & 0xFFFF);
                             lowR = uint16_t(mr & 0xFFFF);
-                        }
-
+                        }*/
                         ProofCore pc(params_);
-                        if (pc.match_filter_4(lowL, lowR))
+                        // do test bits hash
+                        int num_test_bits = num_T2_match_key_bits;
+                        uint64_t meta_l = (uint64_t(L_short_list[i].x1) << num_k_bits) | L_short_list[i].x2;
+                        uint64_t meta_r = (uint64_t(R_sorted[R_pos].x1) << num_k_bits) | R_sorted[R_pos].x2;
+                        PairingResult pair = pc.hashing.pairing(meta_l, meta_r,
+                                                             0,
+                                                             0,
+                                                             num_test_bits);
+                        // does it pass test bits?
+                        if (pair.test_result == 0)
+                        //if (pc.match_filter_4(lowL, lowR))
                         {
                             ProofValidator validator(params_);
                             if (auto pairing = validator.validate_table_2_pairs(x_values))
