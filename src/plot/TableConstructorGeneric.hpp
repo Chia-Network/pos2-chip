@@ -503,6 +503,79 @@ protected:
     ProofCore proof_core_;
 };
 
+class XsConstructorAttack
+{
+public:
+    XsConstructorAttack(const ProofParams &proof_params)
+        : params_(proof_params),
+          proof_core_(proof_params)
+    {
+    }
+
+    virtual ~XsConstructorAttack() = default;
+
+    std::vector<Xs_Candidate> construct(std::vector<uint32_t> &collected_xs)
+    {
+        std::vector<Xs_Candidate> x_candidates;
+        // We'll have 2^(k-4) groups, each group has 16 x-values
+        // => total of 2^(k-4)*16 x-values
+        
+        uint64_t num_xs = collected_xs.size();
+        x_candidates.resize(num_xs);
+
+        Timer timer;
+        timer.start("Hashing Xs_Candidate");
+
+        // iterate only over collected_xs
+        parallel_for_range(
+            uint64_t(0),
+            num_xs,
+            [this, &x_candidates, &collected_xs](uint64_t index)
+            {
+                uint32_t x = collected_xs[index];
+                uint32_t match_info = this->proof_core_.hashing.g(x);
+                x_candidates[index] = Xs_Candidate{match_info, x};
+            }
+        );
+        timings.hash_time_ms = timer.stop();
+
+        timer.start("Setup RadixSort");
+        RadixSort<Xs_Candidate, uint32_t> radix_sort;
+        std::vector<Xs_Candidate> temp_buffer(x_candidates.size());
+        // Create a span over the temporary buffer
+        std::span<Xs_Candidate> buffer(temp_buffer.data(), temp_buffer.size());
+        timer.stop();
+        timings.setup_time_ms = timer.stop();
+
+        timer.start("Sorting Xs_Candidate");
+        radix_sort.sort(x_candidates, buffer);
+        timer.stop();
+        timings.sort_time_ms = timer.stop();
+
+        return x_candidates;
+    }
+
+    struct Timings {
+        double hash_time_ms = 0.0;
+        double setup_time_ms = 0.0;
+        double sort_time_ms = 0.0;
+
+        void show() const {
+            std::cout << "XsConstructorAttack Timings:" << std::endl;
+            std::cout << "  Hash time: " << hash_time_ms << " ms" << std::endl;
+            std::cout << "  Setup time: " << setup_time_ms << " ms" << std::endl;
+            std::cout << "  Sort time: " << sort_time_ms << " ms" << std::endl;
+            std::cout << "  ------------" << std::endl;
+            double total = hash_time_ms + setup_time_ms + sort_time_ms;
+            std::cout << "  Total time: " << total << " ms" << std::endl;
+        }
+    } timings;
+
+protected:
+    ProofParams params_;
+    ProofCore proof_core_;
+};
+
 class Table1Constructor : public TableConstructorGeneric<Xs_Candidate, T1Pairing, std::vector<T1Pairing>>
 {
 public:

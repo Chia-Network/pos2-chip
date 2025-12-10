@@ -19,6 +19,104 @@ public:
     Plotter(const ProofParams& proof_params)
       : proof_params_(proof_params), fragment_codec_(proof_params), validator_(proof_params) {}
 
+    PlotData runAttack(std::vector<uint32_t> &collected_xs) {
+        Timer totalPlotTimer;
+        totalPlotTimer.start();
+        std::cout << "Starting plotter attack with # collected xs: " << collected_xs.size() << "..." << std::endl;
+        proof_params_.debugPrint();
+
+        #if HAVE_AES
+        std::cout << "Using AES hardware acceleration for hashing." << std::endl;
+        #else
+        std::cout << "AES hardware acceleration not available. Using software hashing." << std::endl;
+        #endif
+
+        // 1) Construct Xs candidates
+        XsConstructorAttack xs_gen_ctor(proof_params_);
+        auto xs_candidates = xs_gen_ctor.construct(collected_xs);
+        xs_gen_ctor.timings.show();
+        std::cout << "Constructed " << xs_candidates.size() << " Xs candidates." << std::endl;
+
+        // 2) Table1 generic
+        Table1Constructor t1_ctor(proof_params_);
+        auto t1_pairs = t1_ctor.construct(xs_candidates);
+        t1_ctor.timings.show("Table 1 Timings:");
+        std::cout << "Constructed " << t1_pairs.size() << " Table 1 pairs." << std::endl;
+
+        #ifdef RETAIN_X_VALUES
+        if (validate_) {
+            for (const auto& pair : t1_pairs) {
+                uint32_t xs[2] = { 
+                    static_cast<uint32_t>(pair.meta >> proof_params_.get_k()), 
+                    static_cast<uint32_t>(pair.meta & ((1 << proof_params_.get_k()) - 1)) };
+                auto result = validator_.validate_table_1_pair(xs);
+                if (!result.has_value()) {
+                    std::cerr << "Validation failed for Table 1 pair: ["
+                              << xs[0] << ", " << xs[1] << "]\n";
+                    exit(23);
+                }
+            }
+            std::cout << "Table 1 pairs validated successfully." << std::endl;
+        }
+        #endif
+
+        // 3) Table2 generic
+        Table2Constructor t2_ctor(proof_params_);
+        auto t2_pairs = t2_ctor.construct(t1_pairs);
+        t2_ctor.timings.show("Table 2 Timings:");
+        std::cout << "Constructed " << t2_pairs.size() << " Table 2 pairs." << std::endl;
+
+        #ifdef RETAIN_X_VALUES
+        if (validate_) {
+            for (const auto& pair : t2_pairs) {
+                auto result = validator_.validate_table_2_pairs(pair.xs);
+                if (!result.has_value()) {
+                    std::cerr << "Validation failed for Table 2 pair: ["
+                              << pair.xs[0] << ", " << pair.xs[1] << ", " << pair.xs[2] << ", " << pair.xs[3] << "]\n";
+                    exit(23);
+                }
+            }
+            std::cout << "Table 2 pairs validated successfully." << std::endl;
+        }
+        #endif
+
+        // 4) Table3 generic
+        Table3Constructor t3_ctor(proof_params_);
+        std::vector<T3Pairing> t3_results = t3_ctor.construct(t2_pairs);
+        t3_ctor.timings.show("Table 3 Timings:");
+        std::cout << "Constructed " << t3_results.size() << " Table 3 entries." << std::endl;
+
+        decltype(t1_ctor)::Timings total_timings;
+        total_timings.hash_time_ms = xs_gen_ctor.timings.hash_time_ms +
+                                     t1_ctor.timings.hash_time_ms +
+                                     t2_ctor.timings.hash_time_ms +
+                                     t3_ctor.timings.hash_time_ms;
+        total_timings.setup_time_ms = xs_gen_ctor.timings.setup_time_ms +
+                                      t1_ctor.timings.setup_time_ms +
+                                      t2_ctor.timings.setup_time_ms +
+                                      t3_ctor.timings.setup_time_ms;
+        total_timings.sort_time_ms = xs_gen_ctor.timings.sort_time_ms +
+                                     t1_ctor.timings.sort_time_ms + 
+                                     t2_ctor.timings.sort_time_ms +
+                                     t3_ctor.timings.sort_time_ms;
+        total_timings.find_pairs_time_ms = t1_ctor.timings.find_pairs_time_ms +
+                                           t2_ctor.timings.find_pairs_time_ms +
+                                           t3_ctor.timings.find_pairs_time_ms;
+        total_timings.post_sort_time_ms = t1_ctor.timings.post_sort_time_ms +
+                                          t2_ctor.timings.post_sort_time_ms +
+                                          t3_ctor.timings.post_sort_time_ms;
+        total_timings.misc_time_ms = t1_ctor.timings.misc_time_ms +
+                                    t2_ctor.timings.misc_time_ms +
+                                    t3_ctor.timings.misc_time_ms;
+        total_timings.show("Total Plotting Timings:");
+        
+
+        std::cout << "Total attack time: " << totalPlotTimer.stop() << " ms." << std::endl;
+
+        // Return empty PlotData for now
+        return PlotData{};
+    }
+
     // Execute the plotting pipeline
     PlotData run() {
         Timer totalPlotTimer;
@@ -149,11 +247,32 @@ public:
             for (int i=0; i < MAX_RANGES; i++) {
                 Range r = proof_params_.get_chaining_set_range(1 << i);
                 r.start = 0;
-                std::cout << "Range for 2^" << i << ": [" << r.start << ", " << r.end << ")\n";
-                range_sets[i] = r;
+                std::cout << std::endl << "--------------------------\n";
+                std::cout << "Attack Range for 2^" << i << ": [" << r.start << ", " << r.end << ")\n";
+                // now go through t3_results and count unique x values in this range
+                std::set<uint32_t> unique_xs;
+                int num_entries = 0;
+                for (const auto& t3_pair : t3_results) {
+                    uint64_t proof_fragment = t3_pair.proof_fragment;
+                    if (r.isInRange(proof_fragment)) {
+                        num_entries++;
+                        // insert unique x values
+                        for (int xi = 0; xi < 8; xi++) {
+                            unique_xs_in_ranges[i].insert(t3_pair.xs[xi]);
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                std::cout << "  Unique entries: " << num_entries << "\n";
+                std::cout << "  Unique x values: " << unique_xs_in_ranges[i].size() << "\n";
+                std::cout << "  Now solving for x-values...\n";
+                std::vector<uint32_t> xs_vector(unique_xs_in_ranges[i].begin(), unique_xs_in_ranges[i].end());
+                PlotData attackData = runAttack(xs_vector);
+                std::cout << "  Attack completed.\n";
             }
             // go through our t3_results and count unique x values in each range
-            for (const auto& t3_pair : t3_results) {
+            /*for (const auto& t3_pair : t3_results) {
                 uint64_t proof_fragment = t3_pair.proof_fragment;
                 for (int i=0; i < MAX_RANGES; i++) {
                     const Range& r = range_sets[i];
@@ -178,7 +297,7 @@ public:
                 std::cout << "  Unique entries: " << entry_counts_in_ranges[i] << " % of total entries: " << (static_cast<double>(entry_counts_in_ranges[i]) / static_cast<double>(total_entries)) * 100.0 << "%\n";
                 std::cout << "  Unique x values: " << unique_xs_in_ranges[i].size() << " multiple of entries: " << static_cast<double>(unique_xs_in_ranges[i].size()) / static_cast<double>(entry_counts_in_ranges[i]) << "\n";
                 std::cout << "  Unique l x values: " << unique_lxs_in_ranges[i].size() << " multiple of entries: " << static_cast<double>(unique_lxs_in_ranges[i].size()) / static_cast<double>(entry_counts_in_ranges[i]) << "\n";
-            }
+            }*/
             exit(23);
             
         }
