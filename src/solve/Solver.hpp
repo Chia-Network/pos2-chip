@@ -1435,7 +1435,7 @@ public:
         for (int m : matches_per_thread)
             total += m;
         timings_.misc += timer.stop();
-        std::cout << "TOTAL x2 potential matches: " << total << std::endl;
+        // std::cout << "TOTAL x2 potential matches: " << total << std::endl;
 
         timer.start("Compacting x2 potential matches");
         int write_pos = matches_per_thread[0];
