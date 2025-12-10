@@ -574,7 +574,7 @@ public:
 
             std::fill(hash_to_index.begin(), hash_to_index.end(), INVALID_INDEX);
             assert(R_sorted.size() < INVALID_INDEX); // ensure we don't overflow uint16_t
-            for (uint16_t j = 0; j < static_cast<uint16_t>(R_sorted.size()); ++j)
+            for (uint16_t j = 0; j < numeric_cast<uint16_t>(R_sorted.size()); ++j)
             {
                 uint32_t reduced = R_sorted[j].pair_hash >> REDUCE_SHIFT;
                 if (hash_to_index[reduced] == INVALID_INDEX)
