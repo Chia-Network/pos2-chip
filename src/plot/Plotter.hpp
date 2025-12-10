@@ -142,6 +142,7 @@ public:
         t1_ctor.timings.show("Table 1 Timings:");
         std::cout << "Constructed " << t1_pairs.size() << " Table 1 pairs." << std::endl;
 
+        validate_ = false;
         #ifdef RETAIN_X_VALUES
         if (validate_) {
             for (const auto& pair : t1_pairs) {
@@ -245,12 +246,14 @@ public:
             std::array<std::set<uint32_t>, MAX_RANGES> unique_lxs_in_ranges;
 
             for (int i=0; i < MAX_RANGES; i++) {
-                Range r = proof_params_.get_chaining_set_range(1 << i);
+                size_t chaining_set_index = (1 << i) - 1;
+                Range r = proof_params_.get_chaining_set_range(chaining_set_index);
                 r.start = 0;
                 std::cout << std::endl << "--------------------------\n";
-                std::cout << "Attack Range for 2^" << i << ": [" << r.start << ", " << r.end << ")\n";
+                std::cout << "Attack Range for 2^" << i << " = " << chaining_set_index << ": [" << r.start << ", " << r.end << ")\n";
                 // now go through t3_results and count unique x values in this range
                 std::set<uint32_t> unique_xs;
+                std::set<uint32_t> unique_lxs;
                 int num_entries = 0;
                 for (const auto& t3_pair : t3_results) {
                     uint64_t proof_fragment = t3_pair.proof_fragment;
@@ -260,17 +263,22 @@ public:
                         for (int xi = 0; xi < 8; xi++) {
                             unique_xs_in_ranges[i].insert(t3_pair.xs[xi]);
                         }
+                        for (int xi = 0; xi < 4; xi++) {
+                            unique_lxs_in_ranges[i].insert(t3_pair.xs[xi*2]);
+                        }
                     } else {
                         break;
                     }
                 }
                 std::cout << "  Unique entries: " << num_entries << "\n";
                 std::cout << "  Unique x values: " << unique_xs_in_ranges[i].size() << "\n";
-                std::cout << "  Now solving for x-values...\n";
-                std::vector<uint32_t> xs_vector(unique_xs_in_ranges[i].begin(), unique_xs_in_ranges[i].end());
-                PlotData attackData = runAttack(xs_vector);
-                std::cout << "  Attack completed.\n";
+                std::cout << "  Unique l x values: " << unique_lxs_in_ranges[i].size() << "\n";
+                //std::cout << "  Now solving for x-values...\n";
+                //std::vector<uint32_t> xs_vector(unique_xs_in_ranges[i].begin(), unique_xs_in_ranges[i].end());
+                //PlotData attackData = runAttack(xs_vector);
+                //std::cout << "  Attack completed.\n";
             }
+            exit(23);
             // go through our t3_results and count unique x values in each range
             /*for (const auto& t3_pair : t3_results) {
                 uint64_t proof_fragment = t3_pair.proof_fragment;
