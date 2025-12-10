@@ -573,8 +573,8 @@ public:
             sub_timer.start();
 
             std::fill(hash_to_index.begin(), hash_to_index.end(), INVALID_INDEX);
-
-            for (uint32_t j = 0; j < static_cast<uint32_t>(R_sorted.size()); ++j)
+            assert(R_sorted.size() < INVALID_INDEX); // ensure we don't overflow uint16_t
+            for (uint16_t j = 0; j < static_cast<uint32_t>(R_sorted.size()); ++j)
             {
                 uint32_t reduced = R_sorted[j].pair_hash >> REDUCE_SHIFT;
                 if (hash_to_index[reduced] == INVALID_INDEX)
