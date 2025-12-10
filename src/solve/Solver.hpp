@@ -534,7 +534,7 @@ public:
         const int HASHES_BITMASK_SIZE_BITS = num_k_bits - 8;
 
         const size_t num_buckets = size_t(1) << HASHES_BITMASK_SIZE_BITS;
-        const uint32_t INVALID_INDEX = std::numeric_limits<uint16_t>::max();
+        const uint16_t INVALID_INDEX = std::numeric_limits<uint16_t>::max();
         const int REDUCE_SHIFT = num_k_bits - HASHES_BITMASK_SIZE_BITS;
 
         // For each reduced hash value, store the *lowest* index in R_sorted that has it.
