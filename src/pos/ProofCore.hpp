@@ -22,8 +22,8 @@
 
 // use retain x values to make a plot and save x values to disk for analysis
 // use BOTH includes to for deeper validation of results
-//#define RETAIN_X_VALUES_TO_T3 true
-//#define RETAIN_X_VALUES true
+#define RETAIN_X_VALUES_TO_T3 true
+#define RETAIN_X_VALUES true
 
 
 using QualityChainLinks = std::array<ProofFragment, NUM_CHAIN_LINKS>;

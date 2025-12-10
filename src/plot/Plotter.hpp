@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <set>
 
 #include "common/Timer.hpp"
 #include "pos/ProofCore.hpp"
@@ -125,8 +126,61 @@ public:
                               << "]\n";
                     exit(23);
                 }
-            }
+            } 
             std::cout << "Table 3 pairs validated successfully." << std::endl;
+        }
+        if (true) {
+            // collect x's attack.
+            // Find the challenge range for proof fragments.
+            // We'll make a list of all unique x values used within the range.
+            // and count the number of unique x values as we expand the range by 2x each time.
+            constexpr int MAX_RANGES = 12;
+            std::array<int, MAX_RANGES> entry_counts_in_ranges;
+            // allocate to zero
+            for (int i = 0; i < MAX_RANGES; i++) {
+                entry_counts_in_ranges[i] = 0;
+            }
+            std::array<Range, MAX_RANGES> range_sets;
+            // now our set of unique xs
+            std::array<std::set<uint32_t>, MAX_RANGES> unique_xs_in_ranges;
+            // and our set of unique lxs
+            std::array<std::set<uint32_t>, MAX_RANGES> unique_lxs_in_ranges;
+
+            for (int i=0; i < MAX_RANGES; i++) {
+                Range r = proof_params_.get_chaining_set_range(1 << i);
+                r.start = 0;
+                std::cout << "Range for 2^" << i << ": [" << r.start << ", " << r.end << ")\n";
+                range_sets[i] = r;
+            }
+            // go through our t3_results and count unique x values in each range
+            for (const auto& t3_pair : t3_results) {
+                uint64_t proof_fragment = t3_pair.proof_fragment;
+                for (int i=0; i < MAX_RANGES; i++) {
+                    const Range& r = range_sets[i];
+                    //std::cout << "Checking proof fragment " << proof_fragment << " against range [" << r.start << ", " << r.end << ")\n";
+                    if (r.isInRange(proof_fragment)) {
+                        entry_counts_in_ranges[i]++;
+                        // insert unique x values
+                        for (int xi = 0; xi < 8; xi++) {
+                            unique_xs_in_ranges[i].insert(t3_pair.xs[xi]);
+                        }
+                        for (int xi = 0; xi < 4; xi++) {
+                            unique_lxs_in_ranges[i].insert(t3_pair.xs[xi*2]);
+                        }
+                    }
+                }
+                //exit(23);
+            }
+            // output our entry counts
+            size_t total_entries = 1UL << proof_params_.get_k();
+            for (int i=0; i < MAX_RANGES; i++) {
+                std::cout << "Range 2^" << i << "\n";
+                std::cout << "  Unique entries: " << entry_counts_in_ranges[i] << " % of total entries: " << (static_cast<double>(entry_counts_in_ranges[i]) / static_cast<double>(total_entries)) * 100.0 << "%\n";
+                std::cout << "  Unique x values: " << unique_xs_in_ranges[i].size() << " multiple of entries: " << static_cast<double>(unique_xs_in_ranges[i].size()) / static_cast<double>(entry_counts_in_ranges[i]) << "\n";
+                std::cout << "  Unique l x values: " << unique_lxs_in_ranges[i].size() << " multiple of entries: " << static_cast<double>(unique_lxs_in_ranges[i].size()) / static_cast<double>(entry_counts_in_ranges[i]) << "\n";
+            }
+            exit(23);
+            
         }
         #endif
 
