@@ -1,16 +1,15 @@
 #pragma once
 
 #include <cstdint>
-#include <stdexcept>
 #include <cstring>
-
+#include <stdexcept>
 
 class FeistelCipher {
 public:
     // The key is stored as a fixed-size array of 32 bytes.
     uint8_t plot_id_[32];
-    size_t k_;          // Half the block size (block is 2*k bits)
-    size_t rounds_;     // Number of Feistel rounds
+    size_t k_; // Half the block size (block is 2*k bits)
+    size_t rounds_; // Number of Feistel rounds
     size_t bit_length_; // Total block size in bits (2*k)
 
     // Constructor.
@@ -20,8 +19,10 @@ public:
     //
     // __host__ __device__ makes it callable on both host and device.
     //__host__ __device__
-    FeistelCipher(const uint8_t* plot_id, size_t k, size_t rounds = 4)
-        : k_(k), rounds_(rounds), bit_length_(2 * k)
+    FeistelCipher(uint8_t const* plot_id, size_t k, size_t rounds = 4)
+        : k_(k)
+        , rounds_(rounds)
+        , bit_length_(2 * k)
     {
         // On host, we throw exceptions if the parameters are invalid.
 #ifndef __CUDA_ARCH__
@@ -39,11 +40,12 @@ public:
 
     // Destructor: Nothing to free since we use a fixed-size array.
     //__host__ __device__
-    ~FeistelCipher() { }
+    ~FeistelCipher() {}
 
     // Rotate-left operation confined to a field of bit_length bits.
     //__host__ __device__
-    static inline uint64_t rotate_left(uint64_t value, uint64_t shift, uint64_t bit_length) {
+    static inline uint64_t rotate_left(uint64_t value, uint64_t shift, uint64_t bit_length)
+    {
         if (shift > bit_length)
             shift = bit_length;
         uint64_t mask = (bit_length == 64 ? ~0ULL : ((1ULL << bit_length) - 1));
@@ -53,7 +55,8 @@ public:
     // Extracts a slice from the 256-bit key.
     // Returns a uint64_t containing num_bits starting at start_bit.
     //__host__ __device__
-    inline uint64_t slice_key(size_t start_bit, size_t num_bits) const {
+    inline uint64_t slice_key(size_t start_bit, size_t num_bits) const
+    {
         size_t start_byte = start_bit / 8;
         size_t bit_offset = start_bit % 8;
         size_t needed_bytes = (bit_offset + num_bits + 7) / 8;
@@ -79,7 +82,8 @@ public:
     //      start_bit = i * (256 - 3*k) / (rounds - 1)
     // Otherwise, start_bit is 0.
     //__host__ __device__
-    inline uint64_t get_round_key(size_t round_num) const {
+    inline uint64_t get_round_key(size_t round_num) const
+    {
         size_t half_length = k_;
         size_t bits_for_round = 3 * half_length;
         size_t start_bit = 0;
@@ -96,8 +100,9 @@ public:
 
     // Performs one Feistel round using a quarter-round function inspired by ChaCha20.
     // Returns a FeistelResult structure (instead of std::pair) for host/device compatibility.
-   // __host__ __device__
-    inline FeistelResult feistel_round(uint64_t left, uint64_t right, uint64_t round_key) const {
+    // __host__ __device__
+    inline FeistelResult feistel_round(uint64_t left, uint64_t right, uint64_t round_key) const
+    {
         uint64_t bitmask = (k_ == 64 ? ~0ULL : ((1ULL << k_) - 1));
         uint64_t a = right;
         uint64_t b = round_key & bitmask;
@@ -124,10 +129,11 @@ public:
 
     // Encrypts an integer block (of 2*k bits) and returns the ciphertext as a uint64_t.
     //__host__ __device__
-    inline uint64_t encrypt(uint64_t input_value) const {
+    inline uint64_t encrypt(uint64_t input_value) const
+    {
         size_t half_length = k_;
         uint64_t bitmask = (half_length == 64 ? ~0ULL : ((1ULL << half_length) - 1));
-        uint64_t left  = (input_value >> half_length) & bitmask;
+        uint64_t left = (input_value >> half_length) & bitmask;
         uint64_t right = input_value & bitmask;
         for (size_t round_num = 0; round_num < rounds_; ++round_num) {
             uint64_t round_key = get_round_key(round_num);
@@ -140,13 +146,14 @@ public:
 
     // Decrypts an integer block (of 2*k bits) and returns the plaintext.
     //__host__ __device__
-    inline uint64_t decrypt(uint64_t cipher_value) const {
+    inline uint64_t decrypt(uint64_t cipher_value) const
+    {
         size_t half_length = k_;
         uint64_t bitmask = (half_length == 64 ? ~0ULL : ((1ULL << half_length) - 1));
-        uint64_t left  = (cipher_value >> half_length) & bitmask;
+        uint64_t left = (cipher_value >> half_length) & bitmask;
         uint64_t right = cipher_value & bitmask;
         // Reverse order of rounds.
-        for (size_t round = rounds_; round-- > 0; ) {
+        for (size_t round = rounds_; round-- > 0;) {
             uint64_t round_key = get_round_key(round);
             // Invert the round by swapping left/right.
             FeistelResult res = feistel_round(right, left, round_key);

@@ -1,15 +1,14 @@
-#include "test_util.h"
 #include "common/Utils.hpp"
-#include <vector>
-#include <string>
+#include "test_util.h"
 #include <cstdint>
+#include <string>
+#include <vector>
 
 TEST_SUITE_BEGIN("utils");
 
 TEST_CASE("proof-to-hex-and-back")
 {
-    for (int k : {18, 20, 22, 24, 26, 28, 30, 32})
-    {
+    for (int k: { 18, 20, 22, 24, 26, 28, 30, 32 }) {
         std::vector<uint32_t> original_proof;
         for (int i = 0; i < 512; ++i) {
             // make random original proof in range [0, 2^k)

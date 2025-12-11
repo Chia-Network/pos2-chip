@@ -16,7 +16,7 @@ elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
         )
     endif()
 endif()
-  
+
 target_include_directories(analytics PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../..
 )

@@ -1,32 +1,33 @@
 #pragma once
 
-#include <vector>
-#include <cstdint>
-#include <span>
-#include <atomic>
 #include "common/Timer.hpp"
 #include "common/thread.hpp"
+#include <atomic>
+#include <cstdint>
+#include <span>
+#include <vector>
 
 class ParallelRadixSort {
 public:
-    void sort(std::vector<uint32_t>& data, std::vector<uint32_t> &buffer, bool verbose=false) {
-        const int num_bits = 32;  // Assuming 32-bit integers
-        const int radix_bits = 8; // on pi 5: 30/10 is fastest.
-        const int radix = 1 << radix_bits;    // Base (e.g., 8 bits at a time)
-        const int radix_mask = radix - 1;
-        const int num_passes = num_bits / radix_bits;
-        const int num_threads = std::thread::hardware_concurrency();
+    void sort(std::vector<uint32_t>& data, std::vector<uint32_t>& buffer, bool verbose = false)
+    {
+        int const num_bits = 32; // Assuming 32-bit integers
+        int const radix_bits = 8; // on pi 5: 30/10 is fastest.
+        int const radix = 1 << radix_bits; // Base (e.g., 8 bits at a time)
+        int const radix_mask = radix - 1;
+        int const num_passes = num_bits / radix_bits;
+        int const num_threads = std::thread::hardware_concurrency();
 
         Timer timer;
-        if (verbose)
-        {
-            std::cout << "ParallelRadixSort: Sorting " << data.size() << " elements with " << num_threads << " threads" << std::endl;
+        if (verbose) {
+            std::cout << "ParallelRadixSort: Sorting " << data.size() << " elements with "
+                      << num_threads << " threads" << std::endl;
             timer.start();
         }
 
         std::vector<std::vector<int>> counts_by_thread(num_threads, std::vector<int>(radix, 0));
         // get each threads start and end index
-        const size_t num_elements_per_thread = data.size() / num_threads;
+        size_t const num_elements_per_thread = data.size() / num_threads;
 
         for (int pass = 0; pass < num_passes; ++pass) {
             if (verbose)
@@ -48,7 +49,8 @@ public:
                         }
 
                         size_t start = num_elements_per_thread * t;
-                        size_t end = (t == num_threads - 1) ? data.size() : num_elements_per_thread * (t + 1);
+                        size_t end = (t == num_threads - 1) ? data.size()
+                                                            : num_elements_per_thread * (t + 1);
 
                         for (size_t i = start; i < end; ++i) {
                             uint32_t key = (data[i] >> shift) & radix_mask;
@@ -58,8 +60,7 @@ public:
                 }
             }
 
-            if (verbose)
-            {
+            if (verbose) {
                 countPhaseTimer.stop();
                 countPhaseTimer.start("Prefix sum phase");
             }
@@ -73,43 +74,46 @@ public:
             }
 
             // Prefix sum phase
-            std::vector<std::vector<int>> offsets_for_thread(num_threads, std::vector<int>(radix, 0));
+            std::vector<std::vector<int>> offsets_for_thread(
+                num_threads, std::vector<int>(radix, 0));
 
             // first get global offsets
             std::vector<uint32_t> offsets(radix, 0);
-            for (int i = 1; i < radix; ++i)
-            {
+            for (int i = 1; i < radix; ++i) {
                 offsets[i] = offsets[i - 1] + counts[i - 1];
             }
 
-            // then update offsets for each thread, with thread 0 using the global offsets and others threads building on that.
-            // t 0 offsets first
+            // then update offsets for each thread, with thread 0 using the global offsets and
+            // others threads building on that. t 0 offsets first
             for (int r = 0; r < radix; ++r) {
                 offsets_for_thread[0][r] = offsets[r];
             }
             // t > 0 offsets build on previous ones
-            for (int i = 1; i < num_threads; i++)
-            {
+            for (int i = 1; i < num_threads; i++) {
                 for (int r = 0; r < radix; ++r) {
-                    offsets_for_thread[i][r] = offsets_for_thread[i - 1][r] + counts_by_thread[i - 1][r];
+                    offsets_for_thread[i][r]
+                        = offsets_for_thread[i - 1][r] + counts_by_thread[i - 1][r];
                 }
             }
 
-            if (verbose)
-            {
+            if (verbose) {
                 countPhaseTimer.stop();
             }
-            // now we know each threads own bucket counts, so when the thread scans the same data, it can place the data in the correct bucket with the offset assigned to it from all the threads.
+            // now we know each threads own bucket counts, so when the thread scans the same data,
+            // it can place the data in the correct bucket with the offset assigned to it from all
+            // the threads.
 
             // Redistribution phase
             Timer redistributionTimer;
-            if (verbose) redistributionTimer.start("Redistribution phase");
+            if (verbose)
+                redistributionTimer.start("Redistribution phase");
             {
                 std::vector<thread> threads;
                 for (int t = 0; t < num_threads; ++t) {
                     threads.emplace_back([&, t]() {
                         size_t start = num_elements_per_thread * t;
-                        size_t end = (t == num_threads - 1) ? data.size() : num_elements_per_thread * (t + 1);
+                        size_t end = (t == num_threads - 1) ? data.size()
+                                                            : num_elements_per_thread * (t + 1);
                         for (size_t i = start; i < end; ++i) {
                             uint32_t key = (data[i] >> shift) & radix_mask;
                             int outpos = offsets_for_thread[t][key]++;
@@ -125,39 +129,47 @@ public:
         }
     }
 
-     void sortByKey(std::vector<uint32_t>& keys, std::vector<uint32_t>& values, std::vector<uint32_t>& keyBuffer, std::vector<uint32_t>& valueBuffer, int num_bits, int radix_bits = -1, bool verbose = false) {
-        //num_bits = 28;  // Assuming 32-bit integers
-        //radix_bits = 14; // on pi 5: 30/10 is fastest.
+    void sortByKey(std::vector<uint32_t>& keys,
+        std::vector<uint32_t>& values,
+        std::vector<uint32_t>& keyBuffer,
+        std::vector<uint32_t>& valueBuffer,
+        int num_bits,
+        int radix_bits = -1,
+        bool verbose = false)
+    {
+        // num_bits = 28;  // Assuming 32-bit integers
+        // radix_bits = 14; // on pi 5: 30/10 is fastest.
         if (radix_bits == -1) {
             if (num_bits == 30) {
                 // on pi 5: 30/10 is fastest.
-                //radix_bits = 15; // 1139ms ryzen 5600
+                // radix_bits = 15; // 1139ms ryzen 5600
                 radix_bits = 10; // 515ms ryzen 5600
-                //radix_bits = 8; // 478ms ryzen 5600
-                //radix_bits = 6; // 734ms ryzen 5600
+                // radix_bits = 8; // 478ms ryzen 5600
+                // radix_bits = 6; // 734ms ryzen 5600
             }
             else if (num_bits == 28) {
                 // on pi5 28/14 is fastest?
                 radix_bits = 10; // 128ms ryzen 5600
-                //radix_bits = 14; // 143ms ryzen 5600 <-- use for pi5?
-                //radix_bits = 8; // 197ms ryzen 5600
-                //radix_bits = 7; // 195ms ryzen 5600
+                // radix_bits = 14; // 143ms ryzen 5600 <-- use for pi5?
+                // radix_bits = 8; // 197ms ryzen 5600
+                // radix_bits = 7; // 195ms ryzen 5600
             }
             else {
                 radix_bits = 8;
             }
         }
-        int radix = 1 << radix_bits;    // Base (e.g., 8 bits at a time)
+        int radix = 1 << radix_bits; // Base (e.g., 8 bits at a time)
         int radix_mask = radix - 1;
-        const int num_passes = (num_bits + radix_bits - 1) / radix_bits;
-        const int num_threads = std::thread::hardware_concurrency();
+        int const num_passes = (num_bits + radix_bits - 1) / radix_bits;
+        int const num_threads = std::thread::hardware_concurrency();
 
         if (verbose) {
-            std::cout << "ParallelRadixSort: Sorting " << keys.size() << " key-value pairs with " << num_threads << " threads" << std::endl;
+            std::cout << "ParallelRadixSort: Sorting " << keys.size() << " key-value pairs with "
+                      << num_threads << " threads" << std::endl;
         }
 
         std::vector<std::vector<int>> counts_by_thread(num_threads, std::vector<int>(radix, 0));
-        const size_t num_elements_per_thread = keys.size() / num_threads;
+        size_t const num_elements_per_thread = keys.size() / num_threads;
 
         for (int pass = 0; pass < num_passes; ++pass) {
             if (verbose) {
@@ -186,7 +198,8 @@ public:
                         }
 
                         size_t start = num_elements_per_thread * t;
-                        size_t end = (t == num_threads - 1) ? keys.size() : num_elements_per_thread * (t + 1);
+                        size_t end = (t == num_threads - 1) ? keys.size()
+                                                            : num_elements_per_thread * (t + 1);
 
                         for (size_t i = start; i < end; ++i) {
                             uint32_t key = (keys[i] >> shift) & radix_mask;
@@ -196,8 +209,7 @@ public:
                 }
             }
 
-            if (verbose)
-            {
+            if (verbose) {
                 countPhaseTimer.stop();
                 countPhaseTimer.start("Prefix sum phase");
             }
@@ -211,7 +223,8 @@ public:
             }
 
             // Prefix sum phase
-            std::vector<std::vector<int>> offsets_for_thread(num_threads, std::vector<int>(radix, 0));
+            std::vector<std::vector<int>> offsets_for_thread(
+                num_threads, std::vector<int>(radix, 0));
             std::vector<uint32_t> offsets(radix, 0);
             for (int i = 1; i < radix; ++i) {
                 offsets[i] = offsets[i - 1] + counts[i - 1];
@@ -222,23 +235,24 @@ public:
             }
             for (int i = 1; i < num_threads; i++) {
                 for (int r = 0; r < radix; ++r) {
-                    offsets_for_thread[i][r] = offsets_for_thread[i - 1][r] + counts_by_thread[i - 1][r];
+                    offsets_for_thread[i][r]
+                        = offsets_for_thread[i - 1][r] + counts_by_thread[i - 1][r];
                 }
             }
 
-            if (verbose)
-            {
+            if (verbose) {
                 countPhaseTimer.stop();
                 countPhaseTimer.start("Redistribution phase");
             }
 
             // Redistribution phase
             {
-            std::vector<thread> threads;
+                std::vector<thread> threads;
                 for (int t = 0; t < num_threads; ++t) {
                     threads.emplace_back([&, t]() {
                         size_t start = num_elements_per_thread * t;
-                        size_t end = (t == num_threads - 1) ? keys.size() : num_elements_per_thread * (t + 1);
+                        size_t end = (t == num_threads - 1) ? keys.size()
+                                                            : num_elements_per_thread * (t + 1);
                         for (size_t i = start; i < end; ++i) {
                             uint32_t key = (keys[i] >> shift) & radix_mask;
                             int outpos = offsets_for_thread[t][key]++;
@@ -249,8 +263,7 @@ public:
                 }
             }
 
-            if (verbose)
-            {
+            if (verbose) {
                 countPhaseTimer.stop();
             }
 
@@ -258,5 +271,4 @@ public:
             std::swap(values, valueBuffer);
         }
     }
-
 };

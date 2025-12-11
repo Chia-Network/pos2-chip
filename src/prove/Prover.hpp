@@ -1,19 +1,19 @@
 #pragma once
 
-#include "pos/ProofCore.hpp"
-#include "plot/PlotFile.hpp"
 #include "common/Utils.hpp"
-#include "pos/ProofFragment.hpp"
+#include "plot/PlotFile.hpp"
 #include "pos/Chainer.hpp"
-#include <bitset>
-#include <set>
-#include <optional>
-#include <vector>
+#include "pos/ProofCore.hpp"
+#include "pos/ProofFragment.hpp"
 #include <array>
-#include <limits>
-#include <iostream>
-#include <string>
 #include <bit>
+#include <bitset>
+#include <iostream>
+#include <limits>
+#include <optional>
+#include <set>
+#include <string>
+#include <vector>
 
 // #define DEBUG_PROVER true
 
@@ -23,7 +23,8 @@
 // 1 byte: plot strength
 // repeat 16 times:
 //   8 bytes: little-endian proof fragment
-inline std::vector<uint8_t> serializeQualityProof(QualityChain const& qp, uint8_t const strength) {
+inline std::vector<uint8_t> serializeQualityProof(QualityChain const& qp, uint8_t const strength)
+{
 
     static_assert(sizeof(ProofFragment) == 8, "proof fragments are expected to be 64 bits");
 
@@ -35,28 +36,24 @@ inline std::vector<uint8_t> serializeQualityProof(QualityChain const& qp, uint8_
     size_t idx = 0;
     blob[idx++] = strength;
 
-    for (const ProofFragment& fragment : qp.chain_links) {
-/*
-            // This requires C++23
-            if constexpr (std::endian::native == std::endian::big) {
-                const uint64_t val = std::byteswap(fragment);
-                memcpy(blob.data() + idx, &val, 8);
-            }
-            else
-*/
+    for (ProofFragment const& fragment: qp.chain_links) {
+        /*
+                    // This requires C++23
+                    if constexpr (std::endian::native == std::endian::big) {
+                        const uint64_t val = std::byteswap(fragment);
+                        memcpy(blob.data() + idx, &val, 8);
+                    }
+                    else
+        */
         memcpy(blob.data() + idx, &fragment, 8);
         idx += 8;
     }
     return blob;
 }
 
-class Prover
-{
+class Prover {
 public:
-    Prover(const std::string &plot_file_name)
-        : plot_file_(plot_file_name)
-    {
-    }
+    Prover(std::string const& plot_file_name) : plot_file_(plot_file_name) {}
     ~Prover() = default;
 
     std::vector<QualityChain> prove(std::span<uint8_t const, 32> const challenge)
@@ -68,32 +65,40 @@ public:
 
         ProofCore::SelectedChallengeSets selected_sets = proof_core.selectChallengeSets(challenge);
 
-        #ifdef DEBUG_PROVER
-        std::cout << "  Set A: index=" << selected_sets.fragment_set_A_index
-                  << ", range=[" << selected_sets.fragment_set_A_range.start << ", " << selected_sets.fragment_set_A_range.end << "]\n";
-        std::cout << "  Set B: index=" << selected_sets.fragment_set_B_index
-                  << ", range=[" << selected_sets.fragment_set_B_range.start << ", " << selected_sets.fragment_set_B_range.end << "]\n";
-        #endif
+#ifdef DEBUG_PROVER
+        std::cout << "  Set A: index=" << selected_sets.fragment_set_A_index << ", range=["
+                  << selected_sets.fragment_set_A_range.start << ", "
+                  << selected_sets.fragment_set_A_range.end << "]\n";
+        std::cout << "  Set B: index=" << selected_sets.fragment_set_B_index << ", range=["
+                  << selected_sets.fragment_set_B_range.start << ", "
+                  << selected_sets.fragment_set_B_range.end << "]\n";
+#endif
 
-        std::vector<ProofFragment> proof_fragments_set_A = plot_file_.getProofFragmentsInRange(selected_sets.fragment_set_A_range);
-        std::vector<ProofFragment> proof_fragments_set_B = plot_file_.getProofFragmentsInRange(selected_sets.fragment_set_B_range);
+        std::vector<ProofFragment> proof_fragments_set_A
+            = plot_file_.getProofFragmentsInRange(selected_sets.fragment_set_A_range);
+        std::vector<ProofFragment> proof_fragments_set_B
+            = plot_file_.getProofFragmentsInRange(selected_sets.fragment_set_B_range);
 
-        // check count of proof fragments
-        #ifdef DEBUG_PROVER
-        std::cout << "Challenge selected fragment set A index: " << selected_sets.fragment_set_A_index
-                  << ", range: [" << selected_sets.fragment_set_A_range.start << ", " << selected_sets.fragment_set_A_range.end << "]"
+// check count of proof fragments
+#ifdef DEBUG_PROVER
+        std::cout << "Challenge selected fragment set A index: "
+                  << selected_sets.fragment_set_A_index << ", range: ["
+                  << selected_sets.fragment_set_A_range.start << ", "
+                  << selected_sets.fragment_set_A_range.end << "]"
                   << ", count: " << proof_fragments_set_A.size() << std::endl;
-        std::cout << "Challenge selected fragment set B index: " << selected_sets.fragment_set_B_index
-                  << ", range: [" << selected_sets.fragment_set_B_range.start << ", " << selected_sets.fragment_set_B_range.end << "]"
+        std::cout << "Challenge selected fragment set B index: "
+                  << selected_sets.fragment_set_B_index << ", range: ["
+                  << selected_sets.fragment_set_B_range.start << ", "
+                  << selected_sets.fragment_set_B_range.end << "]"
                   << ", count: " << proof_fragments_set_B.size() << std::endl;
-        #endif
-
+#endif
 
         // now Chainer to find quality chains from these proof fragments
         Chainer chainer(plot_proof_params, challenge);
-        std::vector<Chain> chains = chainer.find_links(proof_fragments_set_A, proof_fragments_set_B);
+        std::vector<Chain> chains
+            = chainer.find_links(proof_fragments_set_A, proof_fragments_set_B);
         std::vector<QualityChain> quality_chains;
-        for (const Chain& chain : chains) {
+        for (Chain const& chain: chains) {
             QualityChain qc;
             qc.chain_links = chain.fragments;
             quality_chains.push_back(qc);
@@ -101,9 +106,7 @@ public:
         return quality_chains;
     }
 
-    ProofParams const& getProofParams() {
-        return plot_file_.getProofParams();
-    }
+    ProofParams const& getProofParams() { return plot_file_.getProofParams(); }
 
 private:
     PlotFile plot_file_;

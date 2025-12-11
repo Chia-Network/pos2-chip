@@ -46,14 +46,14 @@ This repository provides a **public reference implementation** of the new ProofÂ
    ```
 
    **Option B:** Use CMake
-   
+
    First, build with `Release` mode to enable optimizations:
    ```bash
    cmake -B build -DCMAKE_BUILD_TYPE=Release .
    ```
-   
+
    Next, compile:
-   
+
    Linux:
    ```bash
    cmake --build build -j$(nproc)

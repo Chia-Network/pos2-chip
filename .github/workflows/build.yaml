@@ -99,5 +99,3 @@ jobs:
         if: ${{ matrix.mode == 'Release' && !startsWith(matrix.os, 'windows') }}
         run: |
           build/src/tools/solver/solver benchmark 28
-
-

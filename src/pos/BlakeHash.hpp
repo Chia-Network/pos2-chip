@@ -1,9 +1,10 @@
 #pragma once
 
-#include <sstream>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 
 //----------------------------------------------------------------------
@@ -117,31 +118,26 @@
     g(state, 0, 5, 10, 15, block_words[14], block_words[10]); \
     g(state, 1, 6, 11, 12, block_words[2],  block_words[12]); \
     g(state, 2, 7, 8,  13, block_words[3],  block_words[4]);  \
-    g(state, 3, 4, 9,  14, block_words[7],  block_words[13]); \
+    g(state, 3, 4, 9,  14, block_words[7],  block_words[13]);
 
-class BlakeHash
-{
+class BlakeHash {
 public:
-    struct Result64
-    {
+    struct Result64 {
         uint32_t r[2];
     };
 
-    struct Result128
-    {
+    struct Result128 {
         uint32_t r[4];
     };
 
-    struct Result256
-    {
+    struct Result256 {
         uint32_t r[8];
 
         std::string toString() const
         {
             std::ostringstream oss;
             oss << std::hex << std::uppercase << std::setfill('0');
-            for (int i = 0; i < 8; ++i)
-            {
+            for (int i = 0; i < 8; ++i) {
                 if (i > 0)
                     oss << ' ';
                 oss << std::setw(8) << r[i];
@@ -153,28 +149,25 @@ public:
     // Constructor.
     //   plotIdBytes: pointer to an array of exactly 32 bytes.
     // Throws std::invalid_argument if plotIdBytes is null.
-    BlakeHash(const uint8_t *plot_id_bytes)
+    BlakeHash(uint8_t const* plot_id_bytes)
     {
         if (!plot_id_bytes)
             throw std::invalid_argument("plotIdBytes pointer is null.");
         // Fill first 8 words from the 32-byte plot ID (little-endian conversion).
-        for (int i = 0; i < 8; i++)
-        {
+        for (int i = 0; i < 8; i++) {
             // Each word is 4 bytes.
-            block_words[i] =
-                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 0])) |
-                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 1]) << 8) |
-                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 2]) << 16) |
-                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 3]) << 24);
+            block_words[i] = (static_cast<uint32_t>(plot_id_bytes[i * 4 + 0]))
+                | (static_cast<uint32_t>(plot_id_bytes[i * 4 + 1]) << 8)
+                | (static_cast<uint32_t>(plot_id_bytes[i * 4 + 2]) << 16)
+                | (static_cast<uint32_t>(plot_id_bytes[i * 4 + 3]) << 24);
         }
         // Zero the remaining 8 words.
-        for (int i = 8; i < 16; i++)
-        {
+        for (int i = 8; i < 16; i++) {
             block_words[i] = 0;
         }
     }
 
-    static Result256 hash_block_256(const uint32_t block_words[16])
+    static Result256 hash_block_256(uint32_t const block_words[16])
     {
         _b3_inline_rounds;
 
@@ -192,7 +185,7 @@ public:
         return result;
     }
 
-    static Result64 hash_block_64(const uint32_t block_words[16])
+    static Result64 hash_block_64(uint32_t const block_words[16])
     {
         _b3_inline_rounds;
 
@@ -204,39 +197,33 @@ public:
         return result;
     }
 
-    BlakeHash(const uint8_t *plot_id_bytes, const uint8_t *challenge_bytes)
+    BlakeHash(uint8_t const* plot_id_bytes, uint8_t const* challenge_bytes)
     {
         if (!plot_id_bytes || !challenge_bytes)
             throw std::invalid_argument("plotIdBytes or challengeBytes pointer is null.");
 
         // Fill first 8 words from the 32-byte plot ID (little-endian conversion).
-        for (int i = 0; i < 8; i++)
-        {
-            block_words[i] =
-                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 0])) |
-                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 1]) << 8) |
-                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 2]) << 16) |
-                (static_cast<uint32_t>(plot_id_bytes[i * 4 + 3]) << 24);
+        for (int i = 0; i < 8; i++) {
+            block_words[i] = (static_cast<uint32_t>(plot_id_bytes[i * 4 + 0]))
+                | (static_cast<uint32_t>(plot_id_bytes[i * 4 + 1]) << 8)
+                | (static_cast<uint32_t>(plot_id_bytes[i * 4 + 2]) << 16)
+                | (static_cast<uint32_t>(plot_id_bytes[i * 4 + 3]) << 24);
         }
 
         // Fill next 8 words from the challenge bytes.
-        for (int i = 0; i < 8; i++)
-        {
-            block_words[i + 8] =
-                (static_cast<uint32_t>(challenge_bytes[i * 4 + 0])) |
-                (static_cast<uint32_t>(challenge_bytes[i * 4 + 1]) << 8) |
-                (static_cast<uint32_t>(challenge_bytes[i * 4 + 2]) << 16) |
-                (static_cast<uint32_t>(challenge_bytes[i * 4 + 3]) << 24);
+        for (int i = 0; i < 8; i++) {
+            block_words[i + 8] = (static_cast<uint32_t>(challenge_bytes[i * 4 + 0]))
+                | (static_cast<uint32_t>(challenge_bytes[i * 4 + 1]) << 8)
+                | (static_cast<uint32_t>(challenge_bytes[i * 4 + 2]) << 16)
+                | (static_cast<uint32_t>(challenge_bytes[i * 4 + 3]) << 24);
         }
 
         // Do 256 bit hash, set the first 8 words to the result and the last to zero.
         Result256 result = generate_hash_256();
-        for (int i = 0; i < 8; i++)
-        {
+        for (int i = 0; i < 8; i++) {
             block_words[i] = result.r[i];
         }
-        for (int i = 8; i < 16; i++)
-        {
+        for (int i = 8; i < 16; i++) {
             block_words[i] = 0;
         }
     }

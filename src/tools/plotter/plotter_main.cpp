@@ -1,11 +1,12 @@
+#include "common/Utils.hpp"
+#include "plot/PlotFile.hpp"
+#include "plot/Plotter.hpp"
+#include <cstdlib>
 #include <iostream>
 #include <string>
-#include <cstdlib>
-#include "plot/Plotter.hpp"
-#include "plot/PlotFile.hpp"
-#include "common/Utils.hpp"
 
-static void print_usage(const char* prog) {
+static void print_usage(char const* prog)
+{
     std::cerr << "Usage:\n"
               << "  " << prog << " test <k> <plot_id_hex> [strength]\n"
               << "    <k>            : even integer between 18 and 32\n"
@@ -13,9 +14,10 @@ static void print_usage(const char* prog) {
               << "    [strength]     : optional, defaults to 2\n";
 }
 
-// example usage: ./plotter test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF 2
-int main(int argc, char *argv[]) try
-{
+// example usage: ./plotter test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
+// 2
+int main(int argc, char* argv[])
+try {
     if (argc < 2) {
         print_usage(argv[0]);
         return 1;
@@ -57,7 +59,9 @@ int main(int argc, char *argv[]) try
 
     Timer timer;
     timer.start("Plotting");
-    ProofParams params(Utils::hexToBytes(plot_id_hex).data(), numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(strength));
+    ProofParams params(Utils::hexToBytes(plot_id_hex).data(),
+        numeric_cast<uint8_t>(k),
+        numeric_cast<uint8_t>(strength));
     Plotter plotter(params);
     plotter.setValidate(true);
     PlotData plot = plotter.run();
@@ -70,20 +74,19 @@ int main(int argc, char *argv[]) try
 
 #ifdef RETAIN_X_VALUES
     bool validate = true;
-    if (validate)
-    {
+    if (validate) {
         ProofParams params = plotter.getProofParams();
         ProofValidator validator(params);
 
         // first validate all xs in T3
         timer.start("Validating Table 3 - Final");
-        for (const auto& xs_array : plot.xs_correlating_to_proof_fragments) {
+        for (auto const& xs_array: plot.xs_correlating_to_proof_fragments) {
             auto result = validator.validate_table_3_pairs(xs_array.data());
             if (!result.has_value()) {
-                std::cerr << "Validation failed for Table 3 pair: ["
-                          << xs_array[0] << ", " << xs_array[1] << ", " << xs_array[2] << ", " << xs_array[3] 
-                          << ", " << xs_array[4] << ", " << xs_array[5] << ", " << xs_array[6] << ", " << xs_array[7]
-                          << "]\n";
+                std::cerr << "Validation failed for Table 3 pair: [" << xs_array[0] << ", "
+                          << xs_array[1] << ", " << xs_array[2] << ", " << xs_array[3] << ", "
+                          << xs_array[4] << ", " << xs_array[5] << ", " << xs_array[6] << ", "
+                          << xs_array[7] << "]\n";
                 return {};
             }
         }
@@ -93,25 +96,25 @@ int main(int argc, char *argv[]) try
 #endif
 
     bool writeToFile = true;
-    if (writeToFile)
-    {
+    if (writeToFile) {
         std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(strength);
-        #ifdef RETAIN_X_VALUES_TO_T3
+#ifdef RETAIN_X_VALUES_TO_T3
         filename += "_xvalues";
-        #endif
+#endif
         filename += '_' + plot_id_hex + ".bin";
         timer.start("Writing plot file: " + filename);
-        size_t bytes_written = PlotFile::writeData(filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
+        size_t bytes_written = PlotFile::writeData(
+            filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
         timer.stop();
 
-        double bits_per_entry = (static_cast<double>(bytes_written) * 8.0) / static_cast<double>(plot.t3_proof_fragments.size());
+        double bits_per_entry = (static_cast<double>(bytes_written) * 8.0)
+            / static_cast<double>(plot.t3_proof_fragments.size());
         std::cout << "Wrote plot file: " << filename << " (" << bytes_written << " bytes) "
                   << "[" << bits_per_entry << " bits/entry]" << std::endl;
-
     }
 
     return 0;
 }
-catch (const std::exception& e) {
+catch (std::exception const& e) {
     std::cerr << "Failed with exception: " << e.what() << std::endl;
 }

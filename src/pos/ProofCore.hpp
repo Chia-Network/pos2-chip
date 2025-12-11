@@ -1,18 +1,17 @@
 #pragma once
 
 #include <cstdint>
+#include <iostream>
+#include <limits>
+#include <optional>
 #include <stdexcept>
 #include <tuple>
-#include <iostream>
-#include <optional>
-#include <limits>
 #include <vector>
 
 #include "ProofConstants.hpp"
-#include "ProofParams.hpp"
-#include "ProofHashing.hpp"
 #include "ProofFragment.hpp"
-
+#include "ProofHashing.hpp"
+#include "ProofParams.hpp"
 
 //------------------------------------------------------------------------------
 // Structs for pairing results
@@ -20,47 +19,41 @@
 
 // use retain x values to make a plot and save x values to disk for analysis
 // use BOTH includes to for deeper validation of results
-//#define RETAIN_X_VALUES_TO_T3 true
-//#define RETAIN_X_VALUES true
-
+// #define RETAIN_X_VALUES_TO_T3 true
+// #define RETAIN_X_VALUES true
 
 using QualityChainLinks = std::array<ProofFragment, NUM_CHAIN_LINKS>;
 
-struct QualityChain
-{
+struct QualityChain {
     QualityChainLinks chain_links;
 };
 
 // chaining
 // A chain: list of challenges and the corresponding chosen proof fragments.
-struct Chain
-{
-    std::array<ProofFragment, NUM_CHAIN_LINKS> fragments;      // the proof fragments used in the chain
+struct Chain {
+    std::array<ProofFragment, NUM_CHAIN_LINKS> fragments; // the proof fragments used in the chain
 };
 
-// chaining end 
+// chaining end
 
-struct T1Pairing
-{
-    uint64_t meta;       // 2k-bit meta value.
+struct T1Pairing {
+    uint64_t meta; // 2k-bit meta value.
     uint32_t match_info; // k-bit match info.
 };
 
-struct T2Pairing
-{
-    uint64_t meta;       // 2k-bit meta value.
+struct T2Pairing {
+    uint64_t meta; // 2k-bit meta value.
     uint32_t match_info; // k-bit match info.
-    uint32_t x_bits;     // k-bit x bits.
+    uint32_t x_bits; // k-bit x bits.
 #ifdef RETAIN_X_VALUES_TO_T3
     uint32_t xs[4];
 #endif
 };
 
-struct T3Pairing
-{
-    ProofFragment proof_fragment;  // 2k-bit encrypted x-values.
+struct T3Pairing {
+    ProofFragment proof_fragment; // 2k-bit encrypted x-values.
 #ifdef RETAIN_X_VALUES_TO_T3
-    std::array<uint32_t,8> xs;
+    std::array<uint32_t, 8> xs;
 #endif
 };
 
@@ -68,17 +61,16 @@ struct T3Pairing
 // ProofCore Class
 //------------------------------------------------------------------------------
 
-class ProofCore
-{
+class ProofCore {
 public:
     ProofHashing hashing;
     ProofFragmentCodec fragment_codec;
 
     // Constructor: Initializes internal ProofHashing and ProofFragmentCodec objects.
-    ProofCore(const ProofParams &proof_params)
-        : hashing(proof_params),
-          fragment_codec(proof_params),
-          params_(proof_params)
+    ProofCore(ProofParams const& proof_params)
+        : hashing(proof_params)
+        , fragment_codec(proof_params)
+        , params_(proof_params)
     {
     }
 
@@ -87,9 +79,9 @@ public:
     uint32_t matching_target(size_t table_id, uint64_t meta, uint32_t match_key)
     {
         size_t num_match_target_bits = params_.get_num_match_target_bits(table_id);
-        //size_t num_meta_bits = params_.get_num_meta_bits(table_id);
-        return hashing.matching_target(table_id, match_key, meta,
-                                       static_cast<int>(num_match_target_bits));
+        // size_t num_meta_bits = params_.get_num_meta_bits(table_id);
+        return hashing.matching_target(
+            table_id, match_key, meta, static_cast<int>(num_match_target_bits));
     }
 
     // pairing_t1:
@@ -104,23 +96,19 @@ public:
                 return std::nullopt;
         }
         else */
-        if (params_.get_num_match_key_bits(1) == 2)
-        {
+        if (params_.get_num_match_key_bits(1) == 2) {
             if (!match_filter_4(x_l & 0xFFFFU, x_r & 0xFFFFU))
                 return std::nullopt;
         }
-        else
-        {
+        else {
             std::cerr << "pairing_t1: match_filter not supported for this table." << std::endl;
             abort();
         }
 
         PairingResult pair = hashing.pairing(x_l, x_r, static_cast<int>(params_.get_k()));
 
-        T1Pairing result =
-            {
-                .meta = static_cast<uint64_t>(x_l) << params_.get_k() | x_r,
-                .match_info = pair.match_info_result};
+        T1Pairing result = { .meta = static_cast<uint64_t>(x_l) << params_.get_k() | x_r,
+            .match_info = pair.match_info_result };
 
         return result;
     }
@@ -128,16 +116,16 @@ public:
     // pairing_t2:
     // Input: meta_l and meta_r (each 2k bits).
     // Returns: a T2Pairing with match_info (k bits), meta (2k bits), and x_bits (k bits).
-    std::optional<T2Pairing> pairing_t2(const uint64_t meta_l, uint64_t meta_r)
+    std::optional<T2Pairing> pairing_t2(uint64_t const meta_l, uint64_t meta_r)
     {
         int num_test_bits = params_.get_num_match_key_bits(2); // synonymous with get_strength()
         uint64_t out_meta_bits = params_.get_num_pairing_meta_bits();
-        PairingResult pair = hashing.pairing(meta_l, meta_r,
-                                                            static_cast<int>(params_.get_k()),
-                                                            static_cast<int>(out_meta_bits),
-                                                            num_test_bits);
-        if (pair.test_result != 0)
-        {
+        PairingResult pair = hashing.pairing(meta_l,
+            meta_r,
+            static_cast<int>(params_.get_k()),
+            static_cast<int>(out_meta_bits),
+            num_test_bits);
+        if (pair.test_result != 0) {
             return std::nullopt;
         }
         T2Pairing result;
@@ -154,21 +142,19 @@ public:
     // Input: meta_l, meta_r (each 2k bits), x_bits_l, x_bits_r (each k bits).
     // Returns: a T3Pairing struct with lower/upper partition, partition-specific match_info,
     // meta, order bits, and the full proof fragments.
-    std::optional<T3Pairing> pairing_t3(uint64_t meta_l, uint64_t meta_r, uint32_t x_bits_l, uint32_t x_bits_r)
+    std::optional<T3Pairing> pairing_t3(
+        uint64_t meta_l, uint64_t meta_r, uint32_t x_bits_l, uint32_t x_bits_r)
     {
         int num_test_bits = params_.get_num_match_key_bits(3); // synonymous with get_strength()
         /*
-        // commented out is an alternative explicit filter that would slow down plotting but not necessarily improve attack resistance significantly.
-        if (!hashing.t3_pairing_filter(meta_l, meta_r,
-                                    static_cast<int>(params_.get_num_pairing_meta_bits()),
+        // commented out is an alternative explicit filter that would slow down plotting but not
+        necessarily improve attack resistance significantly. if (!hashing.t3_pairing_filter(meta_l,
+        meta_r, static_cast<int>(params_.get_num_pairing_meta_bits()),
                                     params_.get_num_match_key_bits(3)))
             return std::nullopt;
         */
 
-        PairingResult pair = hashing.pairing(meta_l, meta_r,
-                                                             0,
-                                                             0,
-                                                             num_test_bits);
+        PairingResult pair = hashing.pairing(meta_l, meta_r, 0, 0, num_test_bits);
 
         // pairing filter test
         if (pair.test_result != 0)
@@ -176,7 +162,7 @@ public:
 
         uint64_t all_x_bits = (static_cast<uint64_t>(x_bits_l) << params_.get_k()) | x_bits_r;
         ProofFragment proof_fragment = fragment_codec.encode(all_x_bits);
-        
+
         T3Pairing result;
         result.proof_fragment = proof_fragment;
         return result;
@@ -184,25 +170,28 @@ public:
 
     // validate_match_info_pairing:
     // Validates that match_info pairing is correct by comparing extracted sections and targets.
-    bool validate_match_info_pairing(int table_id, uint64_t meta_l, uint32_t match_info_l, uint32_t match_info_r)
+    bool validate_match_info_pairing(
+        int table_id, uint64_t meta_l, uint32_t match_info_l, uint32_t match_info_r)
     {
         uint32_t section_l = params_.extract_section_from_match_info(table_id, match_info_l);
         uint32_t section_r = params_.extract_section_from_match_info(table_id, match_info_r);
-        
+
         uint32_t match_section = matching_section(section_l);
-        if (section_r != match_section)
-        {
-                // std::cout << "section_l " << section_l << " != match_section " << match_section << std::endl
-                //           << "    meta_l: " << meta_l << " match_info_l: " << match_info_l << " match_info_r: " << match_info_r << std::endl;
+        if (section_r != match_section) {
+            // std::cout << "section_l " << section_l << " != match_section " << match_section <<
+            // std::endl
+            //           << "    meta_l: " << meta_l << " match_info_l: " << match_info_l << "
+            //           match_info_r: " << match_info_r << std::endl;
             return false;
         }
 
         uint32_t match_key_r = params_.extract_match_key_from_match_info(table_id, match_info_r);
-        uint32_t match_target_r = params_.extract_match_target_from_match_info(table_id, match_info_r);
-        if (match_target_r != matching_target(table_id, meta_l, match_key_r))
-        {
+        uint32_t match_target_r
+            = params_.extract_match_target_from_match_info(table_id, match_info_r);
+        if (match_target_r != matching_target(table_id, meta_l, match_key_r)) {
             // std::cout << "match_target_r " << match_target_r
-            //           << " != matching_target(" << table_id << ", " << meta_l << ", " << match_key_r << ")" << std::endl;
+            //           << " != matching_target(" << table_id << ", " << meta_l << ", " <<
+            //           match_key_r << ")" << std::endl;
             return false;
         }
         return true;
@@ -215,7 +204,8 @@ public:
         uint32_t num_sections = params_.get_num_sections();
         uint32_t rotated_left = (section << 1) | (section >> (num_section_bits - 1));
         uint32_t rotated_left_plus_1 = (rotated_left + 1) & (num_sections - 1);
-        uint32_t section_new = (rotated_left_plus_1 >> 1) | (rotated_left_plus_1 << (num_section_bits - 1));
+        uint32_t section_new
+            = (rotated_left_plus_1 >> 1) | (rotated_left_plus_1 << (num_section_bits - 1));
         return section_new & (num_sections - 1);
     }
 
@@ -224,14 +214,17 @@ public:
     {
         uint32_t num_section_bits = params_.get_num_section_bits();
         uint32_t num_sections = params_.get_num_sections();
-        uint32_t rotated_left = ((section << 1) | (section >> (num_section_bits - 1))) & (num_sections - 1);
+        uint32_t rotated_left
+            = ((section << 1) | (section >> (num_section_bits - 1))) & (num_sections - 1);
         uint32_t rotated_left_minus_1 = (rotated_left - 1) & (num_sections - 1);
-        uint32_t section_l = ((rotated_left_minus_1 >> 1) | (rotated_left_minus_1 << (num_section_bits - 1))) & (num_sections - 1);
+        uint32_t section_l
+            = ((rotated_left_minus_1 >> 1) | (rotated_left_minus_1 << (num_section_bits - 1)))
+            & (num_sections - 1);
         return section_l;
     }
 
     // get_matching_sections: Returns two matching sections via output parameters.
-    void get_matching_sections(uint32_t section, uint32_t &section1, uint32_t &section2)
+    void get_matching_sections(uint32_t section, uint32_t& section1, uint32_t& section2)
     {
         section1 = matching_section(section);
         section2 = inverse_matching_section(section);
@@ -262,8 +255,7 @@ public:
         return (((r >> 2) + r) & 3U) == 2;
     }
 
-    struct SelectedChallengeSets 
-    {
+    struct SelectedChallengeSets {
         uint32_t fragment_set_A_index;
         uint32_t fragment_set_B_index;
         Range fragment_set_A_range;
@@ -272,27 +264,29 @@ public:
     SelectedChallengeSets selectChallengeSets(std::span<uint8_t const, 32> const challenge)
     {
         // challenge sets will be the same withing a grouped plot id
-        BlakeHash::Result256 grouped_challenge_hash = hashing.challengeWithGroupedPlotIdHash(challenge);
-        
+        BlakeHash::Result256 grouped_challenge_hash
+            = hashing.challengeWithGroupedPlotIdHash(challenge);
+
         // use bits from challenge to select two distinct chaining sets
         uint32_t num_chaining_sets_bits = params_.get_num_chaining_sets_bits();
 
         // fragments are guaranteed to be different by forcing one even and one odd index
         // get first set index from lower bits, but always even (0 on lsb)
-        uint32_t fragment_set_A_index = (grouped_challenge_hash.r[0] & ((1U << num_chaining_sets_bits) - 1)) & ~1U;
+        uint32_t fragment_set_A_index
+            = (grouped_challenge_hash.r[0] & ((1U << num_chaining_sets_bits) - 1)) & ~1U;
         // get second set index from lower of next 32 bits, and always odd (1 on lsb)
-        uint32_t fragment_set_B_index = (grouped_challenge_hash.r[1] & ((1U << num_chaining_sets_bits) - 1)) | 1U;
-        
+        uint32_t fragment_set_B_index
+            = (grouped_challenge_hash.r[1] & ((1U << num_chaining_sets_bits) - 1)) | 1U;
+
         Range fragment_set_A_range = params_.get_chaining_set_range(fragment_set_A_index);
         Range fragment_set_B_range = params_.get_chaining_set_range(fragment_set_B_index);
-        
-        return {fragment_set_A_index, fragment_set_B_index, fragment_set_A_range, fragment_set_B_range};
+
+        return {
+            fragment_set_A_index, fragment_set_B_index, fragment_set_A_range, fragment_set_B_range
+        };
     }
 
-    ProofParams getProofParams() const
-    {
-        return params_;
-    }
+    ProofParams getProofParams() const { return params_; }
 
     uint32_t quality_chain_pass_threshold_ = 0;
 
