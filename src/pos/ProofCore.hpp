@@ -13,8 +13,6 @@
 #include "ProofHashing.hpp"
 #include "ProofFragment.hpp"
 
-//#define USE_T2_FAST_FILTER true
-
 
 //------------------------------------------------------------------------------
 // Structs for pairing results
@@ -132,16 +130,6 @@ public:
     // Returns: a T2Pairing with match_info (k bits), meta (2k bits), and x_bits (k bits).
     std::optional<T2Pairing> pairing_t2(const uint64_t meta_l, uint64_t meta_r)
     {
-        #ifdef USE_T2_FAST_FILTER
-        assert(params_.get_num_match_key_bits(2) == 2);
-        if (!match_filter_4(static_cast<uint32_t>(meta_l & 0xFFFFU),
-                            static_cast<uint32_t>(meta_r & 0xFFFFU)))
-            return std::nullopt;
-        uint64_t out_meta_bits = params_.get_num_pairing_meta_bits();
-        PairingResult pair = hashing.pairing(meta_l, meta_r,
-                                             static_cast<int>(params_.get_k()),
-                                             static_cast<int>(out_meta_bits));
-        #else
         int num_test_bits = params_.get_num_match_key_bits(2); // synonymous with get_strength()
         uint64_t out_meta_bits = params_.get_num_pairing_meta_bits();
         PairingResult pair = hashing.pairing(meta_l, meta_r,
@@ -152,7 +140,6 @@ public:
         {
             return std::nullopt;
         }
-        #endif
         T2Pairing result;
         result.match_info = pair.match_info_result;
         result.meta = pair.meta_result;

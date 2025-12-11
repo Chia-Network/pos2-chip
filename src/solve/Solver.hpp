@@ -582,6 +582,9 @@ public:
                     // Because R_sorted is sorted, this will be the lowest index for this reduced value.
                     hash_to_index[reduced] = j;
                 }
+                else {
+                    assert(hash_to_index[reduced] <= j);
+                }
                 #ifdef DEBUG_VERIFY
                 else {
                     num_R_collisions++;
@@ -604,118 +607,101 @@ public:
             sub_timer.start();
 
             parallel_for_range(L_list.begin(), L_list.end(),
-                               [&](const T1_Match &lm)
-                               {
-                                   ProofCore thread_core(params_);
-                                   std::vector<T2_match> local_out;
-                                   local_out.reserve(4);
+                               [&hash_to_index,
+                                &R_sorted,
+                                &out,
+                                &out_mutex,
+                                &num_match_keys,
+                                &num_k_bits,
+                                &num_section_bits,
+                                &num_T2_match_target_bits,
+                                &REDUCE_SHIFT,
+                                &num_T2_match_key_bits,
+                                this](const T1_Match &lm) {
+                ProofCore thread_core(params_);
+                std::vector<T2_match> local_out;
+                local_out.reserve(4);
 
-                                   for (uint32_t match_key = 0; match_key < num_match_keys; ++match_key)
-                                   {
-                                       // Build target hash exactly as in original code.
-                                       uint64_t meta = (uint64_t(lm.x1) << num_k_bits) | lm.x2;
-                                       uint32_t L_hash = thread_core.matching_target(2, meta, match_key);
+                for (uint32_t match_key = 0; match_key < num_match_keys; ++match_key)
+                {
+                    // Build target hash exactly as in original code.
+                    uint64_t meta = (uint64_t(lm.x1) << num_k_bits) | lm.x2;
+                    uint32_t L_hash = thread_core.matching_target(2, meta, match_key);
 
-                                       uint32_t sec_bits = lm.pair_hash >> (num_k_bits - num_section_bits);
-                                       uint32_t R_sec = thread_core.matching_section(sec_bits);
+                    uint32_t sec_bits = lm.pair_hash >> (num_k_bits - num_section_bits);
+                    uint32_t R_sec = thread_core.matching_section(sec_bits);
 
-                                       uint32_t final_hash =
-                                           (R_sec << (num_k_bits - num_section_bits)) |
-                                           (match_key << num_T2_match_target_bits) |
-                                           L_hash;
+                    uint32_t final_hash =
+                        (R_sec << (num_k_bits - num_section_bits)) |
+                        (match_key << num_T2_match_target_bits) |
+                        L_hash;
 
-                                       uint32_t reduced = final_hash >> REDUCE_SHIFT;
-                                       uint32_t idx = hash_to_index[reduced];
+                    uint32_t reduced = final_hash >> REDUCE_SHIFT;
+                    uint32_t idx = hash_to_index[reduced];
 
-                                       if (idx == INVALID_INDEX)
-                                       {
-                                           // No R entries share this reduced hash.
-                                           continue;
-                                       }
+                    if (idx == INVALID_INDEX)
+                    {
+                        // No R entries share this reduced hash.
+                        continue;
+                    }
 
-                                       // Walk down R_sorted from that index while R is in-range (same reduced).
-                                       // For each, check exact pair_hash match and then validate.
-                                       for (uint32_t j = idx; j < static_cast<uint32_t>(R_sorted.size()); ++j)
-                                       {
-                                           uint32_t r_hash = R_sorted[j].pair_hash;
-                                           uint32_t r_reduced = r_hash >> REDUCE_SHIFT;
+                    // Walk down R_sorted from that index while R is in-range (same reduced).
+                    // For each, check exact pair_hash match and then validate.
+                    for (uint32_t j = idx; j < static_cast<uint32_t>(R_sorted.size()); ++j)
+                    {
+                        uint32_t r_hash = R_sorted[j].pair_hash;
+                        uint32_t r_reduced = r_hash >> REDUCE_SHIFT;
 
-                                           if (r_reduced != reduced)
-                                           {
-                                               // We've left the bucket / range for this reduced value.
-                                               break;
-                                           }
+                        if (r_reduced != reduced)
+                        {
+                            // We've left the bucket / range for this reduced value.
+                            break;
+                        }
 
-                                           if (r_hash != final_hash)
-                                           {
-                                               continue;
-                                           }
+                        if (r_hash != final_hash)
+                        {
+                            continue;
+                        }
 
-                                           // Exact hash match: run filter / pairing.
-                                           uint32_t x_values[4] = {
-                                               lm.x1,
-                                               lm.x2,
-                                               R_sorted[j].x1,
-                                               R_sorted[j].x2};
+                        // Exact hash match: run filter / pairing.
+                        uint32_t x_values[4] = {
+                            lm.x1,
+                            lm.x2,
+                            R_sorted[j].x1,
+                            R_sorted[j].x2
+                        };
 
-#ifdef USE_T2_FAST_FILTER
-                                           {
-                                               ProofCore pc(params_);
-                                               uint16_t lowL = uint16_t(x_values[1] & 0xFFFF);
-                                               uint16_t lowR = uint16_t(x_values[3] & 0xFFFF);
-                                               if (params_.get_k() < 16)
-                                               {
-                                                   uint64_t ml = (uint64_t(x_values[0]) << num_k_bits) | x_values[1];
-                                                   uint64_t mr = (uint64_t(x_values[2]) << num_k_bits) | x_values[3];
-                                                   lowL = uint16_t(ml & 0xFFFF);
-                                                   lowR = uint16_t(mr & 0xFFFF);
-                                               }
-                                               if (pc.match_filter_4(lowL, lowR))
-                                               {
-                                                   ProofValidator validator(params_);
-                                                   if (auto pairing = validator.validate_table_2_pairs(x_values))
-                                                   {
-                                                       T2_match t2;
-                                                       t2.x_values = {x_values[0], x_values[1], x_values[2], x_values[3]};
-                                                       // t2.match_info = pairing->match_info;
-                                                       // t2.meta = pairing->meta;
-                                                       local_out.push_back(t2);
-                                                   }
-                                               }
-                                           }
-#else
-                                       {
-                                           int num_test_bits = num_T2_match_key_bits;
-                                           const uint64_t out_meta_bits = num_k_bits * 2;
-                                           uint64_t meta_l =
-                                               ((uint64_t(lm.x1) << num_k_bits) | lm.x2);
-                                           uint64_t meta_r =
-                                               ((uint64_t(R_sorted[j].x1) << num_k_bits) | R_sorted[j].x2);
+                        {
+                            int num_test_bits = num_T2_match_key_bits;
+                            const uint64_t out_meta_bits = num_k_bits * 2;
+                            uint64_t meta_l =
+                                ((uint64_t(lm.x1) << num_k_bits) | lm.x2);
+                            uint64_t meta_r =
+                                ((uint64_t(R_sorted[j].x1) << num_k_bits) | R_sorted[j].x2);
 
-                                           PairingResult pair = thread_core.hashing.pairing(
-                                               meta_l,
-                                               meta_r,
-                                               num_k_bits,
-                                               static_cast<int>(out_meta_bits),
-                                               num_test_bits);
+                            PairingResult pair = thread_core.hashing.pairing(
+                                meta_l,
+                                meta_r,
+                                num_k_bits,
+                                static_cast<int>(out_meta_bits),
+                                num_test_bits);
 
-                                           if (pair.test_result == 0)
-                                           {
-                                               T2_match t2;
-                                               t2.x_values = {x_values[0], x_values[1], x_values[2], x_values[3]};
-                                               local_out.push_back(t2);
-                                           }
-                                       }
-#endif
-                                       }
-                                   }
+                            if (pair.test_result == 0)
+                            {
+                                T2_match t2;
+                                t2.x_values = {x_values[0], x_values[1], x_values[2], x_values[3]};
+                                local_out.push_back(t2);
+                            }
+                        }
+                    }
+                }
 
-                                   if (!local_out.empty())
-                                   {
-                                       std::lock_guard<std::mutex> lock(out_mutex);
-                                       out.insert(out.end(), local_out.begin(), local_out.end());
-                                   }
-                               });
+                if (!local_out.empty())
+                {
+                    std::lock_guard<std::mutex> lock(out_mutex);
+                    out.insert(out.end(), local_out.begin(), local_out.end());
+                }
+            });
 
             timings_.t2_gen_L_list += sub_timer.stop();
 
@@ -753,7 +739,7 @@ public:
             list.reserve(max_matches_per_x_range);
         }
 
-        for (T1_Match const &match : t1_matches)
+        for (T1_Match const& match : t1_matches)
         {
             uint32_t const x1_bit_dropped = match.x1 >> (num_k_bits - x1_bits);
             int const lookup_index = x_bit_group_mappings.lookup[x1_bit_dropped];
@@ -882,7 +868,7 @@ public:
             // this section splits execution into NUM_SECTIONS tasks
             // performs better when small number of cpu's.
             parallel_for_range(0, NUM_SECTIONS, [&](int section)
-                               {
+            {
                     ProofCore proof_core(params_);
 
                     int x1_start = section_boundaries_x1[section];
@@ -1420,7 +1406,8 @@ public:
                     }
                 }
             done:
-                matches_per_thread[t] = thread_matches; });
+                matches_per_thread[t] = thread_matches; 
+            });
             timings_.chachafilterx2sbybitmask += timer.stop();
         }
 
