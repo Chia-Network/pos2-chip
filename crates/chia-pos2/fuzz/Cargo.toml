@@ -28,3 +28,10 @@ path = "fuzz_targets/validate.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "prover"
+path = "fuzz_targets/prover.rs"
+test = false
+doc = false
+bench = false
