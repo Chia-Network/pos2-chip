@@ -1,0 +1,16 @@
+BasedOnStyle: WebKit
+BinPackArguments: false
+BinPackParameters: OnePerLine
+BitFieldColonSpacing: After
+BreakBeforeBraces: Stroustrup
+ColumnLimit:     100
+QualifierAlignment: Right
+ReferenceAlignment: Left
+SkipMacroDefinitionBody: true
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+BreakTemplateDeclarations: Yes
+CompactNamespaces: true
+PackConstructorInitializers: CurrentLine
+SpaceBeforeRangeBasedForLoopColon: false
+SpaceInEmptyBlock: false
