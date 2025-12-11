@@ -1,59 +1,55 @@
 #pragma once
 
-#include <string>
-#include <fstream>
-#include <stdexcept>
-#include <type_traits>
-#include <vector>
-#include <span>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
 #include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
 #include <utility>
+#include <vector>
 
-#include "PlotData.hpp"
-#include "pos/ProofParams.hpp"
-#include "PlotIO.hpp"
 #include "ChunkCompressor.hpp"
+#include "PlotData.hpp"
+#include "PlotIO.hpp"
+#include "pos/ProofParams.hpp"
 
-class PlotFile
-{
+class PlotFile {
 public:
     static constexpr int CHUNK_SPAN_RANGE_BITS = 16; // 65k entries per chunk
-    static constexpr int MINUS_STUB_BITS = 2;        // proof fragments get k stub bits minus this many extra bits
+    static constexpr int MINUS_STUB_BITS
+        = 2; // proof fragments get k stub bits minus this many extra bits
 
     // Current on-disk format version, update this when the format changes.
     static constexpr uint8_t FORMAT_VERSION = 1;
 
     struct PlotFileContents {
         ChunkedProofFragments data;
-        ProofParams           params;
+        ProofParams params;
     };
 
     // Construct a PlotFile bound to a specific filename (for reading).
-    explicit PlotFile(std::string filename)
-        : filename_(std::move(filename))
-    {}
+    explicit PlotFile(std::string filename) : filename_(std::move(filename)) {}
 
     /// Write PlotData to disk, converting to chunked + compressed representation first.
-    static size_t writeData(const std::string &filename,
-                            PlotData const &data,
-                            ProofParams const &params,
-                            std::span<uint8_t const, 32 + 48 + 32> const memo)
+    static size_t writeData(std::string const& filename,
+        PlotData const& data,
+        ProofParams const& params,
+        std::span<uint8_t const, 32 + 48 + 32> const memo)
     {
         uint64_t const range_per_chunk = (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS));
-        ChunkedProofFragments chunked_data = ChunkedProofFragments::convertToChunkedProofFragments(
-            data,
-            range_per_chunk
-        );
+        ChunkedProofFragments chunked_data
+            = ChunkedProofFragments::convertToChunkedProofFragments(data, range_per_chunk);
         return writeData(filename, chunked_data, params, memo);
     }
 
     // returns bytes written
-    static size_t writeData(const std::string &filename,
-                            ChunkedProofFragments const &data,
-                            ProofParams const &params,
-                            std::span<uint8_t const, 32 + 48 + 32> const memo)
+    static size_t writeData(std::string const& filename,
+        ChunkedProofFragments const& data,
+        ProofParams const& params,
+        std::span<uint8_t const, 32 + 48 + 32> const memo)
     {
         size_t bytes_written = 0;
 
@@ -62,18 +58,18 @@ public:
             throw std::runtime_error("Failed to open " + filename);
 
         out.write("pos2", 4);
-        out.write(reinterpret_cast<const char*>(&FORMAT_VERSION), 1);
+        out.write(reinterpret_cast<char const*>(&FORMAT_VERSION), 1);
 
         // Write plot ID
-        out.write(reinterpret_cast<const char*>(params.get_plot_id_bytes()), 32);
+        out.write(reinterpret_cast<char const*>(params.get_plot_id_bytes()), 32);
 
         // Write k and strength (match_key_bits)
-        const uint8_t k = numeric_cast<uint8_t>(params.get_k());
-        const uint8_t match_key_bits = numeric_cast<uint8_t>(params.get_match_key_bits());
-        out.write(reinterpret_cast<const char*>(&k), 1);
-        out.write(reinterpret_cast<const char*>(&match_key_bits), 1);
+        uint8_t const k = numeric_cast<uint8_t>(params.get_k());
+        uint8_t const match_key_bits = numeric_cast<uint8_t>(params.get_match_key_bits());
+        out.write(reinterpret_cast<char const*>(&k), 1);
+        out.write(reinterpret_cast<char const*>(&match_key_bits), 1);
 
-        out.write(reinterpret_cast<const char*>(memo.data()), memo.size());
+        out.write(reinterpret_cast<char const*>(memo.data()), memo.size());
 
         // Write chunk index + chunk bodies:
         //  uint64_t num_chunks
@@ -81,11 +77,12 @@ public:
         //  chunk_0 data...
         //  chunk_1 data...
         {
-            const uint64_t num_chunks = static_cast<uint64_t>(data.proof_fragments_chunks.size());
+            uint64_t const num_chunks = static_cast<uint64_t>(data.proof_fragments_chunks.size());
 
             // Write num_chunks
-            out.write(reinterpret_cast<const char*>(&num_chunks), sizeof(num_chunks));
-            if (!out) throw std::runtime_error("Failed to write chunk count to " + filename);
+            out.write(reinterpret_cast<char const*>(&num_chunks), sizeof(num_chunks));
+            if (!out)
+                throw std::runtime_error("Failed to write chunk count to " + filename);
 
             // Remember where offsets will be written
             std::streampos offsets_start_pos = out.tellp();
@@ -93,9 +90,11 @@ public:
             // Write placeholder zero offsets
             uint64_t zero = 0;
             for (uint64_t i = 0; i < num_chunks; ++i) {
-                out.write(reinterpret_cast<const char*>(&zero), sizeof(zero));
+                out.write(reinterpret_cast<char const*>(&zero), sizeof(zero));
             }
-            if (!out) throw std::runtime_error("Failed to write chunk offset placeholders to " + filename);
+            if (!out)
+                throw std::runtime_error(
+                    "Failed to write chunk offset placeholders to " + filename);
 
             // Collect real offsets as we write chunks
             std::vector<uint64_t> offsets(num_chunks);
@@ -109,17 +108,13 @@ public:
                 offsets[i] = static_cast<uint64_t>(pos);
 
                 uint64_t start_proof_fragment_range = i * range_per_chunk;
-                std::vector<uint8_t> compressed_chunk =
-                    ChunkCompressor::compressProofFragments(
-                        data.proof_fragments_chunks[i],
-                        start_proof_fragment_range,
-                        stub_bits
-                    );
+                std::vector<uint8_t> compressed_chunk = ChunkCompressor::compressProofFragments(
+                    data.proof_fragments_chunks[i], start_proof_fragment_range, stub_bits);
 
                 writeVector(out, compressed_chunk);
                 if (!out) {
-                    throw std::runtime_error("Failed to write chunk " + std::to_string(i) +
-                                             " to " + filename);
+                    throw std::runtime_error(
+                        "Failed to write chunk " + std::to_string(i) + " to " + filename);
                 }
             }
 
@@ -127,12 +122,14 @@ public:
 
             // Seek back and overwrite placeholders with actual offsets
             out.seekp(offsets_start_pos);
-            if (!out) throw std::runtime_error("Failed to seek to chunk offsets in " + filename);
+            if (!out)
+                throw std::runtime_error("Failed to seek to chunk offsets in " + filename);
 
             for (uint64_t i = 0; i < num_chunks; ++i) {
-                out.write(reinterpret_cast<const char*>(&offsets[i]), sizeof(offsets[i]));
+                out.write(reinterpret_cast<char const*>(&offsets[i]), sizeof(offsets[i]));
             }
-            if (!out) throw std::runtime_error("Failed to write chunk offsets to " + filename);
+            if (!out)
+                throw std::runtime_error("Failed to write chunk offsets to " + filename);
 
             // Seek back to end so file finalization is consistent
             out.seekp(0, std::ios::end);
@@ -168,8 +165,8 @@ public:
         uint8_t version;
         in.read(reinterpret_cast<char*>(&version), sizeof(version));
         if (version != FORMAT_VERSION) {
-            throw std::runtime_error("Plot file format version " + std::to_string(version) +
-                                     " is not supported.");
+            throw std::runtime_error(
+                "Plot file format version " + std::to_string(version) + " is not supported.");
         }
 
         uint8_t plot_id_bytes[32];
@@ -217,11 +214,11 @@ public:
             throw std::runtime_error("PlotFileHeader not loaded");
         }
 
-        const auto &header = *plot_file_header_;
+        auto const& header = *plot_file_header_;
 
         ChunkedProofFragments chunked;
 
-        const uint64_t num_chunks = header.num_chunks;
+        uint64_t const num_chunks = header.num_chunks;
         chunked.proof_fragments_chunks.clear();
         chunked.proof_fragments_chunks.resize(num_chunks);
 
@@ -236,29 +233,22 @@ public:
         for (uint64_t i = 0; i < num_chunks; ++i) {
             in.seekg(static_cast<std::streamoff>(header.offsets[i]), std::ios::beg);
             if (!in) {
-                throw std::runtime_error("Failed to seek to chunk " + std::to_string(i) +
-                                         " in " + filename_);
+                throw std::runtime_error(
+                    "Failed to seek to chunk " + std::to_string(i) + " in " + filename_);
             }
 
             uint64_t start_proof_fragment_range = i * range_per_chunk;
             std::vector<uint8_t> compressed_chunk = readVector<uint8_t>(in);
             if (!in) {
-                throw std::runtime_error("Failed to read compressed chunk " +
-                                         std::to_string(i) + " from " + filename_);
+                throw std::runtime_error(
+                    "Failed to read compressed chunk " + std::to_string(i) + " from " + filename_);
             }
 
-            chunked.proof_fragments_chunks[i] =
-                ChunkCompressor::decompressProofFragments(
-                    compressed_chunk,
-                    start_proof_fragment_range,
-                    stub_bits
-                );
+            chunked.proof_fragments_chunks[i] = ChunkCompressor::decompressProofFragments(
+                compressed_chunk, start_proof_fragment_range, stub_bits);
         }
 
-        return {
-            .data   = std::move(chunked),
-            .params = header.params
-        };
+        return { .data = std::move(chunked), .params = header.params };
     }
 
     // Read a single chunk's decompressed proof fragments by index.
@@ -269,7 +259,7 @@ public:
             throw std::runtime_error("PlotFileHeader not loaded");
         }
 
-        const auto &header = *plot_file_header_;
+        auto const& header = *plot_file_header_;
 
         if (chunk_index >= header.num_chunks) {
             throw std::out_of_range("chunk_index out of range");
@@ -282,8 +272,8 @@ public:
 
         in.seekg(static_cast<std::streamoff>(header.offsets[chunk_index]), std::ios::beg);
         if (!in) {
-            throw std::runtime_error("Failed to seek to chunk " + std::to_string(chunk_index) +
-                                     " in " + filename_);
+            throw std::runtime_error(
+                "Failed to seek to chunk " + std::to_string(chunk_index) + " in " + filename_);
         }
 
         int const stub_bits = header.params.get_k() - MINUS_STUB_BITS;
@@ -292,32 +282,29 @@ public:
 
         std::vector<uint8_t> compressed_chunk = readVector<uint8_t>(in);
         if (!in) {
-            throw std::runtime_error("Failed to read chunk " + std::to_string(chunk_index) +
-                                     " from " + filename_);
+            throw std::runtime_error(
+                "Failed to read chunk " + std::to_string(chunk_index) + " from " + filename_);
         }
 
         return ChunkCompressor::decompressProofFragments(
-            compressed_chunk,
-            start_proof_fragment_range,
-            stub_bits
-        );
+            compressed_chunk, start_proof_fragment_range, stub_bits);
     }
 
     // -------- Static convenience wrappers for reading --------
 
-    static PlotFileContents readAllChunkedData(const std::string &filename)
+    static PlotFileContents readAllChunkedData(std::string const& filename)
     {
         PlotFile pf(filename);
         return pf.readAllChunkedData();
     }
 
-    static std::vector<uint64_t> readChunk(const std::string &filename, uint64_t chunk_index)
+    static std::vector<uint64_t> readChunk(std::string const& filename, uint64_t chunk_index)
     {
         PlotFile pf(filename);
         return pf.readChunk(chunk_index);
     }
 
-    const ProofParams& getProofParams()
+    ProofParams const& getProofParams()
     {
         readHeadersAndIndexes();
         if (!plot_file_header_) {
@@ -338,7 +325,7 @@ public:
         std::vector<ProofFragment> result;
 
         std::vector<uint64_t> chunk_fragments = readChunk(chunk_index);
-        for (const auto& fragment : chunk_fragments) {
+        for (auto const& fragment: chunk_fragments) {
             if (fragment >= range.start && fragment < range.end) {
                 result.push_back(fragment);
             }
@@ -350,16 +337,14 @@ public:
 private:
     struct PlotFileHeader {
         ProofParams params;
-    #ifdef RETAIN_X_VALUES_TO_T3
-        std::vector<std::array<uint32_t,8>> xs_correlating_to_proof_fragments;
-    #endif
+#ifdef RETAIN_X_VALUES_TO_T3
+        std::vector<std::array<uint32_t, 8>> xs_correlating_to_proof_fragments;
+#endif
         uint64_t num_chunks = 0;
         std::vector<uint64_t> offsets;
 
         // Explicit constructor so this type can be constructed
-        explicit PlotFileHeader(const ProofParams& p)
-            : params(p)
-        {}
+        explicit PlotFileHeader(ProofParams const& p) : params(p) {}
     };
 
     uint64_t getRangePerChunk()
@@ -368,7 +353,8 @@ private:
         if (!plot_file_header_) {
             throw std::runtime_error("PlotFileHeader not loaded");
         }
-        // TODO: this will be written with plot eventually, tunable by groupings and disk seq. read speed.
+        // TODO: this will be written with plot eventually, tunable by groupings and disk seq. read
+        // speed.
         return (1ULL << (plot_file_header_->params.get_k() + CHUNK_SPAN_RANGE_BITS));
     }
 

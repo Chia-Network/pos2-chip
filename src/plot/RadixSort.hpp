@@ -1,47 +1,44 @@
 #pragma once
 
-#include <span>
-#include <cstdint>
-#include <thread>
-#include <algorithm>
-#include <vector>
-#include <span>
-#include <iostream>
 #include "common/Timer.hpp"
 #include "common/thread.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <iostream>
+#include <span>
+#include <thread>
+#include <vector>
 
 // A generic radix sort that works on objects of type T by extracting a key (uint32_t)
 // using the provided KeyExtractor functor.
 template <typename T, typename KeyType, typename KeyExtractor = decltype(&T::match_info)>
 class RadixSort {
 public:
-    explicit RadixSort(KeyExtractor extractor)
-        : key_extractor_(extractor)
-    {}
+    explicit RadixSort(KeyExtractor extractor) : key_extractor_(extractor) {}
 
-    explicit RadixSort()
-        : key_extractor_(&T::match_info)
-    {}
+    explicit RadixSort() : key_extractor_(&T::match_info) {}
 
     // Sort the vector 'data' in place, using 'buffer' as temporary storage.
     // Sorting is based on the key extracted by key_extractor_.
-    void sort(std::span<T> data, std::span<T> buffer, int num_bits = 32, bool verbose = false) {
-        const int radix_bits = 8;    // Process 8 bits per pass.
-        const int radix = 1 << radix_bits;
-        const int radix_mask = radix - 1;
-        const int num_passes = (num_bits + radix_bits - 1) / radix_bits; // Number of passes needed.
-        const size_t num_threads = std::thread::hardware_concurrency();
-        const size_t num_elements = data.size();
+    void sort(std::span<T> data, std::span<T> buffer, int num_bits = 32, bool verbose = false)
+    {
+        int const radix_bits = 8; // Process 8 bits per pass.
+        int const radix = 1 << radix_bits;
+        int const radix_mask = radix - 1;
+        int const num_passes = (num_bits + radix_bits - 1) / radix_bits; // Number of passes needed.
+        size_t const num_threads = std::thread::hardware_concurrency();
+        size_t const num_elements = data.size();
 
         Timer timer;
         if (verbose) {
-            std::cout << "RadixSort: Sorting " << num_elements 
-                      << " elements with " << num_threads << " threads on " << num_bits << " bits" << std::endl;
+            std::cout << "RadixSort: Sorting " << num_elements << " elements with " << num_threads
+                      << " threads on " << num_bits << " bits" << std::endl;
             timer.start();
         }
 
-        std::vector<std::vector<uint32_t>> counts_by_thread(num_threads, std::vector<uint32_t>(radix, 0));
-        const int num_elements_per_thread = static_cast<int>(num_elements / num_threads);
+        std::vector<std::vector<uint32_t>> counts_by_thread(
+            num_threads, std::vector<uint32_t>(radix, 0));
+        int const num_elements_per_thread = static_cast<int>(num_elements / num_threads);
 
         for (int pass = 0; pass < num_passes; ++pass) {
             if (verbose)
@@ -62,7 +59,8 @@ public:
                             counts_by_thread[t][r] = 0;
 
                         size_t start = num_elements_per_thread * t;
-                        size_t end = (t == num_threads - 1) ? num_elements : num_elements_per_thread * (t + 1);
+                        size_t end = (t == num_threads - 1) ? num_elements
+                                                            : num_elements_per_thread * (t + 1);
                         for (size_t i = start; i < end; ++i) {
                             // Extract key using the provided key extractor.
                             KeyType key = (data[i].*key_extractor_ >> shift) & radix_mask;
@@ -90,12 +88,14 @@ public:
                 offsets[i] = offsets[i - 1] + counts[i - 1];
 
             // Compute per-thread offsets.
-            std::vector<std::vector<uint32_t>> offsets_for_thread(num_threads, std::vector<uint32_t>(radix, 0));
+            std::vector<std::vector<uint32_t>> offsets_for_thread(
+                num_threads, std::vector<uint32_t>(radix, 0));
             for (size_t r = 0; r < radix; ++r)
                 offsets_for_thread[0][r] = offsets[r];
             for (size_t t = 1; t < num_threads; ++t) {
                 for (size_t r = 0; r < radix; ++r)
-                    offsets_for_thread[t][r] = offsets_for_thread[t - 1][r] + counts_by_thread[t - 1][r];
+                    offsets_for_thread[t][r]
+                        = offsets_for_thread[t - 1][r] + counts_by_thread[t - 1][r];
             }
 
             if (verbose)
@@ -111,7 +111,8 @@ public:
                 for (size_t t = 0; t < num_threads; ++t) {
                     threads.emplace_back([&, t]() {
                         size_t start = num_elements_per_thread * t;
-                        size_t end = (t == num_threads - 1) ? num_elements : num_elements_per_thread * (t + 1);
+                        size_t end = (t == num_threads - 1) ? num_elements
+                                                            : num_elements_per_thread * (t + 1);
                         for (size_t i = start; i < end; ++i) {
                             KeyType key = (data[i].*key_extractor_ >> shift) & radix_mask;
                             size_t outpos = offsets_for_thread[t][key]++;
@@ -141,7 +142,7 @@ public:
         if (verbose)
             timer.stop();
     }
-    
+
 private:
     KeyExtractor key_extractor_;
 };

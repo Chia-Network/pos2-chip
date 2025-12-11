@@ -1,14 +1,14 @@
-#include "test_util.h"
 #include "pos/BlakeHash.hpp"
+#include "test_util.h"
 
 #include "blake_test_cases.hpp"
 
 TEST_CASE("blake3")
 {
-    for (TestCase const& c : test_cases) {
+    for (TestCase const& c: test_cases) {
         BlakeHash h(c.plot_id);
         int idx = 0;
-        for (uint32_t const data : c.data) {
+        for (uint32_t const data: c.data) {
             h.set_data(idx++, data);
         }
         auto res = h.generate_hash();

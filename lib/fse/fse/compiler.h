@@ -39,14 +39,14 @@
 #endif
 
 /**
-  On MSVC qsort requires that functions passed into it use the __cdecl calling conversion(CC). 
-  This explicitly marks such functions as __cdecl so that the code will still compile 
+  On MSVC qsort requires that functions passed into it use the __cdecl calling conversion(CC).
+  This explicitly marks such functions as __cdecl so that the code will still compile
   if a CC other than __cdecl has been made the default.
 */
 #if  defined(_MSC_VER)
 #  define WIN_CDECL __cdecl
 #else
-#  define WIN_CDECL 
+#  define WIN_CDECL
 #endif
 
 /**

@@ -3,7 +3,7 @@ New Generation Entropy coders
 
 This library proposes two high speed entropy coders :
 
-__Huff0__, a [Huffman codec](https://en.wikipedia.org/wiki/Huffman_coding) designed for modern CPU, 
+__Huff0__, a [Huffman codec](https://en.wikipedia.org/wiki/Huffman_coding) designed for modern CPU,
 featuring OoO (Out of Order) operations on multiple ALU (Arithmetic Logic Unit),
 achieving extremely fast compression and decompression speeds.
 
@@ -51,4 +51,3 @@ Branch Policy
 External contributions are welcomed and encouraged.
 The "master" branch is only meant to host stable releases.
 The "dev" branch is the one where all contributions are merged. If you want to propose a patch, please commit into "dev" branch or dedicated feature branch. Direct commit to "master" are not permitted.
-

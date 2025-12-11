@@ -1,9 +1,9 @@
-#include "prove/Prover.hpp"
 #include "plot/PlotFile.hpp"
 #include "plot/Plotter.hpp"
 #include "pos/ProofCore.hpp"
-#include "pos/ProofParams.hpp"
 #include "pos/ProofFragment.hpp"
+#include "pos/ProofParams.hpp"
+#include "prove/Prover.hpp"
 #include "solve/Solver.hpp"
 
 extern "C" {
@@ -11,22 +11,20 @@ extern "C" {
 // plot_id must point to 32 bytes
 // challenge must point to 32 bytes
 // proof must point to 512 uint32_t
-bool validate_proof(
-    uint8_t const* plot_id,
+bool validate_proof(uint8_t const* plot_id,
     uint8_t const k_size,
     uint8_t const strength,
     uint8_t const* challenge,
     uint32_t const* proof,
-    QualityChain* quality) try
-{
+    QualityChain* quality)
+try {
     if ((k_size & 1) == 1)
         throw std::invalid_argument("k must be even");
     ProofParams const params(plot_id, k_size, strength);
     ProofValidator validator(params);
     std::optional<QualityChainLinks> quality_links = validator.validate_full_proof(
         std::span<uint32_t const, TOTAL_XS_IN_PROOF>(proof, proof + TOTAL_XS_IN_PROOF),
-        std::span<uint8_t const, 32>(challenge, challenge + 32)
-        );
+        std::span<uint8_t const, 32>(challenge, challenge + 32));
     if (!quality_links) {
         return false;
     }
@@ -42,12 +40,11 @@ catch (std::exception const& e) {
 // challenge must point to 32 bytes
 // plot_file must be a null-terminated string
 // output must point to "num_outputs" objects
-uint32_t qualities_for_challenge(
-    char const* plot_file,
+uint32_t qualities_for_challenge(char const* plot_file,
     uint8_t const* challenge,
     QualityChain* output,
-    uint32_t const num_outputs) try
-{
+    uint32_t const num_outputs)
+try {
     Prover p(plot_file);
 
     std::span<uint8_t const, 32> const challenge_arr(challenge, challenge + 32);
@@ -61,17 +58,15 @@ catch (std::exception const& e) {
     return 0;
 }
 
-
 // proof must point to exactly TOTAL_PROOF_FRAGMENTS_IN_PROOF (16) proof fragments (each a uint64_t)
 // plot ID must point to exactly 32 bytes
 // output must point to exactly TOTAL_XS_IN_PROOF (128) 32-bit integers
-bool solve_partial_proof(
-    QualityChain const* quality,
+bool solve_partial_proof(QualityChain const* quality,
     uint8_t const* plot_id,
     uint8_t const k,
     uint8_t const strength,
-    uint32_t* output) try
-{
+    uint32_t* output)
+try {
     if ((k & 1) == 1)
         throw std::invalid_argument("k must be even");
     ProofParams params(plot_id, k, strength);
@@ -80,7 +75,7 @@ bool solve_partial_proof(
     std::array<uint32_t, TOTAL_T1_PAIRS_IN_PROOF> x_bits;
     size_t idx = 0;
     for (int i = 0; i < TOTAL_PROOF_FRAGMENTS_IN_PROOF; ++i) {
-        for (const uint32_t x: c.get_x_bits_from_proof_fragment(quality->chain_links[i])) {
+        for (uint32_t const x: c.get_x_bits_from_proof_fragment(quality->chain_links[i])) {
             x_bits[idx] = x;
             ++idx;
         }
@@ -89,7 +84,8 @@ bool solve_partial_proof(
 
     Solver solver(params);
     std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> full_proofs = solver.solve(x_bits);
-    if (full_proofs.empty()) return false;
+    if (full_proofs.empty())
+        return false;
     // TODO: support returning multiple proofs
     std::copy(full_proofs[0].begin(), full_proofs[0].end(), output);
     return true;
@@ -106,19 +102,26 @@ catch (std::exception const& e) {
 // * farmer public key
 // * plot secret key
 // returns true on success
-bool create_plot(char const* filename, uint8_t const k, uint8_t const strength, uint8_t const* plot_id, uint8_t const* memo) try {
+bool create_plot(char const* filename,
+    uint8_t const k,
+    uint8_t const strength,
+    uint8_t const* plot_id,
+    uint8_t const* memo)
+try {
 
     if ((k & 1) == 1)
         throw std::invalid_argument("k must be even");
     ProofParams params(plot_id, int(k), int(strength));
     Plotter plotter(params);
     PlotData plot = plotter.run();
-    PlotFile::writeData(filename, plot, plotter.getProofParams(), std::span<uint8_t const, 32 + 48 + 32>(memo, memo + 32 + 48 + 32));
+    PlotFile::writeData(filename,
+        plot,
+        plotter.getProofParams(),
+        std::span<uint8_t const, 32 + 48 + 32>(memo, memo + 32 + 48 + 32));
     return true;
 }
 catch (std::exception const& e) {
     std::cerr << e.what() << std::endl;
     return false;
 }
-
 }
