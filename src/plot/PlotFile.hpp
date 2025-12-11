@@ -23,11 +23,7 @@ public:
     static constexpr int MINUS_STUB_BITS = 2;        // proof fragments get k stub bits minus this many extra bits
 
     // Current on-disk format version, update this when the format changes.
-#ifdef RETAIN_X_VALUES_TO_T3
-    static constexpr uint8_t FORMAT_VERSION = 3;
-#else
     static constexpr uint8_t FORMAT_VERSION = 1;
-#endif
 
     struct PlotFileContents {
         ChunkedProofFragments data;
@@ -78,10 +74,6 @@ public:
         out.write(reinterpret_cast<const char*>(&match_key_bits), 1);
 
         out.write(reinterpret_cast<const char*>(memo.data()), memo.size());
-
-#ifdef RETAIN_X_VALUES_TO_T3
-        writeVector(out, data.xs_correlating_to_proof_fragments);
-#endif
 
         // Write chunk index + chunk bodies:
         //  uint64_t num_chunks
@@ -196,11 +188,6 @@ public:
 
         PlotFileHeader header(params);
 
-#ifdef RETAIN_X_VALUES_TO_T3
-        // xs_correlating_to_proof_fragments were written before the chunk index.
-        header.xs_correlating_to_proof_fragments = readVector<std::array<uint32_t,8>>(in);
-#endif
-
         // Read number of chunks
         uint64_t num_chunks = 0;
         in.read(reinterpret_cast<char*>(&num_chunks), sizeof(num_chunks));
@@ -233,10 +220,6 @@ public:
         const auto &header = *plot_file_header_;
 
         ChunkedProofFragments chunked;
-
-#ifdef RETAIN_X_VALUES_TO_T3
-        chunked.xs_correlating_to_proof_fragments = header.xs_correlating_to_proof_fragments;
-#endif
 
         const uint64_t num_chunks = header.num_chunks;
         chunked.proof_fragments_chunks.clear();

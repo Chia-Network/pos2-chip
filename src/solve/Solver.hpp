@@ -24,11 +24,18 @@
 #include <execution>
 #endif
 
-
+// Prefetch Macro
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 #include <xmmintrin.h>
+#define PREFETCH(addr) \
+    _mm_prefetch(reinterpret_cast<const char *>(addr), _MM_HINT_T0)
+#elif defined(__arm__) || defined(__aarch64__)
+#define PREFETCH(addr) \
+    __builtin_prefetch((addr), 0 /* read */, 0 /* no locality hint */)
+#else
+// Fallback: no-op
+#define PREFETCH(addr) ((void)0)
 #endif
-
 
 // #define DEBUG_VERIFY true
 
@@ -37,8 +44,8 @@ typedef unsigned int uint;
 
 struct T1_Match
 {
-    uint32_t x1;        
-    uint32_t x2;        
+    uint32_t x1;
+    uint32_t x2;
     uint32_t pair_hash; // hash of x1 and x2 when paired.
 };
 
@@ -54,11 +61,6 @@ struct T2_match
 struct T3_match
 {
     std::array<uint32_t, 8> x_values;
-};
-
-struct T4_match
-{
-    std::array<uint32_t, 16> x_values;
 };
 
 //
@@ -149,7 +151,7 @@ public:
     // Input: an array of 256 x1 candidates.
     //        x_solution is an dev-mode test array that the solver should solve to and test against (debug and verify).
     // Returns: a vector of complete proofs (each proof is an array of TOTAL_XS_IN_PROOF uint32_t x-values).
-    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF/2> const x_bits_list, std::span<uint32_t const> const x_solution = {})
+    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF / 2> const x_bits_list, std::span<uint32_t const> const x_solution = {})
     {
         XBitGroupMappings x_bits_group = compress_with_lookup(x_bits_list, params_.get_k() / 2);
 #ifdef DEBUG_VERIFY
@@ -215,7 +217,7 @@ public:
         std::vector<uint32_t> x1_hashes(num_match_target_hashes);
         timings_.allocating += timer.stop();
 
-// Phase 2: Hash x1 candidates for comparing match info's
+        // Phase 2: Hash x1 candidates for comparing match info's
         hashX1Candidates(x_bits_group.unique_x_bits_list, x1_bits, x1_range_size, x1s, x1_hashes);
 
         timer.start("Allocating buffer for sort");
@@ -262,7 +264,7 @@ public:
                 uint32_t x1 = x_solution[i];
                 uint32_t x2 = x_solution[i + 1];
                 bool found = false;
-                for (auto const& t1 : t1_matches)
+                for (auto const &t1 : t1_matches)
                 {
                     if (t1.x1 == x1 && t1.x2 == x2)
                     {
@@ -312,7 +314,7 @@ public:
                 std::cout << "x1 group: " << x1_group << ", x2 group: " << x2_group << std::endl;
 
                 bool found_l = false;
-                for (auto const& group : t1_match_groups[x1_group])
+                for (auto const &group : t1_match_groups[x1_group])
                 {
                     if (group.x1 == x1 && group.x2 == x2)
                     {
@@ -322,7 +324,7 @@ public:
                 }
 
                 bool found_r = false;
-                for (auto const& group : t1_match_groups[x2_group])
+                for (auto const &group : t1_match_groups[x2_group])
                 {
                     if (group.x1 == x3 && group.x2 == x4)
                     {
@@ -411,8 +413,8 @@ public:
 
     // Phase 11 helper: T3, T4, T5 matching – further pair and validate matches.
     void matchT3Candidates(int /*num_k_bits*/,
-                               std::span<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> const t2_matches,
-                               std::span<std::vector<T3_match>, TOTAL_T3_PAIRS_IN_PROOF> const t3_matches)
+                           std::span<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> const t2_matches,
+                           std::span<std::vector<T3_match>, TOTAL_T3_PAIRS_IN_PROOF> const t3_matches)
     {
 
         Timer timer;
@@ -470,29 +472,31 @@ public:
         // How many x-values belong to each T3 pair in the final proof
         constexpr size_t XS_PER_GROUP = TOTAL_XS_IN_PROOF / TOTAL_T3_PAIRS_IN_PROOF;
         static_assert(TOTAL_XS_IN_PROOF % TOTAL_T3_PAIRS_IN_PROOF == 0,
-                    "TOTAL_XS_IN_PROOF must be divisible by TOTAL_T3_PAIRS_IN_PROOF");
+                      "TOTAL_XS_IN_PROOF must be divisible by TOTAL_T3_PAIRS_IN_PROOF");
 
         // Recursive helper: choose a match for group g, then recurse to g+1.
         std::function<void(size_t)> buildProofs =
             [&](size_t g)
+        {
+            // Base case: we have chosen a match for every group -> store one full proof
+            if (g == TOTAL_T3_PAIRS_IN_PROOF)
             {
-                // Base case: we have chosen a match for every group -> store one full proof
-                if (g == TOTAL_T3_PAIRS_IN_PROOF) {
-                    all_proofs.push_back(full_proof);
-                    return;
-                }
+                all_proofs.push_back(full_proof);
+                return;
+            }
 
-                // For this group g, try every possible match
-                auto const& matches_for_group = t3_matches[g];
-                for (auto const& match : matches_for_group) {
-                    // Copy this match's x-values into the correct slice of the full proof
-                    auto dest_begin = full_proof.begin() + g * XS_PER_GROUP;
-                    std::copy(match.x_values.begin(), match.x_values.end(), dest_begin);
+            // For this group g, try every possible match
+            auto const &matches_for_group = t3_matches[g];
+            for (auto const &match : matches_for_group)
+            {
+                // Copy this match's x-values into the correct slice of the full proof
+                auto dest_begin = full_proof.begin() + g * XS_PER_GROUP;
+                std::copy(match.x_values.begin(), match.x_values.end(), dest_begin);
 
-                    // Recurse to pick matches for the next group
-                    buildProofs(g + 1);
-                }
-            };
+                // Recurse to pick matches for the next group
+                buildProofs(g + 1);
+            }
+        };
 
         // Start recursion at group 0; this will generate the cartesian product:
         // for each match in t3_matches[0]
@@ -504,6 +508,7 @@ public:
 
         return all_proofs;
     }
+
 
     std::array<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> matchT2Candidates(
         std::span<std::vector<T1_Match>> const t1_match_groups,
@@ -522,17 +527,27 @@ public:
         std::cout << "num_section_bits: " << num_section_bits << std::endl;
         std::cout << "num_T2_match_key_bits: " << num_T2_match_key_bits << std::endl;
         std::cout << "num_T2_match_target_bits: " << num_T2_match_target_bits << std::endl;
+        int num_R_collisions = 0;
 #endif
 
-        const int HASHES_BITMASK_SIZE_BITS = num_k_bits - 9;
-        std::vector<uint32_t> hashes_bitmask(size_t(1) << HASHES_BITMASK_SIZE_BITS, 0);
-        std::vector<T1_Match> L_short_list;
+        // Tuning of reduced-hash size
+        const int HASHES_BITMASK_SIZE_BITS = num_k_bits - 8;
+
+        const size_t num_buckets = size_t(1) << HASHES_BITMASK_SIZE_BITS;
+        const uint16_t INVALID_INDEX = std::numeric_limits<uint16_t>::max();
+        const int REDUCE_SHIFT = num_k_bits - HASHES_BITMASK_SIZE_BITS;
+
+        // For each reduced hash value, store the *lowest* index in R_sorted that has it.
+        std::vector<uint16_t> hash_to_index(num_buckets);
 
         std::array<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> t2_matches;
 
         // Process adjacent groups: group 0 with 1, 2 with 3, etc.
         for (size_t t2_group = 0; t2_group < t2_matches.size(); ++t2_group)
         {
+            #ifdef DEBUG_VERIFY
+            num_R_collisions = 0;
+            #endif
             size_t group_mapping_index_l = t2_group * 2;
             size_t group_mapping_index_r = group_mapping_index_l + 1;
             int t1_group_l = x_bits_group.mapping[group_mapping_index_l];
@@ -540,158 +555,158 @@ public:
 
             const auto &R_list = t1_match_groups[t1_group_r];
 
-            // --- sort & bitmask R_list ---
+            // --- sort R_list by pair_hash ---
             sub_timer.start();
-            std::fill(hashes_bitmask.begin(), hashes_bitmask.end(), 0);
             auto R_sorted = R_list;
             std::sort(
 #ifdef __cpp_lib_execution
                 std::execution::par_unseq,
 #endif
                 R_sorted.begin(), R_sorted.end(),
-                [](auto &a, auto &b)
-                { return a.pair_hash < b.pair_hash; });
-            /*std::sort(R_sorted.begin(), R_sorted.end(),
-                      [](auto &a, auto &b){ return a.pair_hash < b.pair_hash; });*/
-
+                [](const T1_Match &a, const T1_Match &b)
+                {
+                    return a.pair_hash < b.pair_hash;
+                });
             timings_.t2_sort_short_list += sub_timer.stop();
 
-            for (size_t j = 0; j < R_sorted.size(); ++j)
+            // --- build hash_to_index: reduced hash -> first index in R_sorted with that reduced value ---
+            sub_timer.start();
+
+            std::fill(hash_to_index.begin(), hash_to_index.end(), INVALID_INDEX);
+            assert(R_sorted.size() < INVALID_INDEX); // ensure we don't overflow uint16_t
+            for (uint16_t j = 0; j < numeric_cast<uint16_t>(R_sorted.size()); ++j)
             {
-                uint32_t hash_reduced = R_sorted[j].pair_hash >> (num_k_bits - HASHES_BITMASK_SIZE_BITS);
-                int slot = hash_reduced >> 5;
-                int bit = hash_reduced & 31;
-                hashes_bitmask[slot] |= (1 << bit);
+                uint32_t reduced = R_sorted[j].pair_hash >> REDUCE_SHIFT;
+                if (hash_to_index[reduced] == INVALID_INDEX)
+                {
+                    // Because R_sorted is sorted, this will be the lowest index for this reduced value.
+                    hash_to_index[reduced] = j;
+                }
+                else {
+                    assert(hash_to_index[reduced] <= j);
+                }
+                #ifdef DEBUG_VERIFY
+                else {
+                    num_R_collisions++;
+                }
+                #endif
             }
+            #ifdef DEBUG_VERIFY
+            std::cout << "Num R collisions: " << num_R_collisions << std::endl;
+            #endif
+
+            timings_.t2_sort_short_list += sub_timer.stop(); // reuse this bucket for index build time
 
             const auto &L_list = t1_match_groups[t1_group_l];
-            ProofCore proof_core(params_);
             uint32_t num_match_keys = 1u << num_T2_match_key_bits;
 
-            // --- use C++20 parallel for to speed up the processing of L_list ---
+            auto &out = t2_matches[t2_group];
+            std::mutex out_mutex;
+
+            // --- parallel processing of unsorted L_list ---
             sub_timer.start();
 
-            // prepare shared list and mutex
-            L_short_list.clear();
-            L_short_list.reserve(L_list.size() * 2);
-            std::mutex list_mutex;
+            parallel_for_range(L_list.begin(), L_list.end(),
+                               [&hash_to_index,
+                                &R_sorted,
+                                &out,
+                                &out_mutex,
+                                &num_match_keys,
+                                &num_k_bits,
+                                &num_section_bits,
+                                &num_T2_match_target_bits,
+                                &REDUCE_SHIFT,
+                                &num_T2_match_key_bits,
+                                this](const T1_Match &lm) {
+                ProofCore thread_core(params_);
+                std::vector<T2_match> local_out;
+                local_out.reserve(4);
 
-            // parallel loop over each L element
-            parallel_for_range(L_list.begin(), L_list.end(), [&](const T1_Match &lm)
-                               {
-                    // each thread gets its own ProofCore instance
-                    ProofCore thread_core(params_);
+                for (uint32_t match_key = 0; match_key < num_match_keys; ++match_key)
+                {
+                    // Build target hash exactly as in original code.
+                    uint64_t meta = (uint64_t(lm.x1) << num_k_bits) | lm.x2;
+                    uint32_t L_hash = thread_core.matching_target(2, meta, match_key);
 
-                    // collect matches for this lm
-                    std::vector<T1_Match> local_matches;
-                    local_matches.reserve(4);
+                    uint32_t sec_bits = lm.pair_hash >> (num_k_bits - num_section_bits);
+                    uint32_t R_sec = thread_core.matching_section(sec_bits);
 
-                    for (uint32_t match_key = 0; match_key < num_match_keys; ++match_key)
+                    uint32_t final_hash =
+                        (R_sec << (num_k_bits - num_section_bits)) |
+                        (match_key << num_T2_match_target_bits) |
+                        L_hash;
+
+                    uint32_t reduced = final_hash >> REDUCE_SHIFT;
+                    uint32_t idx = hash_to_index[reduced];
+
+                    if (idx == INVALID_INDEX)
                     {
-                        uint64_t meta = (uint64_t(lm.x1) << num_k_bits) | lm.x2;
-                        uint32_t L_hash = thread_core.matching_target(2, meta, match_key);
-                        uint32_t sec_bits = lm.pair_hash >> (num_k_bits - num_section_bits);
-
-                        uint32_t R_sec = thread_core.matching_section(sec_bits);
-                        uint32_t final_hash =
-                            (R_sec << (num_k_bits - num_section_bits)) | (match_key << num_T2_match_target_bits) | L_hash;
-
-                        uint32_t reduced = final_hash >> (num_k_bits - HASHES_BITMASK_SIZE_BITS);
-                        if (hashes_bitmask[reduced >> 5] & (1u << (reduced & 31)))
-                        {
-                            local_matches.push_back({lm.x1, lm.x2, final_hash});
-                        }
+                        // No R entries share this reduced hash.
+                        continue;
                     }
 
-                    // merge thread-local results into shared vector
-                    if (!local_matches.empty())
+                    // Walk down R_sorted from that index while R is in-range (same reduced).
+                    // For each, check exact pair_hash match and then validate.
+                    for (uint32_t j = idx; j < static_cast<uint32_t>(R_sorted.size()); ++j)
                     {
-                        std::lock_guard<std::mutex> lock(list_mutex);
-                        L_short_list.insert(
-                            L_short_list.end(),
-                            local_matches.begin(),
-                            local_matches.end());
-                    } });
+                        uint32_t r_hash = R_sorted[j].pair_hash;
+                        uint32_t r_reduced = r_hash >> REDUCE_SHIFT;
 
-            timings_.t2_gen_L_list += sub_timer.stop();
-
-            // --- sort potential matches ---
-            sub_timer.start();
-            // sort parallel
-            std::sort(
-#ifdef __cpp_lib_execution
-                std::execution::par_unseq,
-#endif
-                L_short_list.begin(), L_short_list.end(),
-                [](auto &a, auto &b)
-                { return a.pair_hash < b.pair_hash; });
-            /*std::sort(L_short_list.begin(), L_short_list.end(),
-                      [](auto &a, auto &b){ return a.pair_hash < b.pair_hash; });*/
-            timings_.t2_sort_short_list += sub_timer.stop();
-
-            sub_timer.start();
-
-            // --- two-pointer join L_short_list with R_sorted ---
-            int L_pos = 0, R_pos = 0;
-            auto &out = t2_matches[t2_group];
-            while (L_pos < (int)L_short_list.size() &&
-                   R_pos < (int)R_sorted.size())
-            {
-                uint32_t lhs_hash = L_short_list[L_pos].pair_hash;
-                uint32_t rhs_hash = R_sorted[R_pos].pair_hash;
-
-                if (lhs_hash == rhs_hash)
-                {
-                    size_t i = L_pos;
-                    while (i < L_short_list.size() &&
-                           L_short_list[i].pair_hash == rhs_hash)
-                    {
-                        // build stack-array for validator
-                        uint32_t x_values[4] = {
-                            L_short_list[i].x1,
-                            L_short_list[i].x2,
-                            R_sorted[R_pos].x1,
-                            R_sorted[R_pos].x2};
-
-                        // 4-bit filter
-                        uint16_t lowL = uint16_t(x_values[1] & 0xFFFF);
-                        uint16_t lowR = uint16_t(x_values[3] & 0xFFFF);
-                        if (params_.get_k() < 16)
+                        if (r_reduced != reduced)
                         {
-                            uint64_t ml = (uint64_t(x_values[0]) << num_k_bits) | x_values[1];
-                            uint64_t mr = (uint64_t(x_values[2]) << num_k_bits) | x_values[3];
-                            lowL = uint16_t(ml & 0xFFFF);
-                            lowR = uint16_t(mr & 0xFFFF);
+                            // We've left the bucket / range for this reduced value.
+                            break;
                         }
 
-                        ProofCore pc(params_);
-                        if (pc.match_filter_4(lowL, lowR))
+                        if (r_hash != final_hash)
                         {
-                            ProofValidator validator(params_);
-                            if (auto pairing = validator.validate_table_2_pairs(x_values))
+                            continue;
+                        }
+
+                        // Exact hash match: run filter / pairing.
+                        uint32_t x_values[4] = {
+                            lm.x1,
+                            lm.x2,
+                            R_sorted[j].x1,
+                            R_sorted[j].x2
+                        };
+
+                        {
+                            int num_test_bits = num_T2_match_key_bits;
+                            const uint64_t out_meta_bits = num_k_bits * 2;
+                            uint64_t meta_l =
+                                ((uint64_t(lm.x1) << num_k_bits) | lm.x2);
+                            uint64_t meta_r =
+                                ((uint64_t(R_sorted[j].x1) << num_k_bits) | R_sorted[j].x2);
+
+                            PairingResult pair = thread_core.hashing.pairing(
+                                meta_l,
+                                meta_r,
+                                num_k_bits,
+                                static_cast<int>(out_meta_bits),
+                                num_test_bits);
+
+                            if (pair.test_result == 0)
                             {
                                 T2_match t2;
                                 t2.x_values = {x_values[0], x_values[1], x_values[2], x_values[3]};
-                                // t2.match_info = pairing->match_info;
-                                // t2.meta = pairing->meta;
-                                out.push_back(t2);
+                                local_out.push_back(t2);
                             }
                         }
-                        ++i;
                     }
-                    ++R_pos;
                 }
-                else if (lhs_hash < rhs_hash)
-                {
-                    ++L_pos;
-                }
-                else
-                {
-                    ++R_pos;
-                }
-            }
 
-            timings_.t2_scan_for_matches += sub_timer.stop();
+                if (!local_out.empty())
+                {
+                    std::lock_guard<std::mutex> lock(out_mutex);
+                    out.insert(out.end(), local_out.begin(), local_out.end());
+                }
+            });
+
+            timings_.t2_gen_L_list += sub_timer.stop();
+
+            // We folded the old two-pointer scan work into the L loop above,
+            // so we don't add to t2_scan_for_matches here.
         }
 
         timings_.t2_matches += timer.stop();
@@ -706,28 +721,8 @@ public:
     {
         // split matches into seperate lists for each x1 group
         // make lookup table for x1 ranges
-        // TODO: small chance some x's will have SAME range, but we can handle this later. For now this would be a bug.
-
+        
         Timer timer;
-        /*timer.start("Creating x1 ranges to index lookup table");
-        int total_ranges = 1 << x1_bits; //(num_k_bits - x1_bits); // number of possible ranges an x1 can have is basically the number of bits it has.
-        // std::cout << "Total ranges: " << total_ranges << " from x1_bits: " << x1_bits << " k_bits: " << num_k_bits << std::endl;
-        std::vector<int> x1_ranges_to_index(total_ranges, 0);
-        for (int i = 0; i < x_bits_list.size(); i++)
-        {
-            uint32_t x1_bit_dropped = x_bits_list[i];
-            //uint32_t x1_bit_dropped = x1 >> (num_k_bits - x1_bits);
-            // std::cout << "index: " << i << " x1: " << x1 << " x1_bit_dropped: " << x1_bit_dropped << std::endl;
-            if (x1_bit_dropped >= total_ranges)
-            {
-                std::cout << "x1_bit_dropped: " << x1_bit_dropped << " OUT OF BOUNDS to total_ranges: " << total_ranges << std::endl;
-            }
-            else
-            {
-                x1_ranges_to_index[x1_bit_dropped] = i;
-            }
-        }
-        timings_.misc += timer.stop();*/
 
         timer.start("Splitting matches into x1 groups");
         // Split concurrent_matches into separate match lists
@@ -756,9 +751,6 @@ public:
                 continue;
             }
 #endif
-            // x1_ranges_to_index[x1_bit_dropped];
-            //  std::vector<uint64_t> match_vec = { (match.x1 << num_k_bits) + match.x2, match.pair_hash };
-            //  match_lists[lookup_index].push_back(match_vec);
 
             match_lists[lookup_index].push_back(match);
         }
@@ -778,33 +770,9 @@ public:
         Timer timer;
         timer.start("Computing section boundaries");
 
-
         const auto section_boundaries_x1 = computeSectionBoundaries(x1_hashes);
         const auto section_boundaries_x2 = computeSectionBoundaries(x2_match_hashes);
 
-        /*if (test_section_boundaries_x1 != section_boundaries_x1)
-        {
-            std::cout << "test_section_boundaries_x1 != section_boundaries_x1" << std::endl;
-            // output both section boudnaries
-            std::cout << "test_section_boundaries_x1: ";
-            for (int i = 0; i < test_section_boundaries_x1.size(); i++)
-            {
-                std::cout << test_section_boundaries_x1[i] << ", ";
-            }
-            std::cout << std::endl;
-            std::cout << "section_boundaries_x1: ";
-            for (int i = 0; i < section_boundaries_x1.size(); i++)
-            {
-                std::cout << section_boundaries_x1[i] << ", ";
-            }
-            std::cout << std::endl;
-            exit(23);
-        }
-        if (test_section_boundaries_x2 != section_boundaries_x2)
-        {
-            std::cout << "test_section_boundaries_x2 != section_boundaries_x2" << std::endl;
-            exit(23);
-        }*/
         timings_.misc += timer.stop();
 
         if (false)
@@ -832,8 +800,8 @@ public:
             {
                 const int start_section = section_boundaries_x1[i];
                 const int end_section = (i + 1 == section_boundaries_x1.size())
-                                      ? num_match_target_hashes
-                                      : section_boundaries_x1[i + 1];
+                                            ? num_match_target_hashes
+                                            : section_boundaries_x1[i + 1];
                 std::cout << "section_boundaries_x1 section:" << i << " start_section: " << start_section << " end_section: " << end_section << std::endl;
                 for (int j = start_section; j < end_section; j++)
                 {
@@ -857,8 +825,8 @@ public:
             {
                 const int start_section = section_boundaries_x2[i];
                 const int end_section = (i + 1 == section_boundaries_x2.size())
-                                      ? static_cast<int>(x2_match_hashes.size())
-                                      : section_boundaries_x2[i + 1];
+                                            ? static_cast<int>(x2_match_hashes.size())
+                                            : section_boundaries_x2[i + 1];
                 for (int j = start_section; j < end_section; j++)
                 {
                     const uint32_t hash = x2_match_hashes[j];
@@ -900,7 +868,7 @@ public:
             // this section splits execution into NUM_SECTIONS tasks
             // performs better when small number of cpu's.
             parallel_for_range(0, NUM_SECTIONS, [&](int section)
-                               {
+            {
                     ProofCore proof_core(params_);
 
                     int x1_start = section_boundaries_x1[section];
@@ -965,61 +933,29 @@ public:
             {
                 const int x1_start = section_boundaries_x1[section];
                 const int x1_end = (section + 1 == NUM_SECTIONS)
-                                 ? num_match_target_hashes
-                                 : section_boundaries_x1[section + 1];
+                                       ? num_match_target_hashes
+                                       : section_boundaries_x1[section + 1];
                 const int x2_start = section_boundaries_x2[section];
                 const int x2_end = (section + 1 == NUM_SECTIONS)
-                                 ? static_cast<int>(x2_match_hashes.size())
-                                 : section_boundaries_x2[section + 1];
+                                       ? static_cast<int>(x2_match_hashes.size())
+                                       : section_boundaries_x2[section + 1];
                 const auto task_boundaries_x1 = makeTaskBoundariesSimple(
                     x1_start, x1_end,
                     x1_hashes,
                     num_task_bit_splits);
-                /*auto test_task_boundaries_x1 = makeTaskBoundariesFast(
-                    x1_start, x1_end,
-                    x1_hashes,
-                    num_task_bit_splits);
-                if (task_boundaries_x1 != test_task_boundaries_x1)
-                {
-                    std::cout << "ERROR: task_boundaries_x1 != test_task_boundaries_x1" << std::endl;
-                    exit(23);
-                }*/
+                
                 auto task_boundaries_x2 = makeTaskBoundariesSimple(
                     x2_start, x2_end,
                     x2_match_hashes,
                     num_task_bit_splits);
-                /*auto test_task_boundaries_x2 = makeTaskBoundariesSimple(
-                    x2_start, x2_end,
-                    x2_match_hashes,
-                    num_task_bit_splits);
-                if (task_boundaries_x2 != test_task_boundaries_x2)
-                {
-                    std::cout << "ERROR: task_boundaries_x2 != test_task_boundaries_x2" << std::endl;
-                    exit(23);
-                }
-                */
-
-                /*if (false)
-                {
-                    // verify task boundaries
-                    for (size_t i = 0; i < task_boundaries_x1.size(); i++)
-                    {
-                        std::cout << "Task boundaries x1[" << i << "]: " << task_boundaries_x1[i] << std::endl;
-                        std::cout << "Task boundaries x2[" << i << "]: " << task_boundaries_x2[i] << std::endl;
-                        uint32_t first_hash_x1 = x1_hashes[task_boundaries_x1[i]];
-                        uint32_t first_hash_x2 = x2_match_hashes[task_boundaries_x2[i]];
-                        std::cout << "Task boundaries x1[" << i << "] first hash: " << first_hash_x1 << std::endl;
-                        std::cout << "Task boundaries x2[" << i << "] first hash: " << first_hash_x2 << std::endl;
-                    }
-                }*/
-
+                
                 int total_tasks = 1 << num_task_bit_splits;
 
                 std::vector<int> task_ids(total_tasks);
                 std::iota(task_ids.begin(), task_ids.end(), 0);
 
                 parallel_for_range(task_ids.begin(), task_ids.end(), [&](int task_id)
-                              {
+                                   {
                         ProofCore proof_core(params_);
 
                         const int x1_start = task_boundaries_x1[task_id];
@@ -1330,7 +1266,7 @@ public:
             timer.start("AES multi-threaded bitmask test");
             AesHash aes_hash(params_.get_plot_id_bytes(), params_.get_k());
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t)
-            {
+                               {
                 int thread_matches = 0;
                 uint64_t start = uint64_t(t) * chunk_size;
                 uint64_t end = (t + 1 == (int)num_threads)
@@ -1339,12 +1275,12 @@ public:
                     
                 if (!use_prefetching_) {
                     for (uint64_t x = start; x < end; x++) {
-                        
-                        #if (HAVE_AES)
+
+#if (HAVE_AES)
                         uint32_t g_hash = aes_hash.hash_x<false>(uint32_t(x));
-                        #else
+#else
                         uint32_t g_hash = aes_hash.hash_x<true>(uint32_t(x));
-                        #endif
+#endif
                         
                         uint32_t bitmask_hash = g_hash >> this->bitmask_shift_;
                         int slot = bitmask_hash >> 5;
@@ -1381,12 +1317,12 @@ public:
                     //    We won't *use* them yet; we're just filling the pipeline.
                     uint64_t x_pref = start;
                     for (int i = 0; i < PREFETCH_DIST; ++i, ++x_pref) {
-                        
-                        #if (HAVE_AES)
+
+#if (HAVE_AES)
                         uint32_t h = aes_hash.hash_x<false>(uint32_t(x_pref));
-                        #else
+#else
                         uint32_t h = aes_hash.hash_x<true>(uint32_t(x_pref));
-                        #endif
+#endif
 
                         hash_buf[i] = h;
                         uint32_t bitmask_hash = h >> this->bitmask_shift_;
@@ -1396,11 +1332,7 @@ public:
                         slot_buf[i] = slot;
 
                         //rx_prefetch_nta(&x1_bitmask[slot]);
-                        #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
-                        _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[slot]), _MM_HINT_T0);
-                        #elif defined(__arm__) || defined(__aarch64__)
-                        __builtin_prefetch(&x1_bitmask[slot], 0, 0);
-                        #endif
+                        PREFETCH(&x1_bitmask[slot]);
                     }
 
                     // 2) Main pipelined loop.
@@ -1436,12 +1368,11 @@ public:
                         // Now compute and prefetch for the future element at x_pref = x + PREFETCH_DIST.
                         uint64_t x_future = x + PREFETCH_DIST;
 
-                        
-                        #if (HAVE_AES)
+#if (HAVE_AES)
                         uint32_t h = aes_hash.hash_x<false>(uint32_t(x_future));
-                        #else
+#else
                         uint32_t h = aes_hash.hash_x<true>(uint32_t(x_future));
-                        #endif
+#endif
 
                         hash_buf[buf_ix] = h;
                         uint32_t future_bitmask_hash = h >> this->bitmask_shift_;
@@ -1451,11 +1382,7 @@ public:
                         slot_buf[buf_ix] = future_slot;
 
                         //rx_prefetch_nta(&x1_bitmask[future_slot]);
-                        #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
-                        _mm_prefetch(reinterpret_cast<const char *>(&x1_bitmask[future_slot]), _MM_HINT_T0);
-                        #elif defined(__arm__) || defined(__aarch64__)
-                        __builtin_prefetch(&x1_bitmask[future_slot], 0, 0);
-                        #endif
+                        PREFETCH(&x1_bitmask[future_slot]);
                     }
 
                     // 3) Drain the remaining PREFETCH_DIST-1 buffered entries (no new prefetches).
@@ -1538,7 +1465,7 @@ public:
             ") and num match keys (" + std::to_string(num_match_keys) + ")");
 
         parallel_for_range(0, NUM_X1S, [&](int x1_index)
-                      {
+                           {
                 // each thread in the pool runs this lambda
                 ProofCore proof_core(params_);
                 AesHash aes_hash(params_.get_plot_id_bytes(), params_.get_k());
@@ -1557,11 +1484,11 @@ public:
                      ++x)
                 {
                     uint32_t g_hash;
-                    #if (HAVE_AES)
+#if (HAVE_AES)
                         g_hash = aes_hash.hash_x<false>(uint32_t(x));
-                    #else
+#else
                         g_hash = aes_hash.hash_x<true>(uint32_t(x));
-                    #endif
+#endif
                     
 
                     // offset within this x1 range for writing per-match_key blocks
@@ -1600,7 +1527,7 @@ public:
 
         // TODO: could be multi-threaded
         timer.start("Setting bitmask hash");
-        for (auto const& x1 : x1_hashes)
+        for (auto const &x1 : x1_hashes)
         {
             uint32_t hash = x1 >> bitmask_shift_;
             int slot = hash >> 5;
@@ -1631,7 +1558,7 @@ public:
         bitmask_shift_ = shift;
     }
 
-    ProofSolverTimings const& timings() const { return timings_; }
+    ProofSolverTimings const &timings() const { return timings_; }
 
 private:
     // ------------------------------------------------------------------------
