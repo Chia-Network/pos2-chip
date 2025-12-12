@@ -20,6 +20,7 @@ fn main() {
     }
     build.compile("chiapos_c");
 
+    #[cfg(not(feature = "external-fse"))]
     cc::Build::new()
         .cpp(false)
         .include("fse/fse")

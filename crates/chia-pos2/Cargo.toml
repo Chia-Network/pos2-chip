@@ -17,6 +17,7 @@ bench = false
 
 [features]
 arbitrary = ["dep:arbitrary"]
+external-fse = []
 
 [dependencies]
 serde = { workspace = true }
