@@ -23,6 +23,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: clang-format version
+        run: clang-format --version
       - name: clang-format
         run: find src tests -iname '*.h' -o -iname '*.cpp' -o -iname '*.hpp' | clang-format --files=/dev/stdin -i
       - name: check conformance
