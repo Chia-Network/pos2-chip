@@ -20,17 +20,21 @@ fn main() {
     }
     build.compile("chiapos_c");
 
-    #[cfg(not(feature = "external-fse"))]
-    cc::Build::new()
-        .cpp(false)
-        .include("fse/fse")
-        .file("fse/fse/entropy_common.c")
-        .file("fse/fse/fse_compress.c")
+    let mut build = cc::Build::new();
+    build.cpp(false)
         .file("fse/fse/fse_decompress.c")
+        .define("FSE_MAX_MEMORY_USAGE", "16")
+        .include("fse/fse");
+
+    // This is a bit of a hack to allow linking this together with zstd
+    // which also includes FSE, except FSE_decompress apparently
+    #[cfg(not(feature = "external-fse"))]
+    build.file("fse/fse/entropy_common.c")
+        .file("fse/fse/fse_compress.c")
         .file("fse/fse/fseU16.c")
         .file("fse/fse/huf_compress.c")
         .file("fse/fse/huf_decompress.c")
-        .file("fse/fse/hist.c")
-        .define("FSE_MAX_MEMORY_USAGE", "16")
-        .compile("fse_c");
+        .file("fse/fse/hist.c");
+
+    build.compile("fse_c");
 }
