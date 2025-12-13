@@ -71,7 +71,7 @@ extern "C" {
    Maximum allowed 'maxSymbolValue' is controlled by constant FSE_MAX_SYMBOL_VALUE
    Special values : if result == 0, data is not compressible => Nothing is stored within cSrc !!
                     if result == 1, data is one constant element x srcSize times. Use RLE compression.
-                    if FSE_isError(result), it's an error code.*/
+                    if POS2_FSE_isError(result), it's an error code.*/
 size_t FSE_compressU16(void* dst, size_t dstCapacity,
        const unsigned short* src, size_t srcSize,
        unsigned maxSymbolValue, unsigned tableLog);

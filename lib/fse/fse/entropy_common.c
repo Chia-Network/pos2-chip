@@ -24,21 +24,21 @@
 
 
 /*===   Version   ===*/
-unsigned FSE_versionNumber(void) { return FSE_VERSION_NUMBER; }
+unsigned POS2_FSE_versionNumber(void) { return FSE_VERSION_NUMBER; }
 
 
 /*===   Error Management   ===*/
-unsigned FSE_isError(size_t code) { return ERR_isError(code); }
-const char* FSE_getErrorName(size_t code) { return ERR_getErrorName(code); }
+unsigned POS2_FSE_isError(size_t code) { return ERR_isError(code); }
+const char* POS2_FSE_getErrorName(size_t code) { return ERR_getErrorName(code); }
 
-unsigned HUF_isError(size_t code) { return ERR_isError(code); }
-const char* HUF_getErrorName(size_t code) { return ERR_getErrorName(code); }
+unsigned POS2_HUF_isError(size_t code) { return ERR_isError(code); }
+const char* POS2_HUF_getErrorName(size_t code) { return ERR_getErrorName(code); }
 
 
 /*-**************************************************************
 *  FSE NCount encoding-decoding
 ****************************************************************/
-size_t FSE_readNCount (short* normalizedCounter, unsigned* maxSVPtr, unsigned* tableLogPtr,
+size_t POS2_FSE_readNCount (short* normalizedCounter, unsigned* maxSVPtr, unsigned* tableLogPtr,
                  const void* headerBuffer, size_t hbSize)
 {
     const BYTE* const istart = (const BYTE*) headerBuffer;
@@ -56,9 +56,9 @@ size_t FSE_readNCount (short* normalizedCounter, unsigned* maxSVPtr, unsigned* t
         /* This function only works when hbSize >= 4 */
         char buffer[4] = {0};
         memcpy(buffer, headerBuffer, hbSize);
-        {   size_t const countSize = FSE_readNCount(normalizedCounter, maxSVPtr, tableLogPtr,
+        {   size_t const countSize = POS2_FSE_readNCount(normalizedCounter, maxSVPtr, tableLogPtr,
                                                     buffer, sizeof(buffer));
-            if (FSE_isError(countSize)) return countSize;
+            if (POS2_FSE_isError(countSize)) return countSize;
             if (countSize > hbSize) return ERROR(corruption_detected);
             return countSize;
     }   }
@@ -144,14 +144,14 @@ size_t FSE_readNCount (short* normalizedCounter, unsigned* maxSVPtr, unsigned* t
 }
 
 
-/*! HUF_readStats() :
-    Read compact Huffman tree, saved by HUF_writeCTable().
+/*! POS2_HUF_readStats() :
+    Read compact Huffman tree, saved by POS2_HUF_writeCTable().
     `huffWeight` is destination buffer.
     `rankStats` is assumed to be a table of at least HUF_TABLELOG_MAX U32.
     @return : size read from `src` , or an error Code .
-    Note : Needed by HUF_readCTable() and HUF_readDTableX?() .
+    Note : Needed by POS2_HUF_readCTable() and HUF_readDTableX?() .
 */
-size_t HUF_readStats(BYTE* huffWeight, size_t hwSize, U32* rankStats,
+size_t POS2_HUF_readStats(BYTE* huffWeight, size_t hwSize, U32* rankStats,
                      U32* nbSymbolsPtr, U32* tableLogPtr,
                      const void* src, size_t srcSize)
 {
@@ -178,8 +178,8 @@ size_t HUF_readStats(BYTE* huffWeight, size_t hwSize, U32* rankStats,
     else  {   /* header compressed with FSE (normal case) */
         FSE_DTable fseWorkspace[FSE_DTABLE_SIZE_U32(6)];  /* 6 is max possible tableLog for HUF header (maybe even 5, to be tested) */
         if (iSize+1 > srcSize) return ERROR(srcSize_wrong);
-        oSize = FSE_decompress_wksp(huffWeight, hwSize-1, ip+1, iSize, fseWorkspace, 6);   /* max (hwSize-1) values decoded, as last one is implied */
-        if (FSE_isError(oSize)) return oSize;
+        oSize = POS2_FSE_decompress_wksp(huffWeight, hwSize-1, ip+1, iSize, fseWorkspace, 6);   /* max (hwSize-1) values decoded, as last one is implied */
+        if (POS2_FSE_isError(oSize)) return oSize;
     }
 
     /* collect weight stats */

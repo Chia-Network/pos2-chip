@@ -100,13 +100,13 @@ typedef struct {
 #define FSE_FUNCTION_EXTENSION U16
 
 #define FSE_count_generic FSE_count_genericU16
-#define FSE_buildCTable   FSE_buildCTableU16
-#define FSE_buildCTable_wksp FSE_buildCTable_wksp_U16
+#define POS2_FSE_buildCTable   FSE_buildCTableU16
+#define POS2_FSE_buildCTable_wksp FSE_buildCTable_wksp_U16
 
 #define FSE_DECODE_TYPE   FSE_decode_tU16
-#define FSE_createDTable  FSE_createDTableU16
-#define FSE_freeDTable    FSE_freeDTableU16
-#define FSE_buildDTable   FSE_buildDTableU16
+#define POS2_FSE_createDTable  FSE_createDTableU16
+#define POS2_FSE_freeDTable    FSE_freeDTableU16
+#define POS2_FSE_buildDTable   FSE_buildDTableU16
 
 #include "fse_compress.c"   /* FSE_countU16, FSE_buildCTableU16 */
 #include "fse_decompress.c"   /* FSE_buildDTableU16 */
@@ -223,23 +223,23 @@ size_t FSE_compressU16(void* dst, size_t maxDstSize,
 
     /* Scan for stats */
     {   size_t const maxCount = FSE_countU16 (counting, &maxSymbolValue, ip, srcSize);
-        if (FSE_isError(maxCount)) return maxCount;
+        if (POS2_FSE_isError(maxCount)) return maxCount;
         if (maxCount == srcSize) return 1;   /* src contains one constant element x srcSize times. Use RLE compression. */
     }
     /* Normalize */
-    tableLog = FSE_optimalTableLog(tableLog, srcSize, maxSymbolValue);
-    {   size_t const errorCode = FSE_normalizeCount (norm, tableLog, counting, srcSize, maxSymbolValue);
-        if (FSE_isError(errorCode)) return errorCode;
+    tableLog = POS2_FSE_optimalTableLog(tableLog, srcSize, maxSymbolValue);
+    {   size_t const errorCode = POS2_FSE_normalizeCount (norm, tableLog, counting, srcSize, maxSymbolValue);
+        if (POS2_FSE_isError(errorCode)) return errorCode;
     }
     /* Write table description header */
-    {   size_t const NSize = FSE_writeNCount (op, omax-op, norm, maxSymbolValue, tableLog);
-        if (FSE_isError(NSize)) return NSize;
+    {   size_t const NSize = POS2_FSE_writeNCount (op, omax-op, norm, maxSymbolValue, tableLog);
+        if (POS2_FSE_isError(NSize)) return NSize;
         op += NSize;
     }
     /* Compress */
     {   FSE_CTable CTable[FSE_CTABLE_SIZE_U32(FSE_MAX_TABLELOG, FSE_MAX_SYMBOL_VALUE)];
         size_t const errorCode = FSE_buildCTableU16 (CTable, norm, maxSymbolValue, tableLog);
-        if (FSE_isError(errorCode)) return errorCode;
+        if (POS2_FSE_isError(errorCode)) return errorCode;
         op += FSE_compressU16_usingCTable (op, omax - op, ip, srcSize, CTable);
     }
 
@@ -317,13 +317,13 @@ size_t FSE_decompressU16(U16* dst, size_t maxDstSize,
     if (cSrcSize<2) return ERROR(srcSize_wrong);   /* specific corner cases (uncompressed & rle) */
 
     /* normal FSE decoding mode */
-    {   size_t const NSize = FSE_readNCount (NCount, &maxSymbolValue, &tableLog, istart, cSrcSize);
-        if (FSE_isError(NSize)) return NSize;
+    {   size_t const NSize = POS2_FSE_readNCount (NCount, &maxSymbolValue, &tableLog, istart, cSrcSize);
+        if (POS2_FSE_isError(NSize)) return NSize;
         ip += NSize;
         cSrcSize -= NSize;
     }
     {   size_t const errorCode = FSE_buildDTableU16 (dt, NCount, maxSymbolValue, tableLog);
-        if (FSE_isError(errorCode)) return errorCode;
+        if (POS2_FSE_isError(errorCode)) return errorCode;
     }
     return FSE_decompressU16_usingDTable (dst, maxDstSize, ip, cSrcSize, dt);
 }

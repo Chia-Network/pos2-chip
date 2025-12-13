@@ -29,7 +29,7 @@
 /* **************************************************************
 *  Error Management
 ****************************************************************/
-#define FSE_isError ERR_isError
+#define POS2_FSE_isError ERR_isError
 #define FSE_STATIC_ASSERT(c) DEBUG_STATIC_ASSERT(c)   /* use only *after* variable declarations */
 
 
@@ -57,18 +57,18 @@
 
 
 /* Function templates */
-FSE_DTable* FSE_createDTable (unsigned tableLog)
+FSE_DTable* POS2_FSE_createDTable (unsigned tableLog)
 {
     if (tableLog > FSE_TABLELOG_ABSOLUTE_MAX) tableLog = FSE_TABLELOG_ABSOLUTE_MAX;
     return (FSE_DTable*)malloc( FSE_DTABLE_SIZE_U32(tableLog) * sizeof (U32) );
 }
 
-void FSE_freeDTable (FSE_DTable* dt)
+void POS2_FSE_freeDTable (FSE_DTable* dt)
 {
     free(dt);
 }
 
-size_t FSE_buildDTable(FSE_DTable* dt, const short* normalizedCounter, unsigned maxSymbolValue, unsigned tableLog)
+size_t POS2_FSE_buildDTable(FSE_DTable* dt, const short* normalizedCounter, unsigned maxSymbolValue, unsigned tableLog)
 {
     void* const tdPtr = dt+1;   /* because *dt is unsigned, 32-bits aligned on 32-bits */
     FSE_DECODE_TYPE* const tableDecode = (FSE_DECODE_TYPE*) (tdPtr);
@@ -131,7 +131,7 @@ size_t FSE_buildDTable(FSE_DTable* dt, const short* normalizedCounter, unsigned 
 /*-*******************************************************
 *  Decompression (Byte symbols)
 *********************************************************/
-size_t FSE_buildDTable_rle (FSE_DTable* dt, BYTE symbolValue)
+size_t POS2_FSE_buildDTable_rle (FSE_DTable* dt, BYTE symbolValue)
 {
     void* ptr = dt;
     FSE_DTableHeader* const DTableH = (FSE_DTableHeader*)ptr;
@@ -149,7 +149,7 @@ size_t FSE_buildDTable_rle (FSE_DTable* dt, BYTE symbolValue)
 }
 
 
-size_t FSE_buildDTable_raw (FSE_DTable* dt, unsigned nbBits)
+size_t POS2_FSE_buildDTable_raw (FSE_DTable* dt, unsigned nbBits)
 {
     void* ptr = dt;
     FSE_DTableHeader* const DTableH = (FSE_DTableHeader*)ptr;
@@ -238,7 +238,7 @@ FORCE_INLINE_TEMPLATE size_t FSE_decompress_usingDTable_generic(
 }
 
 
-size_t FSE_decompress_usingDTable(void* dst, size_t originalSize,
+size_t POS2_FSE_decompress_usingDTable(void* dst, size_t originalSize,
                             const void* cSrc, size_t cSrcSize,
                             const FSE_DTable* dt)
 {
@@ -252,7 +252,7 @@ size_t FSE_decompress_usingDTable(void* dst, size_t originalSize,
 }
 
 
-size_t FSE_decompress_wksp(void* dst, size_t dstCapacity, const void* cSrc, size_t cSrcSize, FSE_DTable* workSpace, unsigned maxLog)
+size_t POS2_FSE_decompress_wksp(void* dst, size_t dstCapacity, const void* cSrc, size_t cSrcSize, FSE_DTable* workSpace, unsigned maxLog)
 {
     const BYTE* const istart = (const BYTE*)cSrc;
     const BYTE* ip = istart;
@@ -261,25 +261,25 @@ size_t FSE_decompress_wksp(void* dst, size_t dstCapacity, const void* cSrc, size
     unsigned maxSymbolValue = FSE_MAX_SYMBOL_VALUE;
 
     /* normal FSE decoding mode */
-    size_t const NCountLength = FSE_readNCount (counting, &maxSymbolValue, &tableLog, istart, cSrcSize);
-    if (FSE_isError(NCountLength)) return NCountLength;
+    size_t const NCountLength = POS2_FSE_readNCount (counting, &maxSymbolValue, &tableLog, istart, cSrcSize);
+    if (POS2_FSE_isError(NCountLength)) return NCountLength;
     if (tableLog > maxLog) return ERROR(tableLog_tooLarge);
     assert(NCountLength <= cSrcSize);
     ip += NCountLength;
     cSrcSize -= NCountLength;
 
-    CHECK_F( FSE_buildDTable (workSpace, counting, maxSymbolValue, tableLog) );
+    CHECK_F( POS2_FSE_buildDTable (workSpace, counting, maxSymbolValue, tableLog) );
 
-    return FSE_decompress_usingDTable (dst, dstCapacity, ip, cSrcSize, workSpace);   /* always return, even if it is an error code */
+    return POS2_FSE_decompress_usingDTable (dst, dstCapacity, ip, cSrcSize, workSpace);   /* always return, even if it is an error code */
 }
 
 
 typedef FSE_DTable DTable_max_t[FSE_DTABLE_SIZE_U32(FSE_MAX_TABLELOG)];
 
-size_t FSE_decompress(void* dst, size_t dstCapacity, const void* cSrc, size_t cSrcSize)
+size_t POS2_FSE_decompress(void* dst, size_t dstCapacity, const void* cSrc, size_t cSrcSize)
 {
     DTable_max_t dt;   /* Static analyzer seems unable to understand this table will be properly initialized later */
-    return FSE_decompress_wksp(dst, dstCapacity, cSrc, cSrcSize, dt, FSE_MAX_TABLELOG);
+    return POS2_FSE_decompress_wksp(dst, dstCapacity, cSrc, cSrcSize, dt, FSE_MAX_TABLELOG);
 }
 
 

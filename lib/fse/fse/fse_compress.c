@@ -30,7 +30,7 @@
 /* **************************************************************
 *  Error Management
 ****************************************************************/
-#define FSE_isError ERR_isError
+#define POS2_FSE_isError ERR_isError
 
 
 /* **************************************************************
@@ -58,12 +58,12 @@
 
 /* Function templates */
 
-/* FSE_buildCTable_wksp() :
- * Same as FSE_buildCTable(), but using an externally allocated scratch buffer (`workSpace`).
+/* POS2_FSE_buildCTable_wksp() :
+ * Same as POS2_FSE_buildCTable(), but using an externally allocated scratch buffer (`workSpace`).
  * wkspSize should be sized to handle worst case situation, which is `1<<max_tableLog * sizeof(FSE_FUNCTION_TYPE)`
  * workSpace must also be properly aligned with FSE_FUNCTION_TYPE requirements
  */
-size_t FSE_buildCTable_wksp(FSE_CTable* ct,
+size_t POS2_FSE_buildCTable_wksp(FSE_CTable* ct,
                       const short* normalizedCounter, unsigned maxSymbolValue, unsigned tableLog,
                             void* workSpace, size_t wkspSize)
 {
@@ -169,10 +169,10 @@ size_t FSE_buildCTable_wksp(FSE_CTable* ct,
 }
 
 
-size_t FSE_buildCTable(FSE_CTable* ct, const short* normalizedCounter, unsigned maxSymbolValue, unsigned tableLog)
+size_t POS2_FSE_buildCTable(FSE_CTable* ct, const short* normalizedCounter, unsigned maxSymbolValue, unsigned tableLog)
 {
     FSE_FUNCTION_TYPE tableSymbol[FSE_MAX_TABLESIZE];   /* memset() is not necessary, even if static analyzer complain about it */
-    return FSE_buildCTable_wksp(ct, normalizedCounter, maxSymbolValue, tableLog, tableSymbol, sizeof(tableSymbol));
+    return POS2_FSE_buildCTable_wksp(ct, normalizedCounter, maxSymbolValue, tableLog, tableSymbol, sizeof(tableSymbol));
 }
 
 
@@ -183,7 +183,7 @@ size_t FSE_buildCTable(FSE_CTable* ct, const short* normalizedCounter, unsigned 
 /*-**************************************************************
 *  FSE NCount encoding
 ****************************************************************/
-size_t FSE_NCountWriteBound(unsigned maxSymbolValue, unsigned tableLog)
+size_t POS2_FSE_NCountWriteBound(unsigned maxSymbolValue, unsigned tableLog)
 {
     size_t const maxHeaderSize = (((maxSymbolValue+1) * tableLog) >> 3) + 3;
     return maxSymbolValue ? maxHeaderSize : FSE_NCOUNTBOUND;  /* maxSymbolValue==0 ? use default */
@@ -285,13 +285,13 @@ FSE_writeNCount_generic (void* header, size_t headerBufferSize,
 }
 
 
-size_t FSE_writeNCount (void* buffer, size_t bufferSize,
+size_t POS2_FSE_writeNCount (void* buffer, size_t bufferSize,
                   const short* normalizedCounter, unsigned maxSymbolValue, unsigned tableLog)
 {
     if (tableLog > FSE_MAX_TABLELOG) return ERROR(tableLog_tooLarge);   /* Unsupported */
     if (tableLog < FSE_MIN_TABLELOG) return ERROR(GENERIC);   /* Unsupported */
 
-    if (bufferSize < FSE_NCountWriteBound(maxSymbolValue, tableLog))
+    if (bufferSize < POS2_FSE_NCountWriteBound(maxSymbolValue, tableLog))
         return FSE_writeNCount_generic(buffer, bufferSize, normalizedCounter, maxSymbolValue, tableLog, 0);
 
     return FSE_writeNCount_generic(buffer, bufferSize, normalizedCounter, maxSymbolValue, tableLog, 1 /* write in buffer is safe */);
@@ -302,7 +302,7 @@ size_t FSE_writeNCount (void* buffer, size_t bufferSize,
 *  FSE Compression Code
 ****************************************************************/
 
-FSE_CTable* FSE_createCTable (unsigned maxSymbolValue, unsigned tableLog)
+FSE_CTable* POS2_FSE_createCTable (unsigned maxSymbolValue, unsigned tableLog)
 {
     size_t size;
     if (tableLog > FSE_TABLELOG_ABSOLUTE_MAX) tableLog = FSE_TABLELOG_ABSOLUTE_MAX;
@@ -310,7 +310,7 @@ FSE_CTable* FSE_createCTable (unsigned maxSymbolValue, unsigned tableLog)
     return (FSE_CTable*)malloc(size);
 }
 
-void FSE_freeCTable (FSE_CTable* ct) { free(ct); }
+void POS2_FSE_freeCTable (FSE_CTable* ct) { free(ct); }
 
 /* provides the minimum logSize to safely represent a distribution */
 static unsigned FSE_minTableLog(size_t srcSize, unsigned maxSymbolValue)
@@ -322,7 +322,7 @@ static unsigned FSE_minTableLog(size_t srcSize, unsigned maxSymbolValue)
     return minBits;
 }
 
-unsigned FSE_optimalTableLog_internal(unsigned maxTableLog, size_t srcSize, unsigned maxSymbolValue, unsigned minus)
+unsigned POS2_FSE_optimalTableLog_internal(unsigned maxTableLog, size_t srcSize, unsigned maxSymbolValue, unsigned minus)
 {
     U32 maxBitsSrc = BIT_highbit32((U32)(srcSize - 1)) - minus;
     U32 tableLog = maxTableLog;
@@ -336,9 +336,9 @@ unsigned FSE_optimalTableLog_internal(unsigned maxTableLog, size_t srcSize, unsi
     return tableLog;
 }
 
-unsigned FSE_optimalTableLog(unsigned maxTableLog, size_t srcSize, unsigned maxSymbolValue)
+unsigned POS2_FSE_optimalTableLog(unsigned maxTableLog, size_t srcSize, unsigned maxSymbolValue)
 {
-    return FSE_optimalTableLog_internal(maxTableLog, srcSize, maxSymbolValue, 2);
+    return POS2_FSE_optimalTableLog_internal(maxTableLog, srcSize, maxSymbolValue, 2);
 }
 
 
@@ -432,7 +432,7 @@ static size_t FSE_normalizeM2(short* norm, U32 tableLog, const unsigned* count, 
 }
 
 
-size_t FSE_normalizeCount (short* normalizedCounter, unsigned tableLog,
+size_t POS2_FSE_normalizeCount (short* normalizedCounter, unsigned tableLog,
                            const unsigned* count, size_t total,
                            unsigned maxSymbolValue)
 {
@@ -471,7 +471,7 @@ size_t FSE_normalizeCount (short* normalizedCounter, unsigned tableLog,
         if (-stillToDistribute >= (normalizedCounter[largest] >> 1)) {
             /* corner case, need another normalization method */
             size_t const errorCode = FSE_normalizeM2(normalizedCounter, tableLog, count, total, maxSymbolValue);
-            if (FSE_isError(errorCode)) return errorCode;
+            if (POS2_FSE_isError(errorCode)) return errorCode;
         }
         else normalizedCounter[largest] += (short)stillToDistribute;
     }
@@ -495,7 +495,7 @@ size_t FSE_normalizeCount (short* normalizedCounter, unsigned tableLog,
 
 
 /* fake FSE_CTable, for raw (uncompressed) input */
-size_t FSE_buildCTable_raw (FSE_CTable* ct, unsigned nbBits)
+size_t POS2_FSE_buildCTable_raw (FSE_CTable* ct, unsigned nbBits)
 {
     const unsigned tableSize = 1 << nbBits;
     const unsigned tableMask = tableSize - 1;
@@ -528,7 +528,7 @@ size_t FSE_buildCTable_raw (FSE_CTable* ct, unsigned nbBits)
 }
 
 /* fake FSE_CTable, for rle input (always same symbol) */
-size_t FSE_buildCTable_rle (FSE_CTable* ct, BYTE symbolValue)
+size_t POS2_FSE_buildCTable_rle (FSE_CTable* ct, BYTE symbolValue)
 {
     void* ptr = ct;
     U16* tableU16 = ( (U16*) ptr) + 2;
@@ -565,7 +565,7 @@ static size_t FSE_compress_usingCTable_generic (void* dst, size_t dstSize,
     /* init */
     if (srcSize <= 2) return 0;
     { size_t const initError = BIT_initCStream(&bitC, dst, dstSize);
-      if (FSE_isError(initError)) return 0; /* not enough space available to write a bitstream */ }
+      if (POS2_FSE_isError(initError)) return 0; /* not enough space available to write a bitstream */ }
 
 #define FSE_FLUSHBITS(s)  (fast ? BIT_flushBitsFast(s) : BIT_flushBits(s))
 
@@ -610,7 +610,7 @@ static size_t FSE_compress_usingCTable_generic (void* dst, size_t dstSize,
     return BIT_closeCStream(&bitC);
 }
 
-size_t FSE_compress_usingCTable (void* dst, size_t dstSize,
+size_t POS2_FSE_compress_usingCTable (void* dst, size_t dstSize,
                            const void* src, size_t srcSize,
                            const FSE_CTable* ct)
 {
@@ -623,13 +623,13 @@ size_t FSE_compress_usingCTable (void* dst, size_t dstSize,
 }
 
 
-size_t FSE_compressBound(size_t size) { return FSE_COMPRESSBOUND(size); }
+size_t POS2_FSE_compressBound(size_t size) { return FSE_COMPRESSBOUND(size); }
 
-/* FSE_compress_wksp() :
- * Same as FSE_compress2(), but using an externally allocated scratch buffer (`workSpace`).
+/* POS2_FSE_compress_wksp() :
+ * Same as POS2_FSE_compress2(), but using an externally allocated scratch buffer (`workSpace`).
  * `wkspSize` size must be `(1<<tableLog)`.
  */
-size_t FSE_compress_wksp (void* dst, size_t dstSize, const void* src, size_t srcSize, unsigned maxSymbolValue, unsigned tableLog, void* workSpace, size_t wkspSize)
+size_t POS2_FSE_compress_wksp (void* dst, size_t dstSize, const void* src, size_t srcSize, unsigned maxSymbolValue, unsigned tableLog, void* workSpace, size_t wkspSize)
 {
     BYTE* const ostart = (BYTE*) dst;
     BYTE* op = ostart;
@@ -655,17 +655,17 @@ size_t FSE_compress_wksp (void* dst, size_t dstSize, const void* src, size_t src
         if (maxCount < (srcSize >> 7)) return 0;   /* Heuristic : not compressible enough */
     }
 
-    tableLog = FSE_optimalTableLog(tableLog, srcSize, maxSymbolValue);
-    CHECK_F( FSE_normalizeCount(norm, tableLog, count, srcSize, maxSymbolValue) );
+    tableLog = POS2_FSE_optimalTableLog(tableLog, srcSize, maxSymbolValue);
+    CHECK_F( POS2_FSE_normalizeCount(norm, tableLog, count, srcSize, maxSymbolValue) );
 
     /* Write table description header */
-    {   CHECK_V_F(nc_err, FSE_writeNCount(op, oend-op, norm, maxSymbolValue, tableLog) );
+    {   CHECK_V_F(nc_err, POS2_FSE_writeNCount(op, oend-op, norm, maxSymbolValue, tableLog) );
         op += nc_err;
     }
 
     /* Compress */
-    CHECK_F( FSE_buildCTable_wksp(CTable, norm, maxSymbolValue, tableLog, scratchBuffer, scratchBufferSize) );
-    {   CHECK_V_F(cSize, FSE_compress_usingCTable(op, oend - op, src, srcSize, CTable) );
+    CHECK_F( POS2_FSE_buildCTable_wksp(CTable, norm, maxSymbolValue, tableLog, scratchBuffer, scratchBufferSize) );
+    {   CHECK_V_F(cSize, POS2_FSE_compress_usingCTable(op, oend - op, src, srcSize, CTable) );
         if (cSize == 0) return 0;   /* not enough space for compressed data */
         op += cSize;
     }
@@ -684,17 +684,17 @@ typedef struct {
     } workspace;
 } fseWkspMax_t;
 
-size_t FSE_compress2 (void* dst, size_t dstCapacity, const void* src, size_t srcSize, unsigned maxSymbolValue, unsigned tableLog)
+size_t POS2_FSE_compress2 (void* dst, size_t dstCapacity, const void* src, size_t srcSize, unsigned maxSymbolValue, unsigned tableLog)
 {
     fseWkspMax_t scratchBuffer;
     DEBUG_STATIC_ASSERT(sizeof(scratchBuffer) >= FSE_WKSP_SIZE_U32(FSE_MAX_TABLELOG, FSE_MAX_SYMBOL_VALUE));   /* compilation failures here means scratchBuffer is not large enough */
     if (tableLog > FSE_MAX_TABLELOG) return ERROR(tableLog_tooLarge);
-    return FSE_compress_wksp(dst, dstCapacity, src, srcSize, maxSymbolValue, tableLog, &scratchBuffer, sizeof(scratchBuffer));
+    return POS2_FSE_compress_wksp(dst, dstCapacity, src, srcSize, maxSymbolValue, tableLog, &scratchBuffer, sizeof(scratchBuffer));
 }
 
-size_t FSE_compress (void* dst, size_t dstCapacity, const void* src, size_t srcSize)
+size_t POS2_FSE_compress (void* dst, size_t dstCapacity, const void* src, size_t srcSize)
 {
-    return FSE_compress2(dst, dstCapacity, src, srcSize, FSE_MAX_SYMBOL_VALUE, FSE_DEFAULT_TABLELOG);
+    return POS2_FSE_compress2(dst, dstCapacity, src, srcSize, FSE_MAX_SYMBOL_VALUE, FSE_DEFAULT_TABLELOG);
 }
 
 
