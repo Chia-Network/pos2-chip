@@ -172,11 +172,11 @@ public:
 
         // 1) FSE-compress the deltas
         size_t srcSize = deltas.size();
-        size_t maxDst = FSE_compressBound(srcSize);
+        size_t maxDst = POS2_FSE_compressBound(srcSize);
         std::vector<uint8_t> fse_data(maxDst);
 
-        size_t cSize = FSE_compress(fse_data.data(), maxDst, deltas.data(), srcSize);
-        if (FSE_isError(cSize)) {
+        size_t cSize = POS2_FSE_compress(fse_data.data(), maxDst, deltas.data(), srcSize);
+        if (POS2_FSE_isError(cSize)) {
             throw std::runtime_error("ChunkCompressor::compress: FSE_compress failed");
         }
         fse_data.resize(cSize);
@@ -239,8 +239,8 @@ public:
 
         // 1) FSE-decompress deltas
         out_deltas.resize(num_values);
-        size_t dSize = FSE_decompress(out_deltas.data(), num_values, fse_data, fse_size);
-        if (FSE_isError(dSize) || dSize != num_values) {
+        size_t dSize = POS2_FSE_decompress(out_deltas.data(), num_values, fse_data, fse_size);
+        if (POS2_FSE_isError(dSize) || dSize != num_values) {
             throw std::runtime_error(
                 "ChunkCompressor::decompress: FSE_decompress failed or size mismatch");
         }
