@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Attack Effectiveness Comparison</title>
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .card {
+            background: #020617;
+            border-radius: 12px;
+            padding: 1.5rem 2rem;
+            max-width: 100%;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            border: 1px solid #1f2937;
+            overflow-x: auto;
+        }
+
+        .card h1 {
+            font-size: 1.3rem;
+            margin: 0 0 1.25rem;
+            color: #f9fafb;
+        }
+
+        table.results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            min-width: 800px;
+            /* ensures header stays readable */
+        }
+
+        .results-table thead {
+            background: #111827;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: 0.5rem 0.75rem;
+            text-align: right;
+            border-bottom: 1px solid #1f2937;
+            vertical-align: middle;
+        }
+
+        .results-table th:first-child,
+        .results-table td:first-child {
+            text-align: left;
+            position: sticky;
+            left: 0;
+            background: #020617;
+            z-index: 2;
+        }
+
+        .results-table th {
+            font-weight: 600;
+            color: #d1d5db;
+            white-space: nowrap;
+        }
+
+        .results-table tbody tr:nth-child(even) {
+            background: #020617;
+        }
+
+        .results-table tbody tr:nth-child(odd) {
+            background: #030712;
+        }
+
+        .results-table tbody tr:hover {
+            background: #111827;
+        }
+
+        .run-label {
+            font-weight: 600;
+            color: #e5e7eb;
+            white-space: nowrap;
+        }
+
+        .metric-value {
+            font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            color: #a5b4fc;
+            white-space: nowrap;
+        }
+
+        .unit-note {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin-top: 0.75rem;
+            opacity: 0.9;
+        }
+
+        .no-results {
+            padding: 0.75rem;
+            text-align: center;
+            color: #9ca3af;
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>Attack Effectiveness Comparison</h1>
+
+        <table class="results-table">
+            <thead>
+                <tr id="header-row">
+                    <!-- Filled by JavaScript -->
+                </tr>
+            </thead>
+            <tbody id="results-body">
+                <!-- Filled by JavaScript -->
+            </tbody>
+        </table>
+
+        <div class="unit-note">
+            * Sizes are in TB (decimal, 1 TB = 10<sup>12</sup> bytes).<br />
+            * Costs and power are reported per TB of saved bytes.
+        </div>
+    </div>
+
+    <!-- 1. Load postune.js first so its globals are available -->
+    <script src="./postune.js"></script>
+
+    <!-- 2. Then run our logic -->
+    <script>
+        'use strict';
+
+        function formatValue(key, value) {
+            if (value === null || value === undefined) return '';
+
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+                return String(value);
+            }
+
+            // TB values
+            if (key.includes('size (TB)')) {
+                return value.toFixed(3) + ' TB';
+            }
+
+            // Byte counts
+            if (key.includes('(bytes)')) {
+                return value.toLocaleString('en-US') + ' bytes';
+            }
+
+            // Compression
+            if (key.toLowerCase().includes('compression')) {
+                return value.toFixed(3);
+            }
+
+            // Per TB metrics
+            if (key.includes('per TB')) {
+                return value.toFixed(3);
+            }
+
+            // Default: up to 3 decimal places
+            const rounded = Math.round(value * 1000) / 1000;
+            return String(rounded);
+        }
+
+        function buildTable(resultsArray) {
+            const headerRow = document.getElementById('header-row');
+            const tbody = document.getElementById('results-body');
+
+            headerRow.innerHTML = '';
+            tbody.innerHTML = '';
+
+            if (!Array.isArray(resultsArray) || resultsArray.length === 0) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 99;
+                td.className = 'no-results';
+                td.textContent = 'No results to display.';
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+                return;
+            }
+
+            // Collect union of all metric keys (columns)
+            const metricSet = new Set();
+            for (const result of resultsArray) {
+                if (!result || !result.data) continue;
+                for (const key of Object.keys(result.data)) {
+                    metricSet.add(key);
+                }
+            }
+            const metrics = Array.from(metricSet);
+
+            if (metrics.length === 0) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 99;
+                td.className = 'no-results';
+                td.textContent = 'Results found, but no metrics to display.';
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+                return;
+            }
+
+            // Build header: first column is the run label, rest are metrics
+            const thRun = document.createElement('th');
+            thRun.textContent = 'Run';
+            headerRow.appendChild(thRun);
+
+            for (const metric of metrics) {
+                const th = document.createElement('th');
+                th.textContent = metric;
+                headerRow.appendChild(th);
+            }
+
+            // Build rows
+            resultsArray.forEach((entry, index) => {
+                const tr = document.createElement('tr');
+
+                // Run label cell
+                const tdLabel = document.createElement('td');
+                tdLabel.className = 'run-label';
+                tdLabel.textContent = entry.label || `Run ${index + 1}`;
+                tr.appendChild(tdLabel);
+
+                // Metric cells
+                for (const metric of metrics) {
+                    const td = document.createElement('td');
+                    td.className = 'metric-value';
+                    const rawValue = entry.data ? entry.data[metric] : undefined;
+                    td.textContent = formatValue(metric, rawValue);
+                    tr.appendChild(td);
+                }
+
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Run once DOM is parsed (scripts are at the end, so DOM is ready)
+        (function () {
+            try {
+                // These must be defined in postune.js
+                const deviceParams = device_params_5090;
+                var plotParams = get_plot_params(base_plot_id_filter, 2);
+
+                const attackResults = [];
+
+
+                attackResults.push({
+                    label: 'Collected XS Attack (2048)',
+                    data: calc_attack_collected_xs(2048, plotParams, deviceParams)
+                });
+                attackResults.push({
+                    label: 'Collected LXS Attack (512)',
+                    data: calc_attack_collected_lxs(512, plotParams, deviceParams)
+                });
+                attackResults.push({
+                    label: 'Collected LXS Attack (1024)',
+                    data: calc_attack_collected_lxs(1024, plotParams, deviceParams)
+                });
+
+                attackResults.push({
+                    label: 'Challenge Components Bit Dropping Attack (64 - bitdrop 0)',
+                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 64, 0)
+                });
+                attackResults.push({
+                    label: 'Challenge Components Bit Dropping Attack (128 - bitdrop 0)',
+                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 128, 0)
+                });
+                attackResults.push({
+                    label: 'Challenge Components Bit Dropping Attack (256 - bitdrop 0)',
+                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 256, 0)
+                });
+                attackResults.push({
+                    label: 'Challenge Components Bit Dropping Attack (512 - bitadd 1)',
+                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 512, -1)
+                });
+                attackResults.push({
+                    label: 'Challenge Components Bit Dropping Attack (1024 - bitadd 2)',
+                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 1024, -2)
+                });
+                attackResults.push({
+                    label: 'Challenge Components Bit Dropping Attack (2048 - bitdrop 0)',
+                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 2048, 0)
+                });
+                attackResults.push({
+                    label: 'Challenge Components Bit Dropping Attack (2048 - bitdrop 1)',
+                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 2048, 1)
+                });
+                attackResults.push({
+                    label: 'Challenge Components Bit Dropping Attack (2048 - bitadd +4)',
+                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 2048, -4)
+                });
+
+                attackResults.push({
+                    label: 'Proof Fragments Attack (16 fragments, 0 bits dropped)',
+                    data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 16, 0)
+                });
+                attackResults.push({
+                    label: 'Proof Fragments Attack (1024 fragments, 1 bits dropped)',
+                    data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 1024, 1)
+                });
+                attackResults.push({
+                    label: 'Proof Fragments Attack (1024 fragments, 8 bits dropped)',
+                    data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 1024, 8)
+                });
+                attackResults.push({
+                    label: 'Proof Fragments Attack (1024 fragments, 16 bits dropped)',
+                    data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 1024, 16)
+                });
+                attackResults.push({
+                    label: 'Attack Strength Match Bits (strength: ' + plotParams.strength_bits + ')',
+                    data: calc_attack_strength_match_bits(plotParams, deviceParams)
+                });
+                attackResults.push({
+                    label: 'Attack Strength Match Bits (strength: ' + 10 + ')',
+                    data: calc_attack_strength_match_bits(get_plot_params(base_plot_id_filter, 10), deviceParams)
+                });
+
+                // If this has side effects you care about, keep it:
+                calc_plotting_time(plotParams, deviceParams);
+                calc_pure_rental_attack(plotParams, deviceParams, 10); // 3 EiB
+                calc_reconstruction_rental_attack(get_plot_params(256, 2), deviceParams, 3);
+                //calc_pure_rental_attack(get_plot_params_for_strength(13), deviceParams, 3); // 3 EiB
+
+                buildTable(attackResults);
+
+
+            } catch (err) {
+                console.error('Error building attack results table:', err);
+                const tbody = document.getElementById('results-body');
+                if (tbody) {
+                    const tr = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 99;
+                    td.className = 'no-results';
+                    td.textContent = 'Error while generating results. Check console for details.';
+                    tr.appendChild(td);
+                    tbody.appendChild(tr);
+                }
+            }
+        })();
+    </script>
+</body>
+
+</html>
