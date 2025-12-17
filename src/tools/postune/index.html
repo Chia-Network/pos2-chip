@@ -108,12 +108,130 @@
             color: #9ca3af;
             font-style: italic;
         }
+
+        /* New controls header styling */
+        .controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .controls label {
+            font-size: 0.95rem;
+            color: #cbd5e1;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .controls input[type="range"] {
+            width: 160px;
+        }
+
+        .controls input[type="number"] {
+            width: 5rem;
+            padding: 0.15rem 0.35rem;
+            border-radius: 6px;
+            border: 1px solid #2b3440;
+            background: #071026;
+            color: #e5e7eb;
+        }
+
+        /* Summary styles */
+        .summary {
+            margin: 0.5rem 0 1rem 0;
+            padding: 0.75rem 0.75rem;
+            background: #0b1229;
+            border: 1px solid #1f2937;
+            border-radius: 8px;
+        }
+
+        .summary-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .summary-item {
+            flex: 1 1 280px;
+            min-width: 260px;
+            background: #0a0f24;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+        }
+
+        .summary-label {
+            font-size: 0.85rem;
+            color: #9ca3af;
+            margin-bottom: 0.25rem;
+        }
+
+        .summary-value {
+            font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            color: #a5b4fc;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .summary-value pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        .summary-value ul {
+            margin: 0;
+            padding-left: 1.1rem;
+        }
+
+        .summary-value li {
+            line-height: 1.3;
+        }
     </style>
 </head>
 
 <body>
     <div class="card">
         <h1>Attack Effectiveness Comparison</h1>
+
+        <!-- New header controls: plot id filter bits and netspace EiB input -->
+        <div class="controls">
+            <label>
+                Plot ID filter bits:
+                <input id="plot-bits" type="range" min="6" max="18" value="10" step="1" />
+                <span id="plot-bits-value">10</span>
+                <span id="plot-base-value" style="margin-left:0.5rem">Base: 1024</span>
+            </label>
+
+            <label>
+                Netspace Attack (EiB):
+                <input id="netspace-eib" type="number" min="1" value="10" />
+            </label>
+
+            <!-- Added: proof fragment scan filter range bits -->
+            <label>
+                Proof fragment scan filter range bits:
+                <input id="scan-range-bits" type="range" min="6" max="13" value="10" step="1" />
+                <span id="scan-range-bits-value">10</span>
+                <span id="scan-range-base-value" style="margin-left:0.5rem">Range: 1024</span>
+            </label>
+        </div>
+
+        <!-- New: summary output shown under header and above the results table -->
+        <div id="summary" class="summary">
+            <div class="summary-row">
+                <div class="summary-item">
+                    <div class="summary-label">Plot/Validation time by strength</div>
+                    <div class="summary-value" id="summary-plotting-time">—</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Devices needed (rental attack)</div>
+                    <div class="summary-value" id="summary-rental-devices">—</div>
+                </div>
+            </div>
+        </div>
 
         <table class="results-table">
             <thead>
@@ -135,7 +253,7 @@
     <!-- 1. Load postune.js first so its globals are available -->
     <script src="./postune.js"></script>
 
-    <!-- 2. Then run our logic -->
+    <!-- 2. Then run our logic (updated to use the controls and rebuild on change) -->
     <script>
         'use strict';
 
@@ -244,108 +362,342 @@
             });
         }
 
-        // Run once DOM is parsed (scripts are at the end, so DOM is ready)
+        // Hook up controls and dynamic behavior
         (function () {
             try {
-                // These must be defined in postune.js
-                const deviceParams = device_params_5090;
-                var plotParams = get_plot_params(base_plot_id_filter, 2);
+                // Elements
+                const bitsInput = document.getElementById('plot-bits');
+                const bitsValue = document.getElementById('plot-bits-value');
+                const baseValue = document.getElementById('plot-base-value');
+                const netspaceInput = document.getElementById('netspace-eib');
 
-                const attackResults = [];
+                // New scan-range elements
+                const scanInput = document.getElementById('scan-range-bits');
+                const scanValue = document.getElementById('scan-range-bits-value');
+                const scanBase = document.getElementById('scan-range-base-value');
+
+                function updateBaseDisplay() {
+                    const bits = Number(bitsInput.value);
+                    bitsValue.textContent = bits;
+                    baseValue.textContent = 'Base: ' + (1 << bits);
+                }
+
+                function updateScanDisplay() {
+                    const bits = Number(scanInput.value);
+                    scanValue.textContent = bits;
+                    scanBase.textContent = 'Range: ' + (1 << bits);
+                }
+
+                function getSettings() {
+                    const bits = Number(bitsInput.value);
+                    return {
+                        bits,
+                        baseFilter: 1 << bits,
+                        netspaceEiB: Math.max(1, Number(netspaceInput.value) || 10),
+                        scanRangeBits: Number(scanInput.value),
+                        scanRangeBase: 1 << Number(scanInput.value)
+                    };
+                }
+
+                // Helper: format arbitrary values robustly for the summary
+                function summarizeValue(val) {
+                    if (val === null || val === undefined) return '—';
+                    if (typeof val === 'number') {
+                        const abs = Math.abs(val);
+                        if (abs >= 1000) return val.toLocaleString('en-US');
+                        return (Math.round(val * 1000) / 1000).toString();
+                    }
+                    if (typeof val === 'string') return val;
+                    // objects/arrays: pretty print but compact
+                    try {
+                        return JSON.stringify(val, null, 2);
+                    } catch {
+                        return String(val);
+                    }
+                }
+
+                // New helper: 3 significant digits formatter (avoids scientific when possible)
+                function formatSig3(v) {
+                    if (typeof v !== 'number' || !Number.isFinite(v)) return String(v);
+                    const av = Math.abs(v);
+                    // Avoid scientific notation around ~1e3 by manual rounding
+                    if (av >= 100) return Math.round(v).toString();           // 3 sig figs for 100..999
+                    if (av >= 10)  return (Math.round(v * 10) / 10).toString(); // 2 decimals -> 3 sig figs
+                    if (av >= 1)   return (Math.round(v * 100) / 100).toString(); // 2 decimals
+                    // Fallback for very small values
+                    let s = Number(v).toPrecision(3);
+                    if (s.includes('e')) {
+                        // try plain with up to 6 decimals to avoid sci notation
+                        s = (Math.round(v * 1e6) / 1e6).toString();
+                    }
+                    return s;
+                }
+
+                // New helper: format ms into a human-friendly duration
+                function formatDurationMs(ms) {
+                    if (typeof ms !== 'number' || !Number.isFinite(ms)) return String(ms);
+                    const abs = Math.abs(ms);
+                    const sec = 1000;
+                    const min = 60 * sec;
+                    const hour = 60 * min;
+                    const day = 24 * hour;
+
+                    function fmt(v) {
+                        const av = Math.abs(v);
+                        if (av >= 100) return Math.round(v).toString();
+                        if (av >= 10) return (Math.round(v * 10) / 10).toString();
+                        return (Math.round(v * 100) / 100).toString();
+                    }
+
+                    // Use 3 significant digits when showing milliseconds
+                    if (abs < sec) return formatSig3(ms) + ' ms';
+                    if (abs < min) return fmt(ms / sec) + ' s';
+                    if (abs < hour) return fmt(ms / min) + ' min';
+                    if (abs < day) return fmt(ms / hour) + ' h';
+                    return fmt(ms / day) + ' d';
+                }
+
+                // New helper: TB/day from plotting time (ms) and honest_plot_size_bytes
+                function computeTBPerDay(ms) {
+                    const MS_PER_DAY = 86_400_000;
+                    const bytes = (typeof honest_plot_size_bytes === 'number') ? honest_plot_size_bytes : 0;
+                    if (!Number.isFinite(ms) || ms <= 0 || !Number.isFinite(bytes) || bytes <= 0) return 0;
+                    return (bytes / 1e12) * (MS_PER_DAY / ms);
+                }
+
+                // Render summary values under the header
+                function renderSummary(timesByStrength, devices_needed_for_rental_attack) {
+                    const ptEl = document.getElementById('summary-plotting-time');
+                    const devEl = document.getElementById('summary-rental-devices');
+                    if (!ptEl || !devEl) return;
+
+                    // List items: s N: plot=<val>, validate=<val>, tb/day=<val>
+                    if (Array.isArray(timesByStrength) && timesByStrength.length) {
+                        let html = '<ul>';
+                        for (const item of timesByStrength) {
+                            const s = (item && typeof item.strength === 'number') ? item.strength : '?';
+                            const plotStr = (item && typeof item.plot === 'number')
+                                ? formatDurationMs(item.plot)
+                                : summarizeValue(item?.plot);
+                            const validateStr = (item && typeof item.validate === 'number')
+                                ? formatDurationMs(item.validate)
+                                : summarizeValue(item?.validate);
+                            const tbpdStr = summarizeValue(item.tbpd);
+                            html += '<li>s ' + s + ': plot=' + plotStr + ', validate=' + validateStr + ', tb/day=' + tbpdStr + '</li>';
+                        }
+                        html += '</ul>';
+                        ptEl.innerHTML = html;
+                    } else {
+                        ptEl.textContent = '—';
+                    }
+
+                    const devStr = summarizeValue(devices_needed_for_rental_attack);
+                    devEl.innerHTML = devStr.startsWith && (devStr.startsWith('{') || devStr.startsWith('['))
+                        ? '<pre>' + devStr + '</pre>'
+                        : devStr;
+                }
+
+                function buildResultsAndTable() {
+                    try {
+                        // Use postune.js globals
+                        const deviceParams = device_params_5090;
+                        const s = getSettings();
+                        var plotParams = get_plot_params(s.baseFilter, 2);
+                        plotParams.scan_filter_bits = s.scanRangeBits;
+
+                        const attackResults = [];
+
+                        //attackResults.push({
+                        //    label: 'Challenge Components Bit Dropping Attack (strength: ' + plotParams.strength_bits + ' ' + (1 << plotParams.scan_filter_bits) + ' - bitdrop -2)',
+                        //    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, -2)
+                        //});
+
+                        var pfParams = get_plot_params(s.baseFilter, 10);
+                        pfParams.scan_filter_bits = s.scanRangeBits;
+                        attackResults.push({
+                            label: 'Proof Fragments Attack ('+ pfParams.strength_bits + ' strength, 1 bits dropped)',
+                            data: calc_attack_proof_fragments_drop_bits(pfParams, deviceParams, 1)
+                        });
+                        pfParams = get_plot_params(s.baseFilter, 2);
+                        pfParams.scan_filter_bits = s.scanRangeBits;
+                        attackResults.push({
+                            label: 'Proof Fragments Attack ('+ pfParams.strength_bits + ' strength, 1 bits dropped)',
+                            data: calc_attack_proof_fragments_drop_bits(pfParams, deviceParams, 1)
+                        });
+
+                        /*
+                        // technically this is our solver time:
+                        plotParams.scan_filter_bits = 4;
+                        attackResults.push({
+                            label: 'Proof Fragments Attack (' + (1 << plotParams.scan_filter_bits) + ' - bitdrop 0)',
+                            data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 0)
+                        });
+                        */
+                        /*
+                        attackResults.push({
+                            label: 'Collected XS Attack (2048)',
+                            data: calc_attack_collected_xs(2048, plotParams, deviceParams)
+                        });
+
+                        attackResults.push({
+                            label: 'Collected LXS Attack (512)',
+                            data: calc_attack_collected_lxs(512, plotParams, deviceParams)
+                        });
+                        attackResults.push({
+                            label: 'Collected LXS Attack (1024)',
+                            data: calc_attack_collected_lxs(1024, plotParams, deviceParams)
+                        });
+
+                        attackResults.push({
+                            label: 'Challenge Components Bit Dropping Attack (' + (1 << plotParams.scan_filter_bits) + ' - bitdrop 1)',
+                            data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 1)
+                        });
+                        attackResults.push({
+                            label: 'Challenge Components Bit Dropping Attack (' + (1 << plotParams.scan_filter_bits) + ' - bitdrop 0)',
+                            data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 0)
+                        });
+                        attackResults.push({
+                            label: 'Challenge Components Bit Dropping Attack (' + (1 << plotParams.scan_filter_bits) + ' - bitadd 1)',
+                            data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, -1)
+                        });
+                        attackResults.push({
+                            label: 'Challenge Components Bit Dropping Attack (' + (1 << plotParams.scan_filter_bits) + ' - bitadd 2)',
+                            data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, -2)
+                        });
 
 
-                attackResults.push({
-                    label: 'Collected XS Attack (2048)',
-                    data: calc_attack_collected_xs(2048, plotParams, deviceParams)
+                        attackResults.push({
+                            label: 'Proof Fragments Attack (16 fragments, 0 bits dropped)',
+                            data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 16, 0)
+                        });
+                        attackResults.push({
+                            label: 'Proof Fragments Attack (1024 fragments, 1 bits dropped)',
+                            data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 1024, 1)
+                        });
+                        attackResults.push({
+                            label: 'Proof Fragments Attack (1024 fragments, 8 bits dropped)',
+                            data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 1024, 8)
+                        });
+                        attackResults.push({
+                            label: 'Proof Fragments Attack (1024 fragments, 16 bits dropped)',
+                            data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 1024, 16)
+                        });
+                        attackResults.push({
+                            label: 'Attack Strength Match Bits (strength: ' + plotParams.strength_bits + ')',
+                            data: calc_attack_strength_match_bits(plotParams, deviceParams)
+                        });
+                        attackResults.push({
+                            label: 'Attack Strength Match Bits (strength: ' + 10 + ')',
+                            data: calc_attack_strength_match_bits(get_plot_params(s.baseFilter, 10), deviceParams)
+                        });*/
+
+
+                        // side-effect calculations; pass netspace EiB into the pure rental attack
+
+                        var result = get_highest_effectiveness_challenge_components_attack(plotParams, deviceParams);
+                        var bestPlotParams = get_plot_params(s.baseFilter, result.best_strength_bits);
+                        bestPlotParams.scan_filter_bits = plotParams.scan_filter_bits;
+                        attackResults.push({
+                            label: 'Challenge Components Bit Dropping Attack (' + (1 << plotParams.scan_filter_bits) + ' - strength: ' + bestPlotParams.strength_bits + ' - bitdrop ' + result.best_drop_bits + ')',
+                            data: calc_attack_challenge_components_bit_dropping(bestPlotParams, deviceParams, result.best_drop_bits)
+                        });
+
+                        result = get_highest_effective_collected_xs_attack(plotParams, deviceParams);
+                        bestPlotParams = get_plot_params(s.baseFilter, result.best_strength);
+                        bestPlotParams.scan_filter_bits = plotParams.scan_filter_bits;
+                        attackResults.push({
+                            label: 'Collected XS Attack (sets:' + result.best_challenge_sets_covered + ' - strength: ' + bestPlotParams.strength_bits + ')',
+                            data: calc_attack_collected_xs(result.best_challenge_sets_covered, bestPlotParams, deviceParams)
+                        });
+
+                        result = get_highest_effective_collected_lxs_attack(plotParams, deviceParams);
+                        bestPlotParams = get_plot_params(s.baseFilter, result.best_strength);
+                        bestPlotParams.scan_filter_bits = plotParams.scan_filter_bits;
+                        attackResults.push({
+                            label: 'Collected LXS Attack (sets:' + result.best_challenge_sets_covered + ' - strength: ' + bestPlotParams.strength_bits + ')',
+                            data: calc_attack_collected_lxs(result.best_challenge_sets_covered, bestPlotParams, deviceParams)
+                        });
+
+                        result = get_highest_effective_proof_fragments_drop_bits_attack(plotParams, deviceParams);
+                        bestPlotParams = get_plot_params(s.baseFilter, result.best_strength);
+                        bestPlotParams.scan_filter_bits = plotParams.scan_filter_bits;
+                        attackResults.push({
+                            label: 'Proof Fragments Attack (fragments:' + (1 << bestPlotParams.scan_filter_bits) + ' - strength: ' + bestPlotParams.strength_bits + ' - bits dropped: ' + result.best_bits_dropped + ')',
+                            data: calc_attack_proof_fragments_drop_bits(bestPlotParams, deviceParams, result.best_bits_dropped)
+                        });
+
+                        result = get_highest_effective_strength_match_bits_attack(plotParams, deviceParams);
+                        bestPlotParams = get_plot_params(s.baseFilter, result.best_strength);
+                        bestPlotParams.scan_filter_bits = plotParams.scan_filter_bits;
+                        attackResults.push({
+                            label: 'Attack Strength Match Bits (strength: ' + bestPlotParams.strength_bits + ')',
+                            data: calc_attack_strength_match_bits(bestPlotParams, deviceParams)
+                        });
+
+                        // Compute devices needed first
+                        var devices_needed_for_rental_attack =
+                            calc_pure_rental_attack(plotParams, device_params_5090, getSettings().netspaceEiB);
+
+                        // Compute plotting and validation time for each strength (2..13)
+                        const timesByStrength = [];
+                        for (var strength = 2; strength <= 13; strength++) {
+                            var sp = get_plot_params(plotParams.plot_id_base_filter, strength);
+                            sp.scan_filter_bits = plotParams.scan_filter_bits;
+                            var pt = calc_plotting_time(sp, device_params_5090);
+                            var vt = calc_validation_time(sp, device_params_pi5);
+                            var tbpd = computeTBPerDay(pt);
+                            timesByStrength.push({ strength, plot: pt, validate: vt, tbpd });
+                        }
+
+                        // Add a synthetic row to the results table to display these times
+                        const timeMetrics = {};
+                        for (const t of timesByStrength) {
+                            timeMetrics['plot s' + t.strength] = t.plot;
+                            timeMetrics['validate s' + t.strength] = t.validate;
+                            timeMetrics['TB/day s' + t.strength] = t.tbpd;
+                        }
+
+                        // Update summary UI
+                        renderSummary(timesByStrength, devices_needed_for_rental_attack);
+
+                        // Render table
+                        buildTable(attackResults);
+                    } catch (err) {
+                        console.error('Error building attack results table:', err);
+                        const tbody = document.getElementById('results-body');
+                        if (tbody) {
+                            const tr = document.createElement('tr');
+                            const td = document.createElement('td');
+                            td.colSpan = 99;
+                            td.className = 'no-results';
+                            td.textContent = 'Error while generating results. Check console for details.';
+                            tr.appendChild(td);
+                            tbody.appendChild(tr);
+                        }
+                    }
+                }
+
+                // Initialize display and attach handlers
+                updateBaseDisplay();
+                updateScanDisplay();
+                bitsInput.addEventListener('input', () => {
+                    updateBaseDisplay();
+                    buildResultsAndTable();
                 });
-                attackResults.push({
-                    label: 'Collected LXS Attack (512)',
-                    data: calc_attack_collected_lxs(512, plotParams, deviceParams)
+                // rebuild when scan-range changes
+                scanInput.addEventListener('input', () => {
+                    updateScanDisplay();
+                    buildResultsAndTable();
                 });
-                attackResults.push({
-                    label: 'Collected LXS Attack (1024)',
-                    data: calc_attack_collected_lxs(1024, plotParams, deviceParams)
+                netspaceInput.addEventListener('change', () => {
+                    buildResultsAndTable();
                 });
 
-                attackResults.push({
-                    label: 'Challenge Components Bit Dropping Attack (64 - bitdrop 0)',
-                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 64, 0)
-                });
-                attackResults.push({
-                    label: 'Challenge Components Bit Dropping Attack (128 - bitdrop 0)',
-                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 128, 0)
-                });
-                attackResults.push({
-                    label: 'Challenge Components Bit Dropping Attack (256 - bitdrop 0)',
-                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 256, 0)
-                });
-                attackResults.push({
-                    label: 'Challenge Components Bit Dropping Attack (512 - bitadd 1)',
-                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 512, -1)
-                });
-                attackResults.push({
-                    label: 'Challenge Components Bit Dropping Attack (1024 - bitadd 2)',
-                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 1024, -2)
-                });
-                attackResults.push({
-                    label: 'Challenge Components Bit Dropping Attack (2048 - bitdrop 0)',
-                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 2048, 0)
-                });
-                attackResults.push({
-                    label: 'Challenge Components Bit Dropping Attack (2048 - bitdrop 1)',
-                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 2048, 1)
-                });
-                attackResults.push({
-                    label: 'Challenge Components Bit Dropping Attack (2048 - bitadd +4)',
-                    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, 2048, -4)
-                });
-
-                attackResults.push({
-                    label: 'Proof Fragments Attack (16 fragments, 0 bits dropped)',
-                    data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 16, 0)
-                });
-                attackResults.push({
-                    label: 'Proof Fragments Attack (1024 fragments, 1 bits dropped)',
-                    data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 1024, 1)
-                });
-                attackResults.push({
-                    label: 'Proof Fragments Attack (1024 fragments, 8 bits dropped)',
-                    data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 1024, 8)
-                });
-                attackResults.push({
-                    label: 'Proof Fragments Attack (1024 fragments, 16 bits dropped)',
-                    data: calc_attack_proof_fragments_drop_bits(plotParams, deviceParams, 1024, 16)
-                });
-                attackResults.push({
-                    label: 'Attack Strength Match Bits (strength: ' + plotParams.strength_bits + ')',
-                    data: calc_attack_strength_match_bits(plotParams, deviceParams)
-                });
-                attackResults.push({
-                    label: 'Attack Strength Match Bits (strength: ' + 10 + ')',
-                    data: calc_attack_strength_match_bits(get_plot_params(base_plot_id_filter, 10), deviceParams)
-                });
-
-                // If this has side effects you care about, keep it:
-                calc_plotting_time(plotParams, deviceParams);
-                calc_pure_rental_attack(plotParams, deviceParams, 10); // 3 EiB
-                calc_reconstruction_rental_attack(get_plot_params(256, 2), deviceParams, 3);
-                //calc_pure_rental_attack(get_plot_params_for_strength(13), deviceParams, 3); // 3 EiB
-
-                buildTable(attackResults);
-
+                // initial build
+                buildResultsAndTable();
 
             } catch (err) {
-                console.error('Error building attack results table:', err);
-                const tbody = document.getElementById('results-body');
-                if (tbody) {
-                    const tr = document.createElement('tr');
-                    const td = document.createElement('td');
-                    td.colSpan = 99;
-                    td.className = 'no-results';
-                    td.textContent = 'Error while generating results. Check console for details.';
-                    tr.appendChild(td);
-                    tbody.appendChild(tr);
-                }
+                console.error('Initialization error:', err);
             }
         })();
     </script>
