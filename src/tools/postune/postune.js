@@ -5,20 +5,24 @@ var honest_plot_size_bytes = num_entries_per_table * honest_bits_per_entry / 8;
 
 //var base_plot_id_filter = 4096;
 var default_scan_filter_bits = 11;
-var use_t2_pairing_strength = false;
+
+// 2 sets strength to strength bits, 0 sets strength starting at 0.
+var pairing_strength_start = 2;
+var t1_match_bits_base = 2;
+var hash_speedup = 2;
 
 
 var device_params_5090 = {
-    g_hashes_per_ms: 9925926,       // the g(x) function
-    pair_hashes_per_ms: 9925926,     // once we have a match, the hash to pair them to get next meta
-    target_hashes_per_ms: 9925926,      // given a left side pairing, time to hash (meta + mi) target bits
+    g_hashes_per_ms: 9925926*hash_speedup,       // the g(x) function
+    pair_hashes_per_ms: 9925926*hash_speedup,     // once we have a match, the hash to pair them to get next meta
+    target_hashes_per_ms: 9925926*hash_speedup,      // given a left side pairing, time to hash (meta + mi) target bits
     sloths_per_ms: 0 // 9925926         // time to do sloth encoding
 };
 
 var device_params_pi5 = {
-    g_hashes_per_ms: 74362,       // the g(x) function
-    pair_hashes_per_ms: 74362,     // once we have a match, the hash to pair them to get next meta
-    target_hashes_per_ms: 74362,      // given a left side pairing, time to hash (meta + mi) target bits
+    g_hashes_per_ms: 74362*hash_speedup,       // the g(x) function
+    pair_hashes_per_ms: 74362*hash_speedup,     // once we have a match, the hash to pair them to get next meta
+    target_hashes_per_ms: 74362*hash_speedup,      // given a left side pairing, time to hash (meta + mi) target bits
     sloths_per_ms: 0 // 9925926         // time to do sloth encoding
 }
 var default_plot_params = {
@@ -42,7 +46,7 @@ function get_plot_params(base_plot_id_filter, plot_strength_bits) {
     // strength 5 t1/2/3 match bits = 5,2,2
     // strength 6 t1/2/3 match bits = 5,3,3
     // strength 7 t1/2/3 match bits = 5,4,4
-    var t1_match_bits = 2;
+    var t1_match_bits = t1_match_bits_base;
     var t2_match_bits = 2 + plot_strength_bits - 2;
     var t3_match_bits = 2 + plot_strength_bits - 2;
     return {
@@ -173,14 +177,15 @@ function get_g_time(device_params, num_hashes) {
     console.log("Calculating G time for num_hashes: " + num_hashes, device_params);
     return num_hashes / device_params.g_hashes_per_ms;
 }
+
 function get_t1_pairing_time(plot_params, device_params, num_hashes) {
     // get strength multiplier
-    var strength_multiplier = 1 << plot_params.strength_bits;
+    var strength_multiplier = 1 << (plot_params.strength_bits - pairing_strength_start);
     return (num_hashes * strength_multiplier) / device_params.pair_hashes_per_ms;
 }
 function get_t1_target_time(plot_params, device_params, num_hashes) {
     // get strength multiplier
-    var strength_multiplier = 1 << plot_params.strength_bits;
+    var strength_multiplier = 1 << (plot_params.strength_bits - pairing_strength_start);
     return (num_hashes * strength_multiplier) / device_params.target_hashes_per_ms;
 }
 function get_t2_pairing_time(plot_params, device_params, num_hashes) {
@@ -240,9 +245,6 @@ function calc_plotting_time(plot_params, device_params) {
     var t1_pairing_hashes = num_entries_per_table; // t1 has special fast match function
     var t2_target_hashes = num_entries_per_table * (1 << plot_params.t2_match_bits);
     var t2_pairing_hashes = t2_target_hashes;
-    if (use_t2_pairing_strength) {
-        t2_pairing_hashes *= (1 << (plot_params.strength_bits - 2));
-    }
     var t3_target_hashes = num_entries_per_table * (1 << plot_params.t3_match_bits);
     var t3_pairing_hashes = num_entries_per_table;
     var g_hashes_time = get_g_time(device_params, g_hashes);

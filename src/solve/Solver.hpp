@@ -250,6 +250,15 @@ public:
             x2_potential_match_xs,
             numeric_cast<int>(num_match_target_hashes));
 
+#if ENABLE_AES_HASH_COUNTERS
+        std::cout << "AES g calls.         : " << aes_g_count << std::endl;
+        std::cout << "AES T1 target calls. : " << aes_t1_target_count << std::endl;
+        std::cout << "AES pairing calls : " << aes_pairing_count << std::endl;
+        std::cout << "T1 matches: " << t1_matches.size() << std::endl;
+        uint64_t t1_pairing_count = aes_pairing_count;
+        aes_pairing_count = 0;
+
+#endif
 #ifdef DEBUG_VERIFY
         std::cout << "T1 matches: " << t1_matches.size() << std::endl;
         // exit(23);
@@ -278,7 +287,7 @@ public:
         // Phase 9: Group T1 matches by x1 “range” (using the high‐order half of x1).
         std::vector<std::vector<T1_Match>> t1_match_groups
             = groupT1Matches(num_k_bits_, x1_bits, x_bits_group, t1_matches);
-
+        std::cout << "T1 match groups: " << t1_match_groups.size() << std::endl;
         // T1 groupings now hold all possible x1,x2 pairs that could be used to form T2 matches,
         // often duplicates.
 
@@ -340,6 +349,16 @@ public:
         // Phase 10: T2 Matching – Process adjacent T1 groups to produce T2 matches.
         std::array<std::vector<T2_match>, TOTAL_T2_PAIRS_IN_PROOF> t2_matches
             = matchT2Candidates(t1_match_groups, x_bits_group);
+#if ENABLE_AES_HASH_COUNTERS
+        std::cout << "AES g calls.         : " << aes_g_count << std::endl;
+        std::cout << "AES T1 target calls. : " << aes_t1_target_count << std::endl;
+        std::cout << "AES T1 pairing calls : " << t1_pairing_count << std::endl;
+        std::cout << "AES T2 target calls. : " << aes_t2_target_count << std::endl;
+        std::cout << "AES T2 pairing calls : " << aes_pairing_count << std::endl;
+        std::cout << "T2 matches (" << t2_matches.size() << "):" << std::endl;
+        uint64_t t2_pairing_count = aes_pairing_count;
+        aes_pairing_count = 0;
+#endif
 #ifdef DEBUG_VERIFY
         if (true) {
             std::cout << "T2 matches (" << t2_matches.size() << "):" << std::endl;
@@ -385,6 +404,16 @@ public:
         std::array<std::vector<T3_match>, TOTAL_T3_PAIRS_IN_PROOF> t3_matches;
         matchT3Candidates(num_k_bits_, t2_matches, t3_matches);
 
+#if ENABLE_AES_HASH_COUNTERS
+        std::cout << "AES g calls.         : " << aes_g_count << std::endl;
+        std::cout << "AES T1 target calls. : " << aes_t1_target_count << std::endl;
+        std::cout << "AES T1 pairing calls : " << t1_pairing_count << std::endl;
+        std::cout << "AES T2 target calls. : " << aes_t2_target_count << std::endl;
+        std::cout << "AES T2 pairing calls : " << t2_pairing_count << std::endl;
+        std::cout << "AES T3 target calls. : " << aes_t3_target_count << std::endl;
+        std::cout << "AES T3 pairing calls : " << aes_pairing_count << std::endl;
+        aes_pairing_count = 0;
+#endif
 #ifdef DEBUG_VERIFY
         std::cout << "T3 matches: " << t3_matches.size() << std::endl;
         for (size_t i = 0; i < t3_matches.size(); i++) {

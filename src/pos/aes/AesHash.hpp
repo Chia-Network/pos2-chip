@@ -3,6 +3,17 @@
 #include "intrin_portable.h"
 #include "soft_aes.hpp"
 
+// global counters
+#define ENABLE_AES_HASH_COUNTERS 0
+#if ENABLE_AES_HASH_COUNTERS
+#include <atomic>
+std::atomic<uint64_t> aes_g_count { 0 };
+std::atomic<uint64_t> aes_t1_target_count { 0 };
+std::atomic<uint64_t> aes_t2_target_count { 0 };
+std::atomic<uint64_t> aes_t3_target_count { 0 };
+std::atomic<uint64_t> aes_pairing_count { 0 };
+#endif
+
 // Class that preloads AES key vectors from a 32-byte plot id.
 // Usage:
 //   AesHash hasher(plot_id_bytes);
@@ -37,6 +48,10 @@ public:
             state = aesenc<Soft>(state, round_key_1);
             state = aesenc<Soft>(state, round_key_2);
         }
+
+#if ENABLE_AES_HASH_COUNTERS
+        aes_g_count.fetch_add(1, std::memory_order_relaxed);
+#endif
         // only get bottom k bits.
         return static_cast<uint32_t>(rx_vec_i128_x(state)) & ((1u << k_) - 1u);
     }
@@ -54,6 +69,14 @@ public:
             state = aesenc<Soft>(state, round_key_1);
             state = aesenc<Soft>(state, round_key_2);
         }
+#if ENABLE_AES_HASH_COUNTERS
+        if (salt == 1)
+            aes_t1_target_count.fetch_add(1, std::memory_order_relaxed);
+        else if (salt == 2)
+            aes_t2_target_count.fetch_add(1, std::memory_order_relaxed);
+        else if (salt == 3)
+            aes_t3_target_count.fetch_add(1, std::memory_order_relaxed);
+#endif
         return static_cast<uint32_t>(rx_vec_i128_x(state));
     }
 
@@ -75,6 +98,9 @@ public:
         result.r[1] = static_cast<uint32_t>(rx_vec_i128_y(state));
         result.r[2] = static_cast<uint32_t>(rx_vec_i128_z(state));
         result.r[3] = static_cast<uint32_t>(rx_vec_i128_w(state));
+#if ENABLE_AES_HASH_COUNTERS
+        aes_pairing_count.fetch_add(1, std::memory_order_relaxed);
+#endif
         return result;
     }
 

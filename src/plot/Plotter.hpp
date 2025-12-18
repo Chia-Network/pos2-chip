@@ -48,6 +48,13 @@ public:
         auto t1_pairs = t1_ctor.construct(xs_candidates);
         t1_ctor.timings.show("Table 1 Timings:");
         std::cout << "Constructed " << t1_pairs.size() << " Table 1 pairs." << std::endl;
+#if ENABLE_AES_HASH_COUNTERS
+        std::cout << "AES g calls.         : " << aes_g_count << std::endl;
+        std::cout << "AES T1 target calls. : " << aes_t1_target_count << std::endl;
+        std::cout << "AES pairing calls : " << aes_pairing_count << std::endl;
+        uint64_t t1_pairing_count = aes_pairing_count;
+        aes_pairing_count = 0;
+#endif
 
 #ifdef RETAIN_X_VALUES
         if (validate_) {
@@ -70,7 +77,15 @@ public:
         auto t2_pairs = t2_ctor.construct(t1_pairs);
         t2_ctor.timings.show("Table 2 Timings:");
         std::cout << "Constructed " << t2_pairs.size() << " Table 2 pairs." << std::endl;
-
+#if ENABLE_AES_HASH_COUNTERS
+        std::cout << "AES g calls.         : " << aes_g_count << std::endl;
+        std::cout << "AES T1 target calls. : " << aes_t1_target_count << std::endl;
+        std::cout << "AES T1 pairing calls : " << t1_pairing_count << std::endl;
+        std::cout << "AES T2 target calls. : " << aes_t2_target_count << std::endl;
+        std::cout << "AES T2 pairing calls : " << aes_pairing_count << std::endl;
+        uint64_t t2_pairing_count = aes_pairing_count;
+        aes_pairing_count = 0;
+#endif
 #ifdef RETAIN_X_VALUES
         if (validate_) {
             for (auto const& pair: t2_pairs) {
@@ -90,6 +105,16 @@ public:
         std::vector<T3Pairing> t3_results = t3_ctor.construct(t2_pairs);
         t3_ctor.timings.show("Table 3 Timings:");
         std::cout << "Constructed " << t3_results.size() << " Table 3 entries." << std::endl;
+#if ENABLE_AES_HASH_COUNTERS
+        std::cout << "AES g calls.         : " << aes_g_count << std::endl;
+        std::cout << "AES T1 target calls. : " << aes_t1_target_count << std::endl;
+        std::cout << "AES T1 pairing calls : " << t1_pairing_count << std::endl;
+        std::cout << "AES T2 target calls. : " << aes_t2_target_count << std::endl;
+        std::cout << "AES T2 pairing calls : " << t2_pairing_count << std::endl;
+        std::cout << "AES T3 target calls. : " << aes_t2_target_count << std::endl;
+        std::cout << "AES T3 pairing calls : " << aes_pairing_count << std::endl;
+        exit(23);
+#endif
 
         decltype(t1_ctor)::Timings total_timings;
         total_timings.hash_time_ms = xs_gen_ctor.timings.hash_time_ms + t1_ctor.timings.hash_time_ms
