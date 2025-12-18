@@ -80,8 +80,10 @@ public:
     {
         size_t num_match_target_bits = params_.get_num_match_target_bits(table_id);
         // size_t num_meta_bits = params_.get_num_meta_bits(table_id);
-        return hashing.matching_target(
-            table_id, match_key, meta, static_cast<int>(num_match_target_bits));
+        return hashing.matching_target(numeric_cast<uint32_t>(table_id),
+            match_key,
+            meta,
+            static_cast<int>(num_match_target_bits));
     }
 
     // pairing_t1:
