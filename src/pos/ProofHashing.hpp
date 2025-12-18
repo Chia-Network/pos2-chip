@@ -23,7 +23,6 @@ public:
     // proof_params: a ProofParams instance.
     ProofHashing(ProofParams const& proof_params)
         : params_(proof_params)
-        , blake_(proof_params.get_plot_id_bytes())
         , aes_(proof_params.get_plot_id_bytes(), static_cast<int>(proof_params.get_k()))
     {
     }
@@ -35,25 +34,19 @@ public:
     // table_id: used as salt, match_key, meta: additional parameters.
     // num_target_bits: the number of bits to return from the hash.
     uint32_t matching_target(
-        size_t table_id, uint32_t match_key, uint64_t meta, int num_target_bits);
+        uint32_t table_id, uint32_t match_key, uint64_t meta, int num_target_bits);
 
-    // Prepares Blake hash data for pairing and computes the pairing result.
-    // in_meta_bits: the number of bits for the input meta data.
-    // num_match_info_bits: number of bits for the match info.
-    // out_num_meta_bits: number of meta bits desired in the output.
-    // num_test_bits: if >0, indicates additional test bits.
-    PairingResult pairing(uint64_t meta_l,
+    PairingResult pairing_t1(uint64_t meta_l,
         uint64_t meta_r,
         int num_match_info_bits,
-        int out_num_meta_bits = 0,
-        int num_test_bits = 0);
-
-    // A specialized filter for T3 pairings to rule out non-matching pairs, used when plot strength
-    // > 2. Under consideration (not currently used). bool t3_pairing_filter(uint64_t meta_l,
-    // uint64_t meta_r, int in_meta_bits, int num_test_bits);
-
-    // Prepares Blake hash data for pairing.
-    void set_data_for_pairing(uint64_t meta_l, uint64_t meta_r);
+        int out_num_meta_bits,
+        int num_test_bits);
+    PairingResult pairing_t2(uint64_t meta_l,
+        uint64_t meta_r,
+        int num_match_info_bits,
+        int out_num_meta_bits,
+        int num_test_bits);
+    PairingResult pairing_t3(uint64_t meta_l, uint64_t meta_r, int num_test_bits);
 
     std::array<uint64_t, NUM_CHAIN_LINKS> chainingChallengeWithPlotIdHash(
         std::span<uint8_t const, 32> const challenge) const
@@ -128,11 +121,7 @@ public:
     }
 
 private:
-    // Prepares Blake hash data for computing the matching target.
-    void _set_data_for_matching_target(uint32_t salt, uint32_t match_key, uint64_t meta);
-
     ProofParams params_;
-    BlakeHash blake_;
     AesHash aes_;
 };
 
@@ -147,90 +136,53 @@ inline uint32_t mask32(int const bits) { return numeric_cast<uint32_t>((uint64_t
 inline uint32_t ProofHashing::g(uint32_t x)
 {
 #if HAVE_AES
-    return aes_.hash_x<false>(x);
+    return aes_.g_x<false>(x);
 #else
-    return aes_.hash_x<true>(x);
+    return aes_.g_x<true>(x);
 #endif
 }
 
 inline uint32_t ProofHashing::matching_target(
-    size_t table_id, uint32_t match_key, uint64_t meta, int num_target_bits)
+    uint32_t table_id, uint32_t match_key, uint64_t meta, int num_target_bits)
 {
+    // T1 get's extra hashing rounds based on strength.
+    int const extra_rounds_bits = (table_id == 1) ? (params_.get_strength() - 2) : 0;
 #if HAVE_AES
-    return aes_.matching_target<false>(static_cast<uint32_t>(table_id), match_key, meta)
+    return aes_.matching_target<false>(table_id, match_key, meta, extra_rounds_bits)
         & mask32(num_target_bits);
 #else
-    return aes_.matching_target<true>(static_cast<uint32_t>(table_id), match_key, meta)
+    return aes_.matching_target<true>(
+               static_cast<uint32_t>(table_id), match_key, meta, extra_rounds_bits)
         & mask32(num_target_bits);
 #endif
 }
 
-inline void ProofHashing::_set_data_for_matching_target(
-    uint32_t salt, uint32_t match_key, uint64_t meta)
-{
-    blake_.set_data(0, salt);
-    blake_.set_data(1, match_key);
-    blake_.set_data(2, static_cast<uint32_t>(meta & 0xFFFFFFFFULL));
-    blake_.set_data(3, static_cast<uint32_t>((meta >> 32) & 0xFFFFFFFFULL));
-    for (int i = 4; i < 8; i++) {
-        blake_.set_data(i, 0);
-    }
-}
-
-inline void ProofHashing::set_data_for_pairing(uint64_t meta_l, uint64_t meta_r)
-{
-    blake_.set_data(0, static_cast<uint32_t>(meta_l & 0xFFFFFFFFULL));
-    blake_.set_data(1, static_cast<uint32_t>((meta_l >> 32) & 0xFFFFFFFFULL));
-    blake_.set_data(2, static_cast<uint32_t>(meta_r & 0xFFFFFFFFULL));
-    blake_.set_data(3, static_cast<uint32_t>((meta_r >> 32) & 0xFFFFFFFFULL));
-    for (int i = 4; i < 8; i++) {
-        blake_.set_data(i, 0);
-    }
-}
-
-/*inline bool ProofHashing::t3_pairing_filter(uint64_t meta_l, uint64_t meta_r, int in_meta_bits,
-int num_test_bits) {
-
-    set_data_for_pairing(3, meta_l, meta_r, in_meta_bits);
-    BlakeHash::Result128 res = blake_.generate_hash();
-    uint32_t test_result = res.r[3] & mask32(num_test_bits);
-    return test_result == 0;
-}*/
-
-inline PairingResult ProofHashing::pairing(uint64_t meta_l,
+inline PairingResult ProofHashing::pairing_t1(uint64_t meta_l,
     uint64_t meta_r,
     int num_match_info_bits,
     int out_num_meta_bits,
     int num_test_bits)
 {
+    assert(num_match_info_bits > 0 && num_match_info_bits <= 32);
+    assert(out_num_meta_bits > 0 && out_num_meta_bits <= 64);
+    assert(num_test_bits > 0 && num_test_bits <= 32);
 
+    // T1 get's extra hashing rounds based on strength.
+    int const extra_rounds_bits = params_.get_strength() - 2;
 #if HAVE_AES
-    AesHash::Result128 res = aes_.pairing<false>(meta_l, meta_r);
+    AesHash::Result128 res = aes_.pairing<false>(meta_l, meta_r, extra_rounds_bits);
 #else
-    AesHash::Result128 res = aes_.pairing<true>(meta_l, meta_r);
+    AesHash::Result128 res = aes_.pairing<true>(meta_l, meta_r, extra_rounds_bits);
 #endif
 
     PairingResult pr = { 0, 0, 0 };
-
-    // Special case: table 5 returns only test bits for match filter.
-    if (num_match_info_bits == 0 && out_num_meta_bits == 0 && num_test_bits > 0) {
-        pr.test_result = res.r[0] & mask32(num_test_bits);
-        return pr;
-    }
 
     if (num_match_info_bits == 32)
         pr.match_info_result = res.r[0];
     else if (num_match_info_bits < 32)
         pr.match_info_result = res.r[0] & mask32(num_match_info_bits);
     else {
-        // num_match_info_bits > 32
-        // match_info_result = (res.r0 | (static_cast<uint64_t>(res.r1) << 32))
-        //                    & ((1ULL << num_match_info_bits) - 1);
         throw std::invalid_argument("num_match_info_bits > 32 not supported");
-    }
-
-    if (out_num_meta_bits == 0) {
-        return pr;
     }
 
     if (out_num_meta_bits == 64)
@@ -242,9 +194,60 @@ inline PairingResult ProofHashing::pairing(uint64_t meta_l,
         throw std::invalid_argument("num_bits_meta > 64 not supported");
     }
 
-    if (num_test_bits == 0) {
-        return pr;
+    uint32_t test_result = res.r[3] & mask32(num_test_bits);
+    pr.test_result = test_result;
+    return pr;
+}
+
+inline PairingResult ProofHashing::pairing_t2(uint64_t meta_l,
+    uint64_t meta_r,
+    int num_match_info_bits,
+    int out_num_meta_bits,
+    int num_test_bits)
+{
+    assert(num_match_info_bits > 0 && num_match_info_bits <= 32);
+    assert(out_num_meta_bits > 0 && out_num_meta_bits <= 64);
+    assert(num_test_bits >= 0 && num_test_bits <= 32);
+#if HAVE_AES
+    AesHash::Result128 res = aes_.pairing<false>(meta_l, meta_r);
+#else
+    AesHash::Result128 res = aes_.pairing<true>(meta_l, meta_r);
+#endif
+
+    PairingResult pr = { 0, 0, 0 };
+
+    if (num_match_info_bits == 32)
+        pr.match_info_result = res.r[0];
+    else if (num_match_info_bits < 32)
+        pr.match_info_result = res.r[0] & mask32(num_match_info_bits);
+    else {
+        throw std::invalid_argument("num_match_info_bits > 32 not supported");
     }
+
+    if (out_num_meta_bits == 64)
+        pr.meta_result = res.r[1] + (static_cast<uint64_t>(res.r[2]) << 32);
+    else if (out_num_meta_bits < 64)
+        pr.meta_result = (res.r[1] + (static_cast<uint64_t>(res.r[2]) << 32))
+            & ((1ULL << out_num_meta_bits) - 1);
+    else {
+        throw std::invalid_argument("num_bits_meta > 64 not supported");
+    }
+
+    uint32_t test_result = res.r[3] & mask32(num_test_bits);
+    pr.test_result = test_result;
+    return pr;
+}
+
+inline PairingResult ProofHashing::pairing_t3(uint64_t meta_l, uint64_t meta_r, int num_test_bits)
+{
+    assert(num_test_bits >= 0 && num_test_bits <= 32);
+#if HAVE_AES
+    AesHash::Result128 res = aes_.pairing<false>(meta_l, meta_r);
+#else
+    AesHash::Result128 res = aes_.pairing<true>(meta_l, meta_r);
+#endif
+
+    PairingResult pr = { 0, 0, 0 };
 
     uint32_t test_result = res.r[3] & mask32(num_test_bits);
     pr.test_result = test_result;

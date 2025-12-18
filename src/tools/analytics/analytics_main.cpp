@@ -77,14 +77,14 @@ int hashBench(int N, int rounds, int num_threads)
             if (test == 0) {
                 threads.emplace_back([start, end, &out, &hasher, rounds]() {
                     for (uint64_t i = start; i < end; ++i) {
-                        out[i] = hasher.hash_x<false>(static_cast<uint32_t>(i), rounds);
+                        out[i] = hasher.g_x<false>(static_cast<uint32_t>(i), rounds);
                     }
                 });
             }
             else if (test == 1) {
                 threads.emplace_back([start, end, &out, &hasher, rounds]() {
                     for (uint64_t i = start; i < end; ++i) {
-                        out[i] = hasher.hash_x<true>(static_cast<uint32_t>(i), rounds);
+                        out[i] = hasher.g_x<true>(static_cast<uint32_t>(i), rounds);
                     }
                 });
             }
