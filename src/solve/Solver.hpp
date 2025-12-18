@@ -659,7 +659,7 @@ public:
                                 uint64_t meta_r
                                     = ((uint64_t(R_sorted[j].x1) << num_k_bits) | R_sorted[j].x2);
 
-                                PairingResult pair = thread_core.hashing.pairing(meta_l,
+                                PairingResult pair = thread_core.hashing.pairing_t2(meta_l,
                                     meta_r,
                                     num_k_bits,
                                     static_cast<int>(out_meta_bits),
@@ -1212,9 +1212,9 @@ public:
                     for (uint64_t x = start; x < end; x++) {
 
 #if (HAVE_AES)
-                        uint32_t g_hash = aes_hash.hash_x<false>(uint32_t(x));
+                        uint32_t g_hash = aes_hash.g_x<false>(uint32_t(x));
 #else
-                        uint32_t g_hash = aes_hash.hash_x<true>(uint32_t(x));
+                        uint32_t g_hash = aes_hash.g_x<true>(uint32_t(x));
 #endif
 
                         uint32_t bitmask_hash = g_hash >> this->bitmask_shift_;
@@ -1253,9 +1253,9 @@ public:
                     for (int i = 0; i < PREFETCH_DIST; ++i, ++x_pref) {
 
 #if (HAVE_AES)
-                        uint32_t h = aes_hash.hash_x<false>(uint32_t(x_pref));
+                        uint32_t h = aes_hash.g_x<false>(uint32_t(x_pref));
 #else
-                        uint32_t h = aes_hash.hash_x<true>(uint32_t(x_pref));
+                        uint32_t h = aes_hash.g_x<true>(uint32_t(x_pref));
 #endif
 
                         hash_buf[i] = h;
@@ -1307,9 +1307,9 @@ public:
                         uint64_t x_future = x + PREFETCH_DIST;
 
 #if (HAVE_AES)
-                        uint32_t h = aes_hash.hash_x<false>(uint32_t(x_future));
+                        uint32_t h = aes_hash.g_x<false>(uint32_t(x_future));
 #else
-                        uint32_t h = aes_hash.hash_x<true>(uint32_t(x_future));
+                        uint32_t h = aes_hash.g_x<true>(uint32_t(x_future));
 #endif
 
                         hash_buf[buf_ix] = h;
@@ -1417,9 +1417,9 @@ public:
             for (uint32_t x = x1_range_start; x < x1_range_start + x1_range_size; ++x) {
                 uint32_t g_hash;
 #if (HAVE_AES)
-                g_hash = aes_hash.hash_x<false>(uint32_t(x));
+                g_hash = aes_hash.g_x<false>(uint32_t(x));
 #else
-                        g_hash = aes_hash.hash_x<true>(uint32_t(x));
+                        g_hash = aes_hash.g_x<true>(uint32_t(x));
 #endif
 
                 // offset within this x1 range for writing per-match_key blocks

@@ -109,6 +109,10 @@ public:
 
         std::cout << "Total plotting time: " << totalPlotTimer.stop() << " ms." << std::endl;
 
+#if AES_COUNT_HASHES
+        showHashCounts();
+#endif
+
 #ifdef RETAIN_X_VALUES
         if (validate_) {
             for (auto const& t3_pair: t3_results) {
