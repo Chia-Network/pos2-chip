@@ -113,8 +113,8 @@ TEST_CASE("AesHash emit regression list to CLI")
     REQUIRE(hw == sw);
 #endif
 
-    std::cout << "#define K_AES_REGRESSION_DEFINED 1\n";
     std::cout << "/* AesHash regression list: k=" << k << ", plot_id[i] = i*11+5 */\n";
+    std::cout << "Update in tests/aes_test_cases.hpp\n";
     std::cout << "constexpr uint32_t kAesRegression[" << sw.size() << "] = {";
     for (size_t i = 0; i < sw.size(); ++i) {
         std::cout << sw[i];
