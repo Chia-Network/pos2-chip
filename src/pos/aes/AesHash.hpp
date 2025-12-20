@@ -2,6 +2,7 @@
 
 #include "intrin_portable.h"
 #include "soft_aes.hpp"
+#include <vector>
 
 constexpr int AES_G_ROUNDS = 16;
 constexpr int AES_PAIRING_ROUNDS = 16;
@@ -122,6 +123,46 @@ public:
         result.r[2] = static_cast<uint32_t>(rx_vec_i128_z(state));
         result.r[3] = static_cast<uint32_t>(rx_vec_i128_w(state));
         return result;
+    }
+
+    // Produce a deterministic list of results for regression testing.
+    // This aggregates outputs from g_x, matching_target, and pairing.
+    template <bool Soft>
+    std::vector<uint32_t> regression_results() const
+    {
+        std::vector<uint32_t> out;
+        out.reserve( // g_x: 5, matching_target: 2 tables * 2 keys * 3 metas * 2 extra = 24,
+                     // pairing: 3 pairs * 2 extra * 4 words = 24; total = 53
+            53);
+
+        // g_x inputs
+        for (uint32_t x: { 0u, 1u, 0x12345678u, 0xFFFFFFFFu, 0xABCDEF12u }) {
+            out.push_back(g_x<Soft>(x));
+        }
+
+        // matching_target inputs
+        for (int extra_bits: { 0, 1 }) {
+            for (uint64_t meta: { 0ULL, 0x0123456789ABCDEFULL, 0xFEDCBA9876543210ULL }) {
+                out.push_back(matching_target<Soft>(1, 0xDEADBEEF, meta, extra_bits));
+                out.push_back(matching_target<Soft>(3, 0x0123ABCD, meta, extra_bits));
+            }
+        }
+
+        // pairing inputs
+        auto push_pairing = [&](uint64_t ml, uint64_t mr, int extra_bits) {
+            auto r = pairing<Soft>(ml, mr, extra_bits);
+            out.push_back(r.r[0]);
+            out.push_back(r.r[1]);
+            out.push_back(r.r[2]);
+            out.push_back(r.r[3]);
+        };
+        for (int extra_bits: { 0, 1 }) {
+            push_pairing(0x0123456789ABCDEFULL, 0x0FEDCBA987654321ULL, extra_bits);
+            push_pairing(0ULL, 0ULL, extra_bits);
+            push_pairing(0xFFFFFFFFFFFFFFFFULL, 0xAAAAAAAAAAAAAAAAULL, extra_bits);
+        }
+
+        return out;
     }
 
 private:
