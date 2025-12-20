@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <memory_resource>
 #include <span>
 #include <thread>
 #include <vector>
@@ -22,11 +23,24 @@ public:
     // Sorting is based on the key extracted by key_extractor_.
     void sort(std::span<T> data, std::span<T> buffer, int num_bits = 32, bool verbose = false)
     {
+        sort(data, buffer, num_bits, verbose, std::pmr::get_default_resource());
+    }
+
+    void sort(std::span<T> data,
+        std::span<T> buffer,
+        int num_bits,
+        bool verbose,
+        std::pmr::memory_resource* mr)
+    {
         int const radix_bits = 8; // Process 8 bits per pass.
         int const radix = 1 << radix_bits;
         int const radix_mask = radix - 1;
         int const num_passes = (num_bits + radix_bits - 1) / radix_bits; // Number of passes needed.
-        size_t const num_threads = std::thread::hardware_concurrency();
+
+        size_t num_threads = std::thread::hardware_concurrency();
+        if (num_threads == 0)
+            num_threads = 1;
+
         size_t const num_elements = data.size();
 
         Timer timer;
@@ -36,8 +50,12 @@ public:
             timer.start();
         }
 
-        std::vector<std::vector<uint32_t>> counts_by_thread(
-            num_threads, std::vector<uint32_t>(radix, 0));
+        std::pmr::vector<std::pmr::vector<uint32_t>> counts_by_thread(mr);
+        counts_by_thread.reserve(num_threads);
+        for (size_t t = 0; t < num_threads; ++t) {
+            counts_by_thread.emplace_back(std::pmr::vector<uint32_t>(radix, 0u, mr));
+        }
+
         int const num_elements_per_thread = static_cast<int>(num_elements / num_threads);
 
         for (int pass = 0; pass < num_passes; ++pass) {
@@ -76,7 +94,7 @@ public:
             }
 
             // Merge counts to global counts.
-            std::vector<uint32_t> counts(radix, 0);
+            std::pmr::vector<uint32_t> counts(radix, 0u, mr);
             for (size_t t = 0; t < num_threads; ++t) {
                 for (size_t r = 0; r < radix; ++r)
                     counts[r] += counts_by_thread[t][r];
@@ -88,8 +106,12 @@ public:
                 offsets[i] = offsets[i - 1] + counts[i - 1];
 
             // Compute per-thread offsets.
-            std::vector<std::vector<uint32_t>> offsets_for_thread(
-                num_threads, std::vector<uint32_t>(radix, 0));
+            std::pmr::vector<std::pmr::vector<uint32_t>> offsets_for_thread(mr);
+            offsets_for_thread.reserve(num_threads);
+            for (size_t t = 0; t < num_threads; ++t) {
+                offsets_for_thread.emplace_back(std::pmr::vector<uint32_t>(radix, 0u, mr));
+            }
+
             for (size_t r = 0; r < radix; ++r)
                 offsets_for_thread[0][r] = offsets[r];
             for (size_t t = 1; t < num_threads; ++t) {

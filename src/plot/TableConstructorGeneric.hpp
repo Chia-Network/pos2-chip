@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "RadixSort.hpp"
+#include "ResettableArenaResource.hpp"
 #include "common/ParallelForRange.hpp"
 #include "common/Timer.hpp"
 #include "pos/ProofCore.hpp"
@@ -31,7 +32,7 @@ public:
     virtual ~TableConstructorGeneric() = default;
 
     std::vector<std::vector<uint64_t>> find_candidates_prefixes(
-        std::vector<PairingCandidate> const& pairing_candidates) const
+        std::span<PairingCandidate const> pairing_candidates) const
     {
         size_t const num_sections = params_.get_num_sections();
         size_t const num_match_keys = params_.get_num_match_keys(table_id_);
@@ -268,7 +269,7 @@ public:
         return result;
     }
 
-    T_Result construct(std::vector<PairingCandidate> const& previous_table_pairs)
+    T_Result construct(std::span<PairingCandidate const> previous_table_pairs)
     {
         auto pairing_candidates_offsets = find_candidates_prefixes(previous_table_pairs);
 
@@ -304,7 +305,7 @@ public:
                 timer_.start("Hash matching L candidates");
                 parallel_for_range(uint64_t(0),
                     uint64_t(l_end - l_start),
-                    [this, &l_candidates, &previous_table_pairs, l_start, match_key_r](
+                    [this, &l_candidates, previous_table_pairs, l_start, match_key_r](
                         uint64_t idx) {
                         l_candidates[idx]
                             = matching_target(previous_table_pairs[l_start + idx], match_key_r);
@@ -435,39 +436,52 @@ public:
 
     virtual ~XsConstructor() = default;
 
-    std::vector<Xs_Candidate> construct()
+    BufferSpan<Xs_Candidate> construct(
+        std::pmr::memory_resource* out_mr, std::pmr::memory_resource* scratch_mr)
     {
-        std::vector<Xs_Candidate> x_candidates;
-        // We'll have 2^(k-4) groups, each group has 16 x-values
-        // => total of 2^(k-4)*16 x-values
+        if (!out_mr || !scratch_mr) {
+            throw std::runtime_error("XsConstructor: null memory_resource");
+        }
 
-        uint64_t num_xs = (1ULL << params_.get_k());
-        x_candidates.resize(num_xs);
+        uint64_t const num_xs_u64 = (1ULL << params_.get_k());
+        size_t const num_xs = static_cast<size_t>(num_xs_u64);
+
+        // Allocate output + temp from the provided arenas
+        std::pmr::vector<Xs_Candidate> out(out_mr);
+        std::pmr::vector<Xs_Candidate> tmp(scratch_mr);
+
+        try {
+            out.resize(num_xs);
+            tmp.resize(num_xs);
+        }
+        catch (std::bad_alloc const&) {
+            throw std::runtime_error("XsConstructor: buffers too small");
+        }
+
+        std::span<Xs_Candidate> out_span(out.data(), out.size());
+        std::span<Xs_Candidate> tmp_span(tmp.data(), tmp.size());
 
         Timer timer;
         timer.start("Hashing Xs_Candidate");
 
-        parallel_for_range(uint64_t(0), num_xs, [this, &x_candidates](uint64_t x_val) {
+        parallel_for_range(uint64_t(0), num_xs_u64, [this, out_span](uint64_t x_val) mutable {
             uint32_t x = static_cast<uint32_t>(x_val);
             uint32_t match_info = this->proof_core_.hashing.g(x);
-            x_candidates[x_val] = Xs_Candidate { match_info, x };
+            out_span[static_cast<size_t>(x_val)] = Xs_Candidate { match_info, x };
         });
         timings.hash_time_ms = timer.stop();
 
-        timer.start("Setup RadixSort");
         RadixSort<Xs_Candidate, uint32_t> radix_sort;
-        std::vector<Xs_Candidate> temp_buffer(x_candidates.size());
-        // Create a span over the temporary buffer
-        std::span<Xs_Candidate> buffer(temp_buffer.data(), temp_buffer.size());
-        timer.stop();
-        timings.setup_time_ms = timer.stop();
 
         timer.start("Sorting Xs_Candidate");
-        radix_sort.sort(x_candidates, buffer);
-        timer.stop();
+        // auto sorted = radix_sort.sort_to(out, tmp);
+        radix_sort.sort(out_span, tmp_span);
         timings.sort_time_ms = timer.stop();
 
-        return x_candidates;
+        return BufferSpan<Xs_Candidate> {
+            .where = BufId::A,
+            .view = out_span,
+        };
     }
 
     struct Timings {
