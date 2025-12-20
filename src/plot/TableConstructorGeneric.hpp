@@ -296,15 +296,6 @@ public:
                 // std::cout << "Range is: " << r_start << " to " << r_end <<  " length " << (r_end
                 // - r_start) << std::endl;
 
-                // copy out the R slice
-                timer_.start("Copy R candidates");
-                std::vector<PairingCandidate> r_candidates;
-                r_candidates.reserve(r_end - r_start);
-                for (uint64_t i = r_start; i < r_end; i++) {
-                    r_candidates.push_back(previous_table_pairs[i]);
-                }
-                timings.misc_time_ms += timer_.stop();
-
                 // Build the L candidates by calling matching_target
                 timer_.start("Build L candidates");
                 std::vector<PairingCandidate> l_candidates;
@@ -319,6 +310,12 @@ public:
                             = matching_target(previous_table_pairs[l_start + idx], match_key_r);
                     });
                 timings.hash_time_ms += timer_.stop();
+
+                // Setup R candidates as a span (no copy)
+                timer_.start("Setup R candidates span");
+                auto r_candidates = std::span<PairingCandidate const>(
+                    previous_table_pairs.data() + r_start, r_end - r_start);
+                timings.misc_time_ms += timer_.stop();
 
                 // sort by match_target (default setting for RadixSort)
                 // RadixSort<T_Target, decltype(&T_Target::match_target)>
@@ -359,7 +356,6 @@ public:
                                 std::span<PairingCandidate const>(
                                     r_candidates.data() + split.r_begin,
                                     split.r_end - split.r_begin));
-                            // mutex to add to new_table_pairs
                             {
                                 std::lock_guard<std::mutex> lock(new_table_pairs_mutex);
                                 new_table_pairs.insert(
