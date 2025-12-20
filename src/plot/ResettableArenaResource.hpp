@@ -81,6 +81,13 @@ private:
     std::size_t off_;
 };
 
+template <class T>
+static T* arena_alloc_n(std::pmr::memory_resource* mr, std::size_t n)
+{
+    std::pmr::polymorphic_allocator<T> a(mr);
+    return a.allocate(n); // uninitialized storage
+}
+
 // =======================================
 // Result wrapper that remembers residence
 // =======================================
@@ -197,14 +204,45 @@ struct HugeBuffer {
         return *this;
     }
 
+    // Use when you no longer need the data in [offset, offset+length).
+    // After this call, reading old contents is undefined (may be zeroed or stale).
+    // Next writes may incur page faults again (expected).
+    void discard_pages(std::size_t offset = 0, std::size_t length = 0) noexcept
+    {
+        if (!ptr || size == 0)
+            return;
+
+        if (offset > size)
+            return;
+        if (length == 0 || offset + length > size)
+            length = size - offset;
+
+        std::byte* p = static_cast<std::byte*>(ptr) + offset;
+
+#if defined(_WIN32)
+        // Decommit physical pages but keep address range reserved
+        ::VirtualFree(p, length, MEM_DECOMMIT);
+#else
+        // Hint that pages can be reclaimed; kernel may drop them lazily
+        ::madvise(p, length, MADV_DONTNEED);
+#endif
+    }
+
     ~HugeBuffer()
     {
 #if defined(_WIN32)
         if (ptr)
             ::VirtualFree(ptr, 0, MEM_RELEASE);
 #else
+#if defined(__APPLE__)
+        // MADV_FREE: contents can be discarded; pages reclaimed under pressure.
+        // Doesn't necessarily drop RSS immediately.
+        if (ptr)
+            ::madvise(ptr, size, MADV_FREE);
+#else
         if (ptr)
             ::munmap(ptr, size);
+#endif
 #endif
         ptr = nullptr;
         size = 0;
@@ -260,27 +298,57 @@ struct TwoResources {
 
     std::pmr::memory_resource* mr(BufId id) { return &arena(id); }
     void reset(BufId id) { arena(id).reset(); }
+
+    // Reset arena cursor AND ask OS to reclaim physical pages for that buffer.
+    // Typical use: after a stage completes, call this on the buffer that does NOT
+    // hold the live result (or on a buffer you’re about to repurpose).
+    void reset_and_discard(BufId id) noexcept
+    {
+        arena(id).reset();
+        if (id == BufId::A)
+            bufA.discard_pages();
+        else
+            bufB.discard_pages();
+    }
+
+    // Optional: discard without resetting cursor (rarely useful).
+    void discard(BufId id) noexcept
+    {
+        if (id == BufId::A)
+            bufA.discard_pages();
+        else
+            bufB.discard_pages();
+    }
+
+    void reset_and_discard_all() noexcept
+    {
+        a.reset();
+        b.reset();
+        bufA.discard_pages();
+        bufB.discard_pages();
+    }
 };
 
-// ============================
-// Optional sizing helpers
-// ============================
-//
-// These are convenience helpers to compute required bytes for a single
-// "out + tmp" stage when allocating T[num] in one arena and T[num] in the other.
-//
-// Example for Xs_Candidate:
-//   num = 1ull << k
-//   bytes_per_arena_min = num * sizeof(Xs_Candidate)   (2 GiB at k=28)
-//   total_stage = 2 * bytes_per_arena_min
+struct ScratchResources {
+    arena_vm::HugeBuffer buf;
+    ResettableArenaResource arena;
 
-template <class T>
-inline std::size_t bytes_for_n(std::size_t n)
-{
-    if (n == 0)
-        return 0;
-    if (n > (std::numeric_limits<std::size_t>::max)() / sizeof(T)) {
-        throw std::overflow_error("bytes_for_n overflow");
+    ScratchResources(arena_vm::HugeBuffer&& B) : buf(std::move(B)), arena(buf.ptr, buf.size) {}
+
+    static ScratchResources allocate_vm(std::size_t bytes, bool prefault = false)
+    {
+        arena_vm::HugeBuffer B(bytes, prefault);
+        return ScratchResources(std::move(B));
     }
-    return n * sizeof(T);
-}
+
+    std::pmr::memory_resource* mr() { return &arena; }
+    void reset() { arena.reset(); }
+
+    // Reset scratch arena AND discard its pages (good after finishing a stage or after full
+    // pipeline).
+    void reset_and_discard() noexcept
+    {
+        arena.reset();
+        buf.discard_pages();
+    }
+};

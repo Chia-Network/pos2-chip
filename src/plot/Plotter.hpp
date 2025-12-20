@@ -108,30 +108,38 @@ public:
 
         Timer allocationTimer;
         allocationTimer.debugOut = true;
-        size_t max_bytes_needed = sizeof(T2Pairing) * (1ull << proof_params_.get_k());
-        allocationTimer.start(
-            "Allocating Arena Buffers: 2 x " + std::to_string(max_bytes_needed) + " bytes");
+        size_t max_pairs = max_pairs_per_table_possible(proof_params_);
+        size_t max_bytes_needed = sizeof(T2Pairing) * max_pairs;
+        size_t max_scratch_bytes = max_bytes_needed / 2; // in a section we output
+        allocationTimer.start("Allocating Arena Buffers: 2 x " + std::to_string(max_bytes_needed)
+            + " bytes and scratch " + std::to_string(max_scratch_bytes) + " bytes");
         auto mem = TwoResources::allocate_vm(max_bytes_needed, /*prefault=*/true);
 
+        auto scratch = ScratchResources::allocate_vm(max_bytes_needed, /*prefault=*/true);
         mem.a.reset();
         mem.b.reset();
+        scratch.arena.reset();
+
         allocationTimer.stop();
 
-        // 1) Construct Xs candidates
+        // 1) Xs
         XsConstructor xs_gen_ctor(proof_params_);
-        auto xs_candidates = xs_gen_ctor.construct(&mem.a, &mem.b);
+        BufferSpan<Xs_Candidate> xs_candidates
+            = xs_gen_ctor.construct(mem.mr(BufId::A), mem.mr(BufId::B));
         xs_gen_ctor.timings.show();
-        std::cout << "Constructed " << xs_candidates.view.size() << " Xs candidates." << std::endl;
-
+        std::cout << "Constructed " << xs_candidates.view.size() << " Xs candidates.\n";
         print_rss("[After Xs Generation]");
 
-        // 2) Table1 generic
-        Table1Constructor t1_ctor(proof_params_);
-        auto t1_pairs = t1_ctor.construct(xs_candidates.view);
-        t1_ctor.timings.show("Table 1 Timings:");
-        std::cout << "Constructed " << t1_pairs.size() << " Table 1 pairs." << std::endl;
+        // 2) Table1
+        BufId activeInputBuffer = xs_candidates.where;
+        Table1Constructor t1_ctor(proof_params_, scratch.arena);
+        BufId t1_out = other(activeInputBuffer);
+        mem.arena(t1_out).reset();
 
-        // output current ram used
+        BufferSpan<T1Pairing> t1_pairs = t1_ctor.construct(
+            xs_candidates, t1_out, mem.arena(activeInputBuffer), mem.arena(t1_out));
+        t1_ctor.timings.show("Table 1 Timings:");
+        std::cout << "Constructed " << t1_pairs.view.size() << " Table 1 pairs.\n";
         print_rss("[After Table1]");
 
 #ifdef RETAIN_X_VALUES
@@ -150,12 +158,14 @@ public:
         }
 #endif
 
-        // 3) Table2 generic
-        Table2Constructor t2_ctor(proof_params_);
-        auto t2_pairs = t2_ctor.construct(t1_pairs);
+        // 3) Table 2
+        Table2Constructor t2_ctor(proof_params_, scratch.arena);
+        BufId t2_out = other(t1_pairs.where);
+        mem.arena(t2_out).reset();
+        BufferSpan<T2Pairing> t2_pairs
+            = t2_ctor.construct(t1_pairs, t2_out, mem.arena(t1_pairs.where), mem.arena(t2_out));
         t2_ctor.timings.show("Table 2 Timings:");
-        std::cout << "Constructed " << t2_pairs.size() << " Table 2 pairs." << std::endl;
-
+        std::cout << "Constructed " << t2_pairs.view.size() << " Table 2 pairs.\n";
         print_rss("[After Table2]");
 
 #ifdef RETAIN_X_VALUES
@@ -172,12 +182,14 @@ public:
         }
 #endif
 
-        // 4) Table3 generic
-        Table3Constructor t3_ctor(proof_params_);
-        std::vector<T3Pairing> t3_results = t3_ctor.construct(t2_pairs);
+        // 4) Table 3
+        Table3Constructor t3_ctor(proof_params_, scratch.arena);
+        BufId t3_out = other(t2_pairs.where);
+        mem.arena(t3_out).reset();
+        BufferSpan<T3Pairing> t3_results
+            = t3_ctor.construct(t2_pairs, t3_out, mem.arena(t2_pairs.where), mem.arena(t3_out));
         t3_ctor.timings.show("Table 3 Timings:");
-        std::cout << "Constructed " << t3_results.size() << " Table 3 entries." << std::endl;
-
+        std::cout << "Constructed " << t3_results.view.size() << " Table 3 entries.\n";
         print_rss("[After Table3]");
 
         decltype(t1_ctor)::Timings total_timings;
@@ -219,14 +231,23 @@ public:
         }
 #endif
 
+        // Free up memory we no longer need.
+        // Keep the arena that backs t3_results.view, reset everything else.
+        scratch.reset_and_discard();
+        mem.reset_and_discard(other(t3_results.where));
+        print_rss("[After Discard]");
+
         // Return a default-constructed PlotData to avoid relying on specific member names here.
         auto dummy_data = PlotData {};
         std::vector<ProofFragment> t3_proof_fragments;
-        t3_proof_fragments.reserve(t3_results.size());
-        for (auto const& t3_pair: t3_results) {
+        t3_proof_fragments.reserve(t3_results.view.size());
+        for (auto const& t3_pair: t3_results.view) {
             t3_proof_fragments.push_back(t3_pair.proof_fragment);
         }
         dummy_data.t3_proof_fragments = t3_proof_fragments;
+
+        print_rss("[After Dummy]");
+
         return dummy_data;
     }
 

@@ -19,112 +19,201 @@
 #include "pos/ProofParams.hpp"
 #include "pos/ProofValidator.hpp"
 
+static std::size_t max_pairs_per_table_possible(ProofParams const& params)
+{
+    // Your heuristic kept (but please revisit; if too small you'll overflow output span).
+    if (params.get_k() < 28) {
+        return (1ULL << (params.get_k() + 1));
+    }
+    return ((1ULL << params.get_k())) + (1ULL << (params.get_k() - 10));
+}
+
 template <typename PairingCandidate, typename T_Pairing, typename T_Result>
 class TableConstructorGeneric {
 public:
-    TableConstructorGeneric(int table_id, ProofParams const& proof_params)
+    TableConstructorGeneric(
+        int table_id, ProofParams const& proof_params, ResettableArenaResource& scratch)
         : table_id_(table_id)
         , params_(proof_params)
+        , scratch_arena_(&scratch)
         , proof_core_(proof_params)
     {
     }
 
     virtual ~TableConstructorGeneric() = default;
 
-    std::vector<std::vector<uint64_t>> find_candidates_prefixes(
-        std::span<PairingCandidate const> pairing_candidates) const
-    {
-        size_t const num_sections = params_.get_num_sections();
-        size_t const num_match_keys = params_.get_num_match_keys(table_id_);
-        // Allocate a 2D counts array: dimensions [num_sections][num_match_keys]
-        std::vector<std::vector<uint64_t>> counts(
-            num_sections, std::vector<uint64_t>(num_match_keys, 0ULL));
+    // =========================
+    // Prefix (flat 2D) structure
+    // =========================
+    struct Prefix2D {
+        std::span<uint64_t> data;
+        std::size_t num_sections = 0;
+        std::size_t row_stride = 0; // = num_match_keys+1
 
-        // For each candidate, use its public member "match_info"
+        uint64_t* row(std::size_t s) { return data.data() + s * row_stride; }
+        uint64_t const* row(std::size_t s) const { return data.data() + s * row_stride; }
+    };
+
+    Prefix2D find_candidates_prefixes(std::span<PairingCandidate const> pairing_candidates,
+        std::pmr::memory_resource* scratch_mr) const
+    {
+        std::size_t const num_sections = params_.get_num_sections();
+        std::size_t const num_match_keys = params_.get_num_match_keys(table_id_);
+        std::size_t const stride = num_match_keys + 1;
+
+        // counts: [num_sections][num_match_keys]
+        uint64_t* counts = arena_alloc_n<uint64_t>(scratch_mr, num_sections * num_match_keys);
+        std::fill(counts, counts + num_sections * num_match_keys, 0ULL);
+
         for (auto const& candidate: pairing_candidates) {
             uint32_t section
                 = params_.extract_section_from_match_info(table_id_, candidate.match_info);
-            uint32_t match_key
+            uint32_t mk
                 = params_.extract_match_key_from_match_info(table_id_, candidate.match_info);
-            counts[section][match_key]++;
+            counts[std::size_t(section) * num_match_keys + std::size_t(mk)]++;
         }
 
-        // Now compute the prefix sums.
-        // Each row (for a section) will have (num_match_keys_ + 1) values.
-        std::vector<std::vector<uint64_t>> prefixes(
-            num_sections, std::vector<uint64_t>(num_match_keys + 1, 0ULL));
+        // prefixes: [num_sections][num_match_keys+1]
+        uint64_t* prefixes = arena_alloc_n<uint64_t>(scratch_mr, num_sections * stride);
 
         uint64_t total_prefix = 0ULL;
-        for (size_t section = 0; section < num_sections; section++) {
-            for (size_t mk = 0; mk < num_match_keys; mk++) {
-                prefixes[section][mk] = total_prefix;
-                total_prefix += counts[section][mk];
+        for (std::size_t s = 0; s < num_sections; ++s) {
+            for (std::size_t mk = 0; mk < num_match_keys; ++mk) {
+                prefixes[s * stride + mk] = total_prefix;
+                total_prefix += counts[s * num_match_keys + mk];
             }
-            // The last element for each row is the overall "end" prefix.
-            prefixes[section][num_match_keys] = total_prefix;
+            prefixes[s * stride + num_match_keys] = total_prefix;
         }
 
-        return prefixes;
+        return Prefix2D {
+            std::span<uint64_t>(prefixes, num_sections * stride), num_sections, stride
+        };
     }
 
-    std::vector<T_Pairing> find_pairs(std::span<PairingCandidate const> const& l_targets,
-        std::span<PairingCandidate const> const& r_candidates)
-    {
-        std::vector<T_Pairing> pairs;
-        pairs.reserve(std::max(l_targets.size(), r_candidates.size()));
+    // =========================
+    // Split ranges for parallel
+    // =========================
+    struct SplitRange {
+        std::size_t l_begin;
+        std::size_t l_end;
+        std::size_t r_begin;
+        std::size_t r_end;
+    };
 
-        size_t left_index = 0;
-        size_t right_index = 0;
+    // Returns a span allocated from scratch_mr.
+    std::span<SplitRange> make_splits_simple(std::span<PairingCandidate const> l_candidates,
+        std::span<PairingCandidate const> r_candidates,
+        unsigned num_threads,
+        uint32_t match_target_mask) const
+    {
+        using std::size_t;
+
+        size_t const l_size = l_candidates.size();
         size_t const r_size = r_candidates.size();
 
-        size_t num_match_target_bits = params_.get_num_match_target_bits(table_id_);
-        uint32_t match_target_mask = (1 << num_match_target_bits) - 1;
-
-        // We treat r_candidates like an iterator:
-        bool have_r_candidate = (r_size > 0);
-        size_t current_r_idx = 0;
-
-        while (left_index < l_targets.size() && have_r_candidate) {
-            uint32_t match_target_l = l_targets[left_index].match_info;
-            uint32_t match_target_r = (r_candidates[current_r_idx].match_info & match_target_mask);
-
-            if (match_target_l == match_target_r) {
-                // we match all left items that share the same match_target_l
-                size_t start_i = left_index;
-                while (start_i < l_targets.size()
-                    && (l_targets[start_i].match_info == match_target_r)) {
-                    handle_pair(l_targets[start_i],
-                        r_candidates[current_r_idx],
-                        pairs,
-                        start_i,
-                        right_index);
-                    start_i++;
-                }
-                // Advance the right side
-                right_index++;
-                if (right_index < r_size) {
-                    current_r_idx = right_index;
-                }
-                else {
-                    have_r_candidate = false;
-                }
-            }
-            else if (match_target_r < match_target_l) {
-                // Advance the right side
-                right_index++;
-                if (right_index < r_size) {
-                    current_r_idx = right_index;
-                }
-                else {
-                    have_r_candidate = false;
-                }
-            }
-            else {
-                // match_target_r > match_target_l => advance left side
-                left_index++;
-            }
+        if (l_size == 0 || r_size == 0 || num_threads == 0) {
+            return {};
         }
-        return pairs;
+
+        num_threads = std::min<unsigned>(num_threads, static_cast<unsigned>(l_size));
+        if (num_threads == 0) {
+            return {};
+        }
+
+        auto key = [match_target_mask](PairingCandidate const& c) -> uint32_t {
+            return c.match_info & match_target_mask;
+        };
+
+        unsigned const num_splits = num_threads; // one chunk per thread
+
+        // Allocate split arrays from scratch
+        size_t* l_splits = arena_alloc_n<size_t>(scratch_arena_, num_splits + 1);
+        size_t* r_splits = arena_alloc_n<size_t>(scratch_arena_, num_splits + 1);
+
+        l_splits[0] = 0;
+        l_splits[num_splits] = l_size;
+
+        size_t const base_chunk = l_size / num_splits;
+
+        for (unsigned i = 1; i < num_splits; ++i) {
+            size_t idx = i * base_chunk;
+            if (idx >= l_size)
+                idx = l_size - 1;
+
+            uint32_t k = key(l_candidates[idx]);
+            while (idx > 0 && key(l_candidates[idx - 1]) == k) {
+                --idx;
+            }
+            if (idx < l_splits[i - 1])
+                idx = l_splits[i - 1];
+
+            l_splits[i] = idx;
+        }
+
+        r_splits[0] = 0;
+        r_splits[num_splits] = r_size;
+
+        for (unsigned i = 1; i < num_splits; ++i) {
+            size_t const l_idx = l_splits[i];
+            size_t r_idx = r_size * i / num_splits;
+            if (r_idx >= r_size)
+                r_idx = r_size ? (r_size - 1) : 0;
+
+            if (l_idx >= l_size) {
+                r_splits[i] = r_size;
+                continue;
+            }
+
+            // scan down if L key is less
+            while (r_idx > 0
+                && l_candidates[l_idx].match_info
+                    < (r_candidates[r_idx].match_info & match_target_mask)) {
+                --r_idx;
+            }
+
+            // if equal, scan to first equal on R
+            if (r_size > 0
+                && l_candidates[l_idx].match_info
+                    == (r_candidates[r_idx].match_info & match_target_mask)) {
+                while (r_idx > 0
+                    && ((r_candidates[r_idx - 1].match_info & match_target_mask)
+                        == l_candidates[l_idx].match_info)) {
+                    --r_idx;
+                }
+            }
+
+            // scan up if L key is greater
+            while (r_idx < r_size
+                && l_candidates[l_idx].match_info
+                    > (r_candidates[r_idx].match_info & match_target_mask)) {
+                ++r_idx;
+            }
+
+            r_splits[i] = r_idx;
+        }
+
+        SplitRange* ranges = arena_alloc_n<SplitRange>(scratch_arena_, num_splits);
+        for (unsigned i = 0; i < num_splits; ++i) {
+            ranges[i] = SplitRange { l_splits[i], l_splits[i + 1], r_splits[i], r_splits[i + 1] };
+        }
+
+        return std::span<SplitRange>(ranges, num_splits);
+    }
+
+    // =========================
+    // Pair finding into output span
+    // =========================
+
+    // Derived class should create 1..N pairings for a match.
+    // out_count is an atomic cursor; derived must reserve slots via fetch_add.
+    virtual void handle_pair_into(PairingCandidate const& /*l_candidate*/,
+        PairingCandidate const& /*r_candidate*/,
+        std::span<T_Pairing> /*out_pairs*/,
+        std::atomic<std::size_t>& /*out_count*/,
+        std::size_t /*left_index*/,
+        std::size_t /*right_index*/)
+    {
+        throw std::runtime_error("handle_pair_into not implemented");
     }
 
     virtual PairingCandidate matching_target(
@@ -133,269 +222,210 @@ public:
         throw std::runtime_error("matching_target not implemented");
     }
 
-    virtual void handle_pair(PairingCandidate const& /*l_candidate*/,
-        PairingCandidate const& /*r_candidate*/,
-        std::vector<T_Pairing>& /*pairs*/,
-        size_t /*left_index*/,
-        size_t /*right_index*/)
-    {
-        throw std::runtime_error("handle_pair not implemented");
-    }
-
-    struct SplitRange {
-        std::size_t l_begin;
-        std::size_t l_end;
-        std::size_t r_begin;
-        std::size_t r_end;
-    };
-    // Make T split ranges for (l_candidates, r_candidates) for use in T threads.
-    // Strategy:
-    //  1) Split L evenly by index.
-    //  2) For each internal boundary, move it DOWN so we don't split equal keys in L.
-    //  3) For each L-boundary, map to an approximate position in R by proportion,
-    //     then scan up/down locally until we find the matching key in R.
-    std::vector<SplitRange> make_splits_simple(std::span<PairingCandidate const> l_candidates,
+    // Writes pairs into out_pairs using atomic cursor.
+    void find_pairs_into(std::span<PairingCandidate const> l_targets,
         std::span<PairingCandidate const> r_candidates,
-        unsigned num_threads,
-        uint32_t match_target_mask)
+        std::span<T_Pairing> out_pairs,
+        std::atomic<std::size_t>& out_count)
     {
-        using std::size_t;
+        std::size_t left_index = 0;
+        std::size_t right_index = 0;
+        std::size_t const r_size = r_candidates.size();
 
-        std::vector<SplitRange> result;
+        std::size_t const num_match_target_bits = params_.get_num_match_target_bits(table_id_);
+        uint32_t const match_target_mask = (uint32_t(1) << num_match_target_bits) - 1u;
 
-        size_t const l_size = l_candidates.size();
-        size_t const r_size = r_candidates.size();
+        bool have_r_candidate = (r_size > 0);
+        std::size_t current_r_idx = 0;
 
-        if (l_size == 0 || r_size == 0 || num_threads == 0) {
-            return result;
-        }
+        while (left_index < l_targets.size() && have_r_candidate) {
+            uint32_t match_target_l = l_targets[left_index].match_info;
+            uint32_t match_target_r = (r_candidates[current_r_idx].match_info & match_target_mask);
 
-        // Clamp thread count
-        num_threads = std::min<unsigned>(num_threads, static_cast<unsigned>(l_size));
-        if (num_threads == 0) {
-            return result;
-        }
-
-        auto key = [match_target_mask](PairingCandidate const& c) -> uint32_t {
-            return c.match_info & match_target_mask;
-        };
-
-        // 1) Build L split indices: l_splits[0..num_splits], where
-        //    l_splits[0] = 0, l_splits[num_splits] = l_size.
-        unsigned const num_splits = num_threads; // one chunk per thread
-        std::vector<size_t> l_splits(num_splits + 1);
-        l_splits[0] = 0;
-        l_splits[num_splits] = l_size;
-
-        // Base even split size
-        size_t const base_chunk = l_size / num_splits;
-
-        for (unsigned i = 1; i < num_splits; ++i) {
-            // Initial even index
-            size_t idx = i * base_chunk;
-            if (idx >= l_size)
-                idx = l_size - 1; // clamp just in case
-
-            // 2) Move DOWN if we are in the middle of a run of equal keys in L.
-            uint32_t k = key(l_candidates[idx]);
-            while (idx > 0 && key(l_candidates[idx - 1]) == k) {
-                --idx;
-            }
-
-            // Ensure monotonicity
-            if (idx < l_splits[i - 1]) {
-                idx = l_splits[i - 1];
-            }
-
-            l_splits[i] = idx;
-        }
-
-        // 3) Build corresponding R split indices: r_splits[0..num_splits]
-        std::vector<size_t> r_splits(num_splits + 1);
-        r_splits[0] = 0;
-        r_splits[num_splits] = r_size;
-
-        for (unsigned i = 1; i < num_splits; ++i) {
-            size_t l_idx = l_splits[i];
-            // r_idx starts at proportional position to split
-            size_t r_idx = r_size * i / num_splits;
-
-            // If this L boundary is at the very end, R boundary is also at the end.
-            if (l_idx >= l_size) {
-                r_splits[i] = r_size;
-                continue;
-            }
-
-            // if l size is less than r side, then scan down from r side
-            while (l_candidates[l_idx].match_info
-                < (r_candidates[r_idx].match_info & match_target_mask)) {
-                if (r_idx == 0) {
-                    break;
+            if (match_target_l == match_target_r) {
+                std::size_t start_i = left_index;
+                while (start_i < l_targets.size()
+                    && (l_targets[start_i].match_info == match_target_r)) {
+                    handle_pair_into(l_targets[start_i],
+                        r_candidates[current_r_idx],
+                        out_pairs,
+                        out_count,
+                        start_i,
+                        right_index);
+                    ++start_i;
                 }
-                --r_idx;
+
+                ++right_index;
+                if (right_index < r_size)
+                    current_r_idx = right_index;
+                else
+                    have_r_candidate = false;
             }
-            // if they are same, then scan r down to the first of that key
-            if (l_candidates[l_idx].match_info
-                == (r_candidates[r_idx].match_info & match_target_mask)) {
-                while (r_idx > 0
-                    && (r_candidates[r_idx - 1].match_info & match_target_mask)
-                        == l_candidates[l_idx].match_info) {
-                    --r_idx;
-                }
+            else if (match_target_r < match_target_l) {
+                ++right_index;
+                if (right_index < r_size)
+                    current_r_idx = right_index;
+                else
+                    have_r_candidate = false;
             }
-            // if l size is greater than r side, then scan up from r side
-            while (l_candidates[l_idx].match_info
-                > (r_candidates[r_idx].match_info & match_target_mask)) {
-                if (r_idx == r_size) {
-                    break;
-                }
-                ++r_idx;
+            else {
+                ++left_index;
             }
-            // end result is R is always >= L side match key.
-            r_splits[i] = r_idx;
         }
-
-        // 4) Build per-thread ranges
-        result.reserve(num_splits);
-        for (unsigned i = 0; i < num_splits; ++i) {
-            size_t l_begin = l_splits[i];
-            size_t l_end = l_splits[i + 1];
-            size_t r_begin = r_splits[i];
-            size_t r_end = r_splits[i + 1];
-
-            result.push_back(SplitRange { l_begin, l_end, r_begin, r_end });
-        }
-
-        return result;
     }
 
-    T_Result construct(std::span<PairingCandidate const> previous_table_pairs)
+    // =========================
+    // Main construct using arenas
+    // =========================
+    BufferSpan<T_Result> construct(BufferSpan<PairingCandidate> previous_table_pairs,
+        BufId out_id,
+        ResettableArenaResource& in_arena, // previous table pairs is in here...
+        ResettableArenaResource& out_arena)
     {
-        auto pairing_candidates_offsets = find_candidates_prefixes(previous_table_pairs);
+        scratch_arena_->reset();
 
-        std::vector<T_Pairing> new_table_pairs;
-        std::mutex new_table_pairs_mutex;
+        // Prefixes live in scratch
+        Prefix2D prefix = find_candidates_prefixes(previous_table_pairs.view, scratch_arena_);
 
-        size_t const num_match_keys = params_.get_num_match_keys(table_id_);
+        std::size_t const max_pairs_guess = max_pairs_per_table_possible(params_);
+        std::cout << "T" << table_id_ << ": max_pairs_guess=" << max_pairs_guess
+                  << " sizeof(T_Pairing)=" << sizeof(T_Pairing)
+                  << " bytes=" << (max_pairs_guess * sizeof(T_Pairing))
+                  << " out_cap=" << out_arena.capacity_bytes()
+                  << " out_rem=" << out_arena.remaining_bytes() << "\n";
 
-        // parallel across sections
-        // parallel_for_range(uint64_t(0), uint64_t(params_.get_num_sections()), [&](uint64_t
-        // section)
-        for (uint32_t section = 0; section < params_.get_num_sections(); section++) {
-            uint32_t section_l = section;
-            uint32_t section_r = proof_core_.matching_section(section_l);
+        // Output array for pairings lives in OUT arena
+        T_Pairing* out_ptr = arena_alloc_n<T_Pairing>(&out_arena, max_pairs_guess);
+        std::span<T_Pairing> out_pairs(out_ptr, max_pairs_guess);
 
-            // l_start..l_end in the previous_table_pairs
-            uint64_t l_start = pairing_candidates_offsets[section_l][0];
-            uint64_t l_end = pairing_candidates_offsets[section_l][num_match_keys];
+        std::atomic<std::size_t> out_count { 0 };
 
-            // For each match_key in [0..num_match_keys_-1]
-            for (uint32_t match_key_r = 0; match_key_r < num_match_keys; match_key_r++) {
-                uint64_t r_start = pairing_candidates_offsets[section_r][match_key_r];
-                uint64_t r_end = pairing_candidates_offsets[section_r][match_key_r + 1];
+        std::size_t const num_match_keys = params_.get_num_match_keys(table_id_);
+        uint32_t const match_target_mask
+            = (uint32_t(1) << params_.get_num_match_target_bits(table_id_)) - 1u;
 
-                // std::cout << "Range is: " << r_start << " to " << r_end <<  " length " << (r_end
-                // - r_start) << std::endl;
+        uint32_t const num_sections = static_cast<uint32_t>(params_.get_num_sections());
 
-                // Build the L candidates by calling matching_target
-                timer_.start("Build L candidates");
-                std::vector<PairingCandidate> l_candidates;
-                l_candidates.resize(l_end - l_start);
-                timings.setup_time_ms += timer_.stop();
+        for (uint32_t section = 0; section < num_sections; ++section) {
+            uint32_t const section_l = section;
+            uint32_t const section_r = proof_core_.matching_section(section_l);
+
+            uint64_t const l_start_u64 = prefix.row(section_l)[0];
+            uint64_t const l_end_u64 = prefix.row(section_l)[num_match_keys];
+
+            for (uint32_t match_key_r = 0; match_key_r < num_match_keys; ++match_key_r) {
+                auto m = scratch_arena_->mark();
+
+                uint64_t const r_start_u64 = prefix.row(section_r)[match_key_r];
+                uint64_t const r_end_u64 = prefix.row(section_r)[match_key_r + 1];
+
+                std::size_t const l_start = static_cast<std::size_t>(l_start_u64);
+                std::size_t const l_end = static_cast<std::size_t>(l_end_u64);
+                std::size_t const r_start = static_cast<std::size_t>(r_start_u64);
+                std::size_t const r_end = static_cast<std::size_t>(r_end_u64);
+
+                std::size_t const l_count = l_end - l_start;
+                std::size_t const r_count = r_end - r_start;
+
+                if (l_count == 0 || r_count == 0) {
+                    scratch_arena_->rewind(m);
+                    continue;
+                }
+
+                PairingCandidate* l_ptr = arena_alloc_n<PairingCandidate>(scratch_arena_, l_count);
+                std::span<PairingCandidate> l_candidates(l_ptr, l_count);
+
                 timer_.start("Hash matching L candidates");
                 parallel_for_range(uint64_t(0),
-                    uint64_t(l_end - l_start),
-                    [this, &l_candidates, previous_table_pairs, l_start, match_key_r](
+                    uint64_t(l_count),
+                    [this, l_ptr, prev = previous_table_pairs.view, l_start, match_key_r](
                         uint64_t idx) {
-                        l_candidates[idx]
-                            = matching_target(previous_table_pairs[l_start + idx], match_key_r);
+                        l_ptr[static_cast<std::size_t>(idx)] = matching_target(
+                            prev[l_start + static_cast<std::size_t>(idx)], match_key_r);
                     });
                 timings.hash_time_ms += timer_.stop();
 
-                // Setup R candidates as a span (no copy)
-                timer_.start("Setup R candidates span");
+                // R is a view into previous table pairs
                 auto r_candidates = std::span<PairingCandidate const>(
-                    previous_table_pairs.data() + r_start, r_end - r_start);
-                timings.misc_time_ms += timer_.stop();
+                    previous_table_pairs.view.data() + r_start, r_count);
 
-                // sort by match_target (default setting for RadixSort)
-                // RadixSort<T_Target, decltype(&T_Target::match_target)>
-                // radix_sort(&T_Target::match_target);
+                // Sort L using temp buffer in scratch
+                PairingCandidate* tmp_ptr
+                    = arena_alloc_n<PairingCandidate>(scratch_arena_, l_count);
+                std::span<PairingCandidate> tmp(tmp_ptr, l_count);
+
                 RadixSort<PairingCandidate, uint32_t> radix_sort;
 
-                timer_.start("Setup temp sort buffer");
-                // create a temporary buffer as before:
-                std::vector<PairingCandidate> temp_buffer(l_candidates.size());
-                std::span<PairingCandidate> buffer(temp_buffer.data(), temp_buffer.size());
-                timings.setup_time_ms += timer_.stop();
                 timer_.start("Sorting L candidates");
-                radix_sort.sort(l_candidates, buffer);
+                radix_sort.sort(l_candidates, tmp);
                 timings.sort_time_ms += timer_.stop();
 
-                int num_threads = std::thread::hardware_concurrency();
+                unsigned num_threads = std::thread::hardware_concurrency();
+                if (num_threads == 0)
+                    num_threads = 1;
+
                 if (num_threads > 1) {
                     timer_.start("Make Splits Simple");
-                    auto splits = make_splits_simple(l_candidates,
-                        r_candidates,
-                        num_threads,
-                        (1 << params_.get_num_match_target_bits(table_id_)) - 1);
+                    auto splits = make_splits_simple(
+                        l_candidates, r_candidates, num_threads, match_target_mask);
                     timings.misc_time_ms += timer_.stop();
+
                     timer_.start("Finding pairs (parallel)");
-                    // Now parallel across splits
                     parallel_for_range(uint64_t(0),
                         uint64_t(splits.size()),
-                        [this,
-                            &splits,
-                            &l_candidates,
-                            &r_candidates,
-                            &new_table_pairs,
-                            &new_table_pairs_mutex](uint64_t split_idx) {
-                            auto const& split = splits[split_idx];
-                            auto found_pairs = find_pairs(std::span<PairingCandidate const>(
-                                                              l_candidates.data() + split.l_begin,
-                                                              split.l_end - split.l_begin),
-                                std::span<PairingCandidate const>(
-                                    r_candidates.data() + split.r_begin,
-                                    split.r_end - split.r_begin));
-                            {
-                                std::lock_guard<std::mutex> lock(new_table_pairs_mutex);
-                                new_table_pairs.insert(
-                                    new_table_pairs.end(), found_pairs.begin(), found_pairs.end());
-                            }
+                        [this, &splits, &l_candidates, &r_candidates, out_pairs, &out_count](
+                            uint64_t split_idx) {
+                            auto const& split = splits[static_cast<std::size_t>(split_idx)];
+
+                            auto l_span = std::span<PairingCandidate const>(
+                                l_candidates.data() + split.l_begin, split.l_end - split.l_begin);
+
+                            auto r_span = std::span<PairingCandidate const>(
+                                r_candidates.data() + split.r_begin, split.r_end - split.r_begin);
+
+                            this->find_pairs_into(l_span, r_span, out_pairs, out_count);
                         });
                     timings.find_pairs_time_ms += timer_.stop();
                 }
                 else {
-                    // Now pair them
                     timer_.start("Finding pairs");
-                    auto found_pairs = find_pairs(l_candidates, r_candidates);
-
-                    // Append found_pairs to new_table_pairs
-                    new_table_pairs.insert(
-                        new_table_pairs.end(), found_pairs.begin(), found_pairs.end());
-
+                    find_pairs_into(
+                        std::span<PairingCandidate const>(l_candidates.data(), l_candidates.size()),
+                        r_candidates,
+                        out_pairs,
+                        out_count);
                     timings.find_pairs_time_ms += timer_.stop();
                 }
+                // output how big scratch got
+                std::cout << "  Scratch used bytes after section " << section << " match_key_r "
+                          << match_key_r << ": " << scratch_arena_->used_bytes() << "\n";
+                scratch_arena_->rewind(m);
             }
         }
 
-        return post_construct(new_table_pairs);
+        std::size_t const produced = out_count.load(std::memory_order_relaxed);
+        if (produced > out_pairs.size()) {
+            std::cout << "Produced: " << produced << ", capacity: " << out_pairs.size() << "\n";
+            // This indicates the estimate was too small or handle_pair_into wrote past capacity.
+            throw std::runtime_error("TableConstructorGeneric: output arena capacity exceeded (bad "
+                                     "max_pairs_per_table_possible)");
+        }
+
+        // post_construct must allocate its returned result in out_arena and return
+        // BufferSpan<T_Result> note in_arena is now depleted (used for previous table pairs)
+        return post_construct_span(out_pairs.first(produced), out_id, out_arena, in_arena);
     }
 
     // called following construct method - typically sort operations
-    virtual T_Result post_construct(std::vector<T_Pairing>& /*pairings*/)
+    virtual BufferSpan<T_Result> post_construct_span(std::span<T_Pairing> /*pairings*/,
+        BufId /*out_id*/,
+        ResettableArenaResource& /*out_arena*/,
+        ResettableArenaResource& /*previous in_arena*/)
     {
-        throw std::runtime_error("post_construct not implemented");
+        throw std::runtime_error("post_construct_span not implemented");
     }
 
-protected:
-    int table_id_;
-    ProofParams params_;
-    Timer timer_;
-
 public:
-    // Provide direct access to the underlying ProofCore if needed:
-    ProofCore proof_core_;
     struct Timings {
         double hash_time_ms = 0.0;
         double setup_time_ms = 0.0;
@@ -406,19 +436,28 @@ public:
 
         void show(std::string header) const
         {
-            std::cout << header << std::endl;
-            std::cout << "  Hash time: " << hash_time_ms << " ms" << std::endl;
-            std::cout << "  Setup time: " << setup_time_ms << " ms" << std::endl;
-            std::cout << "  Sort time: " << sort_time_ms << " ms" << std::endl;
-            std::cout << "  Find pairs time: " << find_pairs_time_ms << " ms" << std::endl;
-            std::cout << "  Post-sort time: " << post_sort_time_ms << " ms" << std::endl;
-            std::cout << "  Misc time: " << misc_time_ms << " ms" << std::endl;
+            std::cout << header << "\n";
+            std::cout << "  Hash time: " << hash_time_ms << " ms\n";
+            std::cout << "  Setup time: " << setup_time_ms << " ms\n";
+            std::cout << "  Sort time: " << sort_time_ms << " ms\n";
+            std::cout << "  Find pairs time: " << find_pairs_time_ms << " ms\n";
+            std::cout << "  Post-sort time: " << post_sort_time_ms << " ms\n";
+            std::cout << "  Misc time: " << misc_time_ms << " ms\n";
             double total = hash_time_ms + setup_time_ms + sort_time_ms + find_pairs_time_ms
                 + post_sort_time_ms + misc_time_ms;
-            std::cout << "  ------------" << std::endl;
-            std::cout << "  Total time: " << total << " ms" << std::endl;
+            std::cout << "  ------------\n";
+            std::cout << "  Total time: " << total << " ms\n";
         }
     } timings;
+
+protected:
+    int table_id_;
+    ProofParams params_;
+    Timer timer_;
+    ResettableArenaResource* scratch_arena_;
+
+public:
+    ProofCore proof_core_;
 };
 
 struct Xs_Candidate {
@@ -506,61 +545,77 @@ protected:
     ProofCore proof_core_;
 };
 
-class Table1Constructor
-    : public TableConstructorGeneric<Xs_Candidate, T1Pairing, std::vector<T1Pairing>> {
+class Table1Constructor : public TableConstructorGeneric<Xs_Candidate, T1Pairing, T1Pairing> {
 public:
-    Table1Constructor(ProofParams const& proof_params) : TableConstructorGeneric(1, proof_params) {}
+    // NOTE: this base now requires a scratch arena reference
+    explicit Table1Constructor(ProofParams const& proof_params, ResettableArenaResource& scratch)
+        : TableConstructorGeneric<Xs_Candidate, T1Pairing, T1Pairing>(1, proof_params, scratch)
+    {
+    }
 
     // matching_target => (meta_l, r_match_target)
     Xs_Candidate matching_target(Xs_Candidate const& prev_table_pair, uint32_t match_key_r) override
     {
-        // The "prev_table_pair" from Xs is: [ x, match_info ]
-        // But for T1 we only need x => call matching_target(1, x, match_key_r).
         uint32_t x = prev_table_pair.x;
         uint32_t r_match_target = proof_core_.matching_target(1, x, match_key_r);
-        // Return [ meta_l, match_target ]
-        // Here meta_l = x
 
         // note: match_info is only the lower match_target_bits, rest is not used.
         return Xs_Candidate { .match_info = r_match_target, .x = x };
     }
 
-    void handle_pair(Xs_Candidate const& l_candidate,
+    void handle_pair_into(Xs_Candidate const& l_candidate,
         Xs_Candidate const& r_candidate,
-        std::vector<T1Pairing>& pairs,
-        size_t /*left_index*/,
-        size_t /*right_index*/) override
+        std::span<T1Pairing> out_pairs,
+        std::atomic<std::size_t>& out_count,
+        std::size_t /*left_index*/,
+        std::size_t /*right_index*/) override
     {
         uint32_t x_left = l_candidate.x;
         uint32_t x_right = r_candidate.x;
+
         std::optional<T1Pairing> res = proof_core_.pairing_t1(x_left, x_right);
-        if (res.has_value()) {
-            pairs.push_back(res.value());
-        }
+        if (!res.has_value())
+            return;
+
+        // Reserve one slot in the shared output array
+        std::size_t idx = out_count.fetch_add(1, std::memory_order_relaxed);
+
+        // IMPORTANT: If idx >= out_pairs.size(), you're out of capacity.
+        // You cannot safely throw from worker threads. Choose a policy.
+        // Here: hard fail (writes are prevented); after construct we throw if overflow happened.
+        if (idx >= out_pairs.size())
+            return;
+
+        out_pairs[idx] = *res;
     }
 
-    std::vector<T1Pairing> post_construct(std::vector<T1Pairing>& pairings) override
+    // Sort the produced pairings into OUT arena and return them as the stage result span.
+    BufferSpan<T1Pairing> post_construct_span(std::span<T1Pairing> pairings,
+        BufId out_id,
+        ResettableArenaResource& /*out_arena*/,
+        ResettableArenaResource& previous_in_arena) override
     {
-        RadixSort<T1Pairing, uint32_t> radix_sort;
-        timer_.start("Setup temp sort buffer for T1Pairing");
-        std::vector<T1Pairing> temp_buffer(pairings.size());
-        // Create a span over the temporary buffer
-        std::span<T1Pairing> buffer(temp_buffer.data(), temp_buffer.size());
-        timings.setup_time_ms += timer_.stop();
+        previous_in_arena.reset();
+        T1Pairing* tmp_ptr = arena_alloc_n<T1Pairing>(&previous_in_arena, pairings.size());
+        std::span<T1Pairing> tmp(tmp_ptr, pairings.size());
 
-        // sort by match_info (default)
+        RadixSort<T1Pairing, uint32_t> radix_sort;
+
         timer_.start("Sorting T1Pairing");
-        radix_sort.sort(pairings, buffer);
+        radix_sort.sort(pairings, tmp);
         timings.post_sort_time_ms += timer_.stop();
 
-        return pairings;
+        // Result is the sorted span in out_arena.
+        return BufferSpan<T1Pairing> { out_id, pairings };
     }
 };
 
-class Table2Constructor
-    : public TableConstructorGeneric<T1Pairing, T2Pairing, std::vector<T2Pairing>> {
+class Table2Constructor : public TableConstructorGeneric<T1Pairing, T2Pairing, T2Pairing> {
 public:
-    Table2Constructor(ProofParams const& proof_params) : TableConstructorGeneric(2, proof_params) {}
+    explicit Table2Constructor(ProofParams const& proof_params, ResettableArenaResource& scratch)
+        : TableConstructorGeneric<T1Pairing, T2Pairing, T2Pairing>(2, proof_params, scratch)
+    {
+    }
 
     // matching_target => (meta_l, r_match_target)
     T1Pairing matching_target(T1Pairing const& prev_table_pair, uint32_t match_key_r) override
@@ -570,66 +625,81 @@ public:
         return T1Pairing { .meta = meta_l, .match_info = r_match_target };
     }
 
-    void handle_pair(T1Pairing const& l_candidate,
+    void handle_pair_into(T1Pairing const& l_candidate,
         T1Pairing const& r_candidate,
-        std::vector<T2Pairing>& pairs,
-        size_t /*left_index*/,
-        size_t /*right_index*/) override
+        std::span<T2Pairing> out_pairs,
+        std::atomic<std::size_t>& out_count,
+        std::size_t /*left_index*/,
+        std::size_t /*right_index*/) override
     {
-        uint64_t meta_l = l_candidate.meta;
-        uint64_t meta_r = r_candidate.meta;
+        uint64_t const meta_l = l_candidate.meta;
+        uint64_t const meta_r = r_candidate.meta;
+
         auto opt_res = proof_core_.pairing_t2(meta_l, meta_r);
-        if (opt_res.has_value()) {
-            auto r = opt_res.value();
+        if (!opt_res.has_value())
+            return;
 
-            // x_bits becomes x1 >> k/2 bits, x3 >> k/2 bits.
-            uint32_t x_bits_l
-                = numeric_cast<uint32_t>((meta_l >> params_.get_k()) >> (params_.get_k() / 2));
-            uint32_t x_bits_r
-                = numeric_cast<uint32_t>((meta_r >> params_.get_k()) >> (params_.get_k() / 2));
-            uint32_t x_bits = x_bits_l << (params_.get_k() / 2) | x_bits_r;
+        auto r = opt_res.value();
 
-            T2Pairing pairing { .meta = r.meta,
-                .match_info = r.match_info,
-                .x_bits = x_bits,
+        // x_bits becomes x1 >> k/2 bits, x3 >> k/2 bits.
+        uint32_t const x_bits_l
+            = numeric_cast<uint32_t>((meta_l >> params_.get_k()) >> (params_.get_k() / 2));
+        uint32_t const x_bits_r
+            = numeric_cast<uint32_t>((meta_r >> params_.get_k()) >> (params_.get_k() / 2));
+        uint32_t const x_bits = (x_bits_l << (params_.get_k() / 2)) | x_bits_r;
+
+        T2Pairing pairing { .meta = r.meta,
+            .match_info = r.match_info,
+            .x_bits = x_bits,
 #ifdef RETAIN_X_VALUES_TO_T3
-                .xs = { static_cast<uint32_t>(meta_l >> params_.get_k()),
-                    static_cast<uint32_t>(meta_l & ((1 << params_.get_k()) - 1)),
-                    static_cast<uint32_t>(meta_r >> params_.get_k()),
-                    static_cast<uint32_t>(meta_r & ((1 << params_.get_k()) - 1)) }
+            .xs = { static_cast<uint32_t>(meta_l >> params_.get_k()),
+                static_cast<uint32_t>(meta_l & ((uint64_t(1) << params_.get_k()) - 1)),
+                static_cast<uint32_t>(meta_r >> params_.get_k()),
+                static_cast<uint32_t>(meta_r & ((uint64_t(1) << params_.get_k()) - 1)) }
 #endif
-            };
+        };
 
-            pairs.push_back(pairing);
-        }
+        // Reserve one slot in shared output
+        std::size_t const idx = out_count.fetch_add(1, std::memory_order_relaxed);
+
+        // Capacity policy: prevent OOB write; base will sanity-check after the fact.
+        if (idx >= out_pairs.size())
+            return;
+
+        out_pairs[idx] = pairing;
     }
 
-    std::vector<T2Pairing> post_construct(std::vector<T2Pairing>& pairings) override
+    BufferSpan<T2Pairing> post_construct_span(std::span<T2Pairing> pairings,
+        BufId out_id,
+        ResettableArenaResource& /*out_arena*/,
+        ResettableArenaResource& previous_out_arena) override
     {
-        RadixSort<T2Pairing, uint32_t> radix_sort;
-        timer_.start("Setup temp sort buffer for T2Pairing");
-        std::vector<T2Pairing> temp_buffer(pairings.size());
-        // Create a span over the temporary buffer
-        std::span<T2Pairing> buffer(temp_buffer.data(), temp_buffer.size());
-        timings.setup_time_ms += timer_.stop();
+        previous_out_arena.reset();
+        T2Pairing* tmp_ptr = arena_alloc_n<T2Pairing>(&previous_out_arena, pairings.size());
+        std::span<T2Pairing> tmp(tmp_ptr, pairings.size());
 
-        // sort by match_info (default)
+        RadixSort<T2Pairing, uint32_t> radix_sort;
+
         timer_.start("Sorting T2Pairing");
-        radix_sort.sort(pairings, buffer);
+        radix_sort.sort(pairings, tmp);
         timings.post_sort_time_ms += timer_.stop();
 
-        return pairings;
+        // Return sorted data (lives in out_arena)
+        return BufferSpan<T2Pairing> { out_id, pairings };
     }
 };
 
-class Table3Constructor
-    : public TableConstructorGeneric<T2Pairing, T3Pairing, std::vector<T3Pairing>> {
+class Table3Constructor : public TableConstructorGeneric<T2Pairing, T3Pairing, T3Pairing> {
 public:
-    Table3Constructor(ProofParams const& proof_params) : TableConstructorGeneric(3, proof_params) {}
+    explicit Table3Constructor(ProofParams const& proof_params, ResettableArenaResource& scratch)
+        : TableConstructorGeneric<T2Pairing, T3Pairing, T3Pairing>(3, proof_params, scratch)
+    {
+    }
 
     T2Pairing matching_target(T2Pairing const& prev_table_pair, uint32_t match_key_r) override
     {
         uint32_t r_match_target = proof_core_.matching_target(3, prev_table_pair.meta, match_key_r);
+
         return T2Pairing { .meta = prev_table_pair.meta,
             .match_info = r_match_target,
             .x_bits = prev_table_pair.x_bits,
@@ -642,45 +712,56 @@ public:
         };
     }
 
-    void handle_pair(T2Pairing const& l_candidate,
+    void handle_pair_into(T2Pairing const& l_candidate,
         T2Pairing const& r_candidate,
-        std::vector<T3Pairing>& pairs,
-        size_t /*left_index*/,
-        size_t /*right_index*/) override
+        std::span<T3Pairing> out_pairs,
+        std::atomic<std::size_t>& out_count,
+        std::size_t /*left_index*/,
+        std::size_t /*right_index*/) override
     {
-        uint64_t meta_l = l_candidate.meta;
-        uint64_t meta_r = r_candidate.meta;
+        uint64_t const meta_l = l_candidate.meta;
+        uint64_t const meta_r = r_candidate.meta;
+
         std::optional<T3Pairing> opt_res
             = proof_core_.pairing_t3(meta_l, meta_r, l_candidate.x_bits, r_candidate.x_bits);
-        if (opt_res.has_value()) {
-            T3Pairing pairing = opt_res.value();
+
+        if (!opt_res.has_value())
+            return;
+
+        T3Pairing pairing = *opt_res;
+
 #ifdef RETAIN_X_VALUES_TO_T3
-            for (int i = 0; i < 4; i++) {
-                pairing.xs[i] = l_candidate.xs[i];
-                pairing.xs[i + 4] = r_candidate.xs[i];
-            }
-#endif
-            pairs.push_back(pairing);
+        for (int i = 0; i < 4; ++i) {
+            pairing.xs[i] = l_candidate.xs[i];
+            pairing.xs[i + 4] = r_candidate.xs[i];
         }
+#endif
+
+        const std::size_t idx = out_count.fetch_add(1, std::memory_order_relaxed);
+        if (idx >= out_pairs.size())
+            return; // prevent OOB; base will detect overflow by count
+
+        out_pairs[idx] = pairing;
     }
 
-    std::vector<T3Pairing> post_construct(std::vector<T3Pairing>& pairings) override
+    BufferSpan<T3Pairing> post_construct_span(std::span<T3Pairing> pairings,
+        BufId out_id,
+        ResettableArenaResource& /*out_arena*/,
+        ResettableArenaResource& previous_out_arena) override
     {
+        previous_out_arena.reset();
+
         // do a radix sort on fragments
         RadixSort<T3Pairing, uint64_t, decltype(&T3Pairing::proof_fragment)> radix_sort(
             &T3Pairing::proof_fragment);
 
-        timer_.start("Setup temp sort buffer for T3Pairing");
-        // 1) sort by fragments
-        std::vector<T3Pairing> temp_buffer(pairings.size());
-        // Create a span over the temporary buffer
-        std::span<T3Pairing> buffer(temp_buffer.data(), temp_buffer.size());
-        timings.setup_time_ms += timer_.stop();
+        T3Pairing* tmp_ptr = arena_alloc_n<T3Pairing>(&previous_out_arena, pairings.size());
+        std::span<T3Pairing> tmp(tmp_ptr, pairings.size());
 
         timer_.start("Sorting T3Pairing");
-        radix_sort.sort(pairings, buffer, params_.get_k() * 2); // don't forget to sort full 2k bits
+        radix_sort.sort(pairings, tmp, params_.get_k() * 2);
         timings.post_sort_time_ms += timer_.stop();
 
-        return pairings;
+        return BufferSpan<T3Pairing> { out_id, pairings };
     }
 };
