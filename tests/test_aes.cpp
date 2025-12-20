@@ -4,6 +4,8 @@
 #include <iostream>
 #include <vector>
 
+#include "aes_test_cases.hpp"
+
 // initial tests compare soft/hard AES results for equality.
 // regression test emits known-good results from software AES, that systems that are then tested for
 // equality across all platforms.
@@ -76,12 +78,12 @@ TEST_CASE("AesHash pairing soft vs hardware")
 #endif
 
 #if HAVE_AES
-TEST_CASE("AesHash regression list soft")
+TEST_CASE("AesHash regression list soft vs hardware")
 {
     std::array<uint8_t, 32> plot_id {};
     for (size_t i = 0; i < plot_id.size(); ++i)
         plot_id[i] = static_cast<uint8_t>(i * 11 + 5);
-    int k = 24;
+    int k = 28;
     AesHash hasher(plot_id.data(), k);
     auto hw = hasher.regression_results<false>();
     auto sw = hasher.regression_results<true>();
@@ -101,7 +103,7 @@ TEST_CASE("AesHash emit regression list to CLI")
     std::array<uint8_t, 32> plot_id {};
     for (size_t i = 0; i < plot_id.size(); ++i)
         plot_id[i] = static_cast<uint8_t>(i * 11 + 5);
-    int k = 24;
+    int k = 28;
     AesHash hasher(plot_id.data(), k);
 
     auto sw = hasher.regression_results<true>();
@@ -113,10 +115,10 @@ TEST_CASE("AesHash emit regression list to CLI")
 
     std::cout << "#define K_AES_REGRESSION_DEFINED 1\n";
     std::cout << "/* AesHash regression list: k=" << k << ", plot_id[i] = i*11+5 */\n";
-    std::cout << "constexpr uint32_t kAesRegression[" << hw.size() << "] = {";
-    for (size_t i = 0; i < hw.size(); ++i) {
-        std::cout << hw[i];
-        if (i + 1 < hw.size())
+    std::cout << "constexpr uint32_t kAesRegression[" << sw.size() << "] = {";
+    for (size_t i = 0; i < sw.size(); ++i) {
+        std::cout << sw[i];
+        if (i + 1 < sw.size())
             std::cout << ", ";
         if ((i + 1) % 8 == 0)
             std::cout << "\n";
@@ -124,54 +126,12 @@ TEST_CASE("AesHash emit regression list to CLI")
     std::cout << "};\n";
 }
 
-// Paste the emitted list here from the emit regression test:
-constexpr uint32_t kAesRegression[41] = { 10343082,
-    7326751,
-    6927852,
-    6968908,
-    11512430,
-    409340410,
-    505582378,
-    1721018924,
-    1480140290,
-    1396524303,
-    3587190239,
-    707841484,
-    1331347346,
-    1241879891,
-    2167726916,
-    3067597756,
-    4168169983,
-    1091708360,
-    2175255815,
-    2816383768,
-    1674980125,
-    2543702698,
-    4091426003,
-    533075521,
-    3859141200,
-    31044209,
-    4179457918,
-    1030061401,
-    3699883668,
-    210961197,
-    1476679550,
-    3006735961,
-    939518466,
-    1218571309,
-    716491999,
-    1747602127,
-    1064749683,
-    1584340891,
-    3071410499,
-    4118871486,
-    1400922689 };
 TEST_CASE("AesHash fixed regression list matches")
 {
     std::array<uint8_t, 32> plot_id {};
     for (size_t i = 0; i < plot_id.size(); ++i)
         plot_id[i] = static_cast<uint8_t>(i * 11 + 5);
-    int k = 24;
+    int k = 28;
     AesHash hasher(plot_id.data(), k);
 
     auto sw = hasher.regression_results<true>();
