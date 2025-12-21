@@ -357,8 +357,15 @@ public:
                 RadixSort<PairingCandidate, uint32_t> radix_sort;
 
                 timer_.start("Sorting L candidates");
-                radix_sort.sort(l_candidates, tmp);
+                bool l_sorted_in_place
+                    = radix_sort.sort(l_candidates, tmp, 28, false, scratch_arena_);
                 timings.sort_time_ms += timer_.stop();
+
+                // RadixSort alternates between the two spans; for 28 bits (3 passes)
+                // the sorted output lives in `tmp`, not `l_candidates`.
+                std::span<PairingCandidate const> l_sorted = l_sorted_in_place
+                    ? std::span<PairingCandidate const>(l_candidates)
+                    : std::span<PairingCandidate const>(tmp);
 
                 unsigned num_threads = std::thread::hardware_concurrency();
                 if (num_threads == 0)
@@ -367,18 +374,18 @@ public:
                 if (num_threads > 1) {
                     timer_.start("Make Splits Simple");
                     auto splits = make_splits_simple(
-                        l_candidates, r_candidates, num_threads, match_target_mask);
+                        l_sorted, r_candidates, num_threads, match_target_mask);
                     timings.misc_time_ms += timer_.stop();
 
                     timer_.start("Finding pairs (parallel)");
                     parallel_for_range(uint64_t(0),
                         uint64_t(splits.size()),
-                        [this, &splits, &l_candidates, &r_candidates, out_pairs, &out_count](
+                        [this, &splits, &l_sorted, &r_candidates, out_pairs, &out_count](
                             uint64_t split_idx) {
                             auto const& split = splits[static_cast<std::size_t>(split_idx)];
 
                             auto l_span = std::span<PairingCandidate const>(
-                                l_candidates.data() + split.l_begin, split.l_end - split.l_begin);
+                                l_sorted.data() + split.l_begin, split.l_end - split.l_begin);
 
                             auto r_span = std::span<PairingCandidate const>(
                                 r_candidates.data() + split.r_begin, split.r_end - split.r_begin);
@@ -390,7 +397,7 @@ public:
                 else {
                     timer_.start("Finding pairs");
                     find_pairs_into(
-                        std::span<PairingCandidate const>(l_candidates.data(), l_candidates.size()),
+                        std::span<PairingCandidate const>(l_sorted.data(), l_sorted.size()),
                         r_candidates,
                         out_pairs,
                         out_count);
@@ -514,12 +521,12 @@ public:
 
         timer.start("Sorting Xs_Candidate");
         // auto sorted = radix_sort.sort_to(out, tmp);
-        radix_sort.sort(out_span, tmp_span);
+        bool sorted_in_place = radix_sort.sort(out_span, tmp_span, 28, false, scratch_mr);
         timings.sort_time_ms = timer.stop();
 
         return BufferSpan<Xs_Candidate> {
-            .where = BufId::A,
-            .view = out_span,
+            .where = sorted_in_place ? BufId::A : BufId::B,
+            .view = sorted_in_place ? out_span : tmp_span,
         };
     }
 
@@ -602,11 +609,12 @@ public:
         RadixSort<T1Pairing, uint32_t> radix_sort;
 
         timer_.start("Sorting T1Pairing");
-        radix_sort.sort(pairings, tmp);
+        bool sorted_in_place = radix_sort.sort(pairings, tmp, 28, false, scratch_arena_);
         timings.post_sort_time_ms += timer_.stop();
 
         // Result is the sorted span in out_arena.
-        return BufferSpan<T1Pairing> { out_id, pairings };
+        BufId out_buffer = sorted_in_place ? out_id : other(out_id);
+        return BufferSpan<T1Pairing> { out_buffer, sorted_in_place ? pairings : tmp };
     }
 };
 
@@ -681,11 +689,12 @@ public:
         RadixSort<T2Pairing, uint32_t> radix_sort;
 
         timer_.start("Sorting T2Pairing");
-        radix_sort.sort(pairings, tmp);
+        bool sorted_in_place = radix_sort.sort(pairings, tmp, 28, false, scratch_arena_);
         timings.post_sort_time_ms += timer_.stop();
 
         // Return sorted data (lives in out_arena)
-        return BufferSpan<T2Pairing> { out_id, pairings };
+        BufId out_buffer = sorted_in_place ? out_id : other(out_id);
+        return BufferSpan<T2Pairing> { out_buffer, sorted_in_place ? pairings : tmp };
     }
 };
 
@@ -759,9 +768,11 @@ public:
         std::span<T3Pairing> tmp(tmp_ptr, pairings.size());
 
         timer_.start("Sorting T3Pairing");
-        radix_sort.sort(pairings, tmp, params_.get_k() * 2);
+        bool sorted_in_place
+            = radix_sort.sort(pairings, tmp, params_.get_k() * 2, false, scratch_arena_);
         timings.post_sort_time_ms += timer_.stop();
 
-        return BufferSpan<T3Pairing> { out_id, pairings };
+        BufId out_buffer = sorted_in_place ? out_id : other(out_id);
+        return BufferSpan<T3Pairing> { out_buffer, sorted_in_place ? pairings : tmp };
     }
 };

@@ -21,18 +21,14 @@ public:
 
     // Sort the vector 'data' in place, using 'buffer' as temporary storage.
     // Sorting is based on the key extracted by key_extractor_.
-    void sort(std::span<T> data, std::span<T> buffer, int num_bits = 32, bool verbose = false)
-    {
-        sort(data, buffer, num_bits, verbose, std::pmr::get_default_resource());
-    }
-
-    void sort(std::span<T> data,
+    // returns true if sorted in place, false if sorted data is in buffer
+    bool sort(std::span<T> data,
         std::span<T> buffer,
         int num_bits,
         bool verbose,
         std::pmr::memory_resource* mr)
     {
-        int const radix_bits = 8; // Process 8 bits per pass.
+        int const radix_bits = 10; // Process bits per pass.
         int const radix = 1 << radix_bits;
         int const radix_mask = radix - 1;
         int const num_passes = (num_bits + radix_bits - 1) / radix_bits; // Number of passes needed.
@@ -155,14 +151,17 @@ public:
         // If an odd number of passes was performed, 'data' still points
         // to the original container and 'buffer' holds the sorted data.
         // Copy the sorted data back into the caller's container.
-        if (num_passes % 2 == 1) {
-            if (verbose)
-                std::cout << "Copying sorted data back to original container." << std::endl;
-            std::copy(buffer.begin(), buffer.end(), data.begin());
-        }
 
         if (verbose)
             timer.stop();
+
+        if (num_passes % 2 == 1) {
+            return false;
+            // if (verbose)
+            //     std::cout << "Copying sorted data back to original container." << std::endl;
+            // std::copy(buffer.begin(), buffer.end(), data.begin());
+        }
+        return true;
     }
 
 private:
