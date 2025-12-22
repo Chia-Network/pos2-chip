@@ -109,7 +109,15 @@ public:
         Timer allocationTimer;
         allocationTimer.debugOut = true;
         size_t max_pairs = max_pairs_per_table_possible(proof_params_);
-        size_t max_bytes_needed = sizeof(T2Pairing) * max_pairs;
+        size_t max_element_bytes = std::max(
+            { sizeof(Xs_Candidate), sizeof(T1Pairing), sizeof(T2Pairing), sizeof(T3Pairing) });
+        // output each size of element
+        // std::cout << "Max element size: " << max_element_bytes << " bytes\n";
+        // std::cout << "Xs_Candidate size: " << sizeof(Xs_Candidate) << " bytes\n";
+        // std::cout << "T1Pairing size: " << sizeof(T1Pairing) << " bytes\n";
+        // std::cout << "T2Pairing size: " << sizeof(T2Pairing) << " bytes\n";
+        // std::cout << "T3Pairing size: " << sizeof(T3Pairing) << " bytes\n";
+        size_t max_bytes_needed = max_element_bytes * max_pairs;
         size_t max_scratch_bytes = max_bytes_needed / 2; // in a section we output
         allocationTimer.start("Allocating Arena Buffers: 2 x " + std::to_string(max_bytes_needed)
             + " bytes and scratch " + std::to_string(max_scratch_bytes) + " bytes");

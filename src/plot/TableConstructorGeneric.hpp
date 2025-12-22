@@ -356,6 +356,7 @@ public:
 
                 RadixSort<PairingCandidate, uint32_t> radix_sort;
 
+                // TODO: could sort with fewer bits.
                 timer_.start("Sorting L candidates");
                 bool l_sorted_in_place
                     = radix_sort.sort(l_candidates, tmp, 28, false, scratch_arena_);
@@ -628,9 +629,10 @@ public:
     // matching_target => (meta_l, r_match_target)
     T1Pairing matching_target(T1Pairing const& prev_table_pair, uint32_t match_key_r) override
     {
-        uint64_t meta_l = prev_table_pair.meta;
+        uint64_t meta_l = prev_table_pair.meta();
         uint32_t r_match_target = proof_core_.matching_target(2, meta_l, match_key_r);
-        return T1Pairing { .meta = meta_l, .match_info = r_match_target };
+        T1Pairing t1Pairing = T1Pairing::make(meta_l, r_match_target);
+        return t1Pairing;
     }
 
     void handle_pair_into(T1Pairing const& l_candidate,
@@ -640,8 +642,8 @@ public:
         std::size_t /*left_index*/,
         std::size_t /*right_index*/) override
     {
-        uint64_t const meta_l = l_candidate.meta;
-        uint64_t const meta_r = r_candidate.meta;
+        uint64_t const meta_l = l_candidate.meta();
+        uint64_t const meta_r = r_candidate.meta();
 
         auto opt_res = proof_core_.pairing_t2(meta_l, meta_r);
         if (!opt_res.has_value())

@@ -37,9 +37,22 @@ struct Chain {
 // chaining end
 
 struct T1Pairing {
-    uint64_t meta; // 2k-bit meta value.
-    uint32_t match_info; // k-bit match info.
+    uint32_t meta_lo;
+    uint32_t meta_hi;
+    uint32_t match_info;
+
+    uint64_t meta() const noexcept { return uint64_t(meta_lo) | (uint64_t(meta_hi) << 32); }
+
+    static T1Pairing make(uint64_t meta, uint32_t match) noexcept
+    {
+        T1Pairing p {};
+        p.meta_lo = uint32_t(meta);
+        p.meta_hi = uint32_t(meta >> 32);
+        p.match_info = match;
+        return p;
+    }
 };
+static_assert(sizeof(T1Pairing) == 12);
 
 struct T2Pairing {
     uint64_t meta; // 2k-bit meta value.
@@ -101,10 +114,9 @@ public:
             return std::nullopt;
         }
 
-        T1Pairing result = { .meta = static_cast<uint64_t>(x_l) << params_.get_k() | x_r,
-            .match_info = pair.match_info_result };
+        uint64_t const meta = (static_cast<uint64_t>(x_l) << params_.get_k()) | x_r;
 
-        return result;
+        return T1Pairing::make(meta, pair.match_info_result);
     }
 
     // pairing_t2:
