@@ -111,6 +111,21 @@ public:
         size_t max_pairs = max_pairs_per_table_possible(proof_params_);
         size_t max_element_bytes = std::max(
             { sizeof(Xs_Candidate), sizeof(T1Pairing), sizeof(T2Pairing), sizeof(T3Pairing) });
+        // TODO:
+        //   Have buffer for 16 bytes T2 pairing, 12 bytes T1 pairing, and 8 bytes scratch
+        //.  instead of dual 16 bytes buffer. Dual buffer is 16 + 16 + 8 = 40, whereas other is 16 +
+        // 12 + 6 = 34 = 12*34/40 = 10.2GB vs 12GB.
+        // Buffer A is N*16 bytes, B is N*12 bytes, scratch is (N/2)*16 bytes.
+        // [ Buf A: N Xs output (8 bytes). | empty                                 | empty ] [ Buf
+        // A: N Xs input (8 bytes)   | Buf B: N T1 output entries (12 bytes) | 2*N/4 scratch (8
+        // bytes) -> 4 ] = 8 + 12 + 4  = 24 [ Buf A: N T2 output (16 bytes) | Buf B: N T1 input
+        // entries (12 bytes)               | 2*N/4 scratch (12 bytes)-> 6 ] = 16 + 12 + 6 = 34 [
+        // Buf A: N T2 input (16 bytes)  -> 2 overlap | Buf B: N T3 output entries (8 bytes)  |
+        // 2*N/4 scratch (16 bytes)-> 8 ] = 16 + 8 + 8  = 32
+        //                                                                                                         vs 16 + 16 + 8 = 40 bytes per element
+        // [ Buf A: N (8 bytes) | Buf B: N (12 bytes) | Buf C: N (16 bytes) = 8 + 12 + 16 = 36 bytes
+        // per element
+        //
         // output each size of element
         // std::cout << "Max element size: " << max_element_bytes << " bytes\n";
         // std::cout << "Xs_Candidate size: " << sizeof(Xs_Candidate) << " bytes\n";
@@ -123,7 +138,7 @@ public:
             + " bytes and scratch " + std::to_string(max_scratch_bytes) + " bytes");
         auto mem = TwoResources::allocate_vm(max_bytes_needed, /*prefault=*/true);
 
-        auto scratch = ScratchResources::allocate_vm(max_bytes_needed, /*prefault=*/true);
+        auto scratch = ScratchResources::allocate_vm(max_bytes_needed, /*prefault=*/false);
         mem.a.reset();
         mem.b.reset();
         scratch.arena.reset();

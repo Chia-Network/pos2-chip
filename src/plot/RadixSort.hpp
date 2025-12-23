@@ -22,11 +22,7 @@ public:
     // Sort the vector 'data' in place, using 'buffer' as temporary storage.
     // Sorting is based on the key extracted by key_extractor_.
     // returns true if sorted in place, false if sorted data is in buffer
-    bool sort(std::span<T> data,
-        std::span<T> buffer,
-        int num_bits,
-        bool verbose,
-        std::pmr::memory_resource* mr)
+    bool sort(std::span<T> data, std::span<T> buffer, int num_bits, std::pmr::memory_resource* mr)
     {
         int const radix_bits = 10; // Process bits per pass.
         int const radix = 1 << radix_bits;
@@ -40,7 +36,7 @@ public:
         size_t const num_elements = data.size();
 
         Timer timer;
-        if (verbose) {
+        if (verbose_) {
             std::cout << "RadixSort: Sorting " << num_elements << " elements with " << num_threads
                       << " threads on " << num_bits << " bits" << std::endl;
             timer.start();
@@ -55,13 +51,13 @@ public:
         int const num_elements_per_thread = static_cast<int>(num_elements / num_threads);
 
         for (int pass = 0; pass < num_passes; ++pass) {
-            if (verbose)
+            if (verbose_)
                 std::cout << "----- Pass " << pass << " -----" << std::endl;
             int shift = pass * radix_bits;
 
             // Count phase: each thread counts keys.
             Timer countPhaseTimer;
-            if (verbose)
+            if (verbose_)
                 countPhaseTimer.start("Count phase");
 
             {
@@ -84,7 +80,7 @@ public:
                 }
             }
 
-            if (verbose) {
+            if (verbose_) {
                 countPhaseTimer.stop();
                 countPhaseTimer.start("Prefix sum phase");
             }
@@ -116,12 +112,12 @@ public:
                         = offsets_for_thread[t - 1][r] + counts_by_thread[t - 1][r];
             }
 
-            if (verbose)
+            if (verbose_)
                 countPhaseTimer.stop();
 
             // Redistribution phase: place elements in sorted order into buffer.
             Timer redistributionTimer;
-            if (verbose)
+            if (verbose_)
                 redistributionTimer.start("Redistribution phase");
 
             {
@@ -152,18 +148,21 @@ public:
         // to the original container and 'buffer' holds the sorted data.
         // Copy the sorted data back into the caller's container.
 
-        if (verbose)
+        if (verbose_)
             timer.stop();
 
         if (num_passes % 2 == 1) {
             return false;
-            // if (verbose)
+            // if (verbose_)
             //     std::cout << "Copying sorted data back to original container." << std::endl;
             // std::copy(buffer.begin(), buffer.end(), data.begin());
         }
         return true;
     }
 
+    void setVerbose(bool v) { verbose_ = v; }
+
 private:
+    bool verbose_ = false;
     KeyExtractor key_extractor_;
 };

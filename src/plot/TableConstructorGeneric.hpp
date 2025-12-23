@@ -304,10 +304,8 @@ public:
         uint32_t const match_target_mask
             = (uint32_t(1) << params_.get_num_match_target_bits(table_id_)) - 1u;
 
-        uint32_t const num_sections = static_cast<uint32_t>(params_.get_num_sections());
-
-        for (uint32_t section = 0; section < num_sections; ++section) {
-            uint32_t const section_l = section;
+        uint32_t section_l = 0;
+        while (true) {
             uint32_t const section_r = proof_core_.matching_section(section_l);
 
             uint64_t const l_start_u64 = prefix.row(section_l)[0];
@@ -356,10 +354,13 @@ public:
 
                 RadixSort<PairingCandidate, uint32_t> radix_sort;
 
-                // TODO: could sort with fewer bits.
                 timer_.start("Sorting L candidates");
-                bool l_sorted_in_place
-                    = radix_sort.sort(l_candidates, tmp, 28, false, scratch_arena_);
+                // only need to sort by matching_target bits, as match_info returned by
+                // matching_target only uses those bits.
+                bool l_sorted_in_place = radix_sort.sort(l_candidates,
+                    tmp,
+                    params_.get_num_match_target_bits(table_id_),
+                    scratch_arena_);
                 timings.sort_time_ms += timer_.stop();
 
                 // RadixSort alternates between the two spans; for 28 bits (3 passes)
@@ -405,9 +406,15 @@ public:
                     timings.find_pairs_time_ms += timer_.stop();
                 }
                 // output how big scratch got
-                std::cout << "  Scratch used bytes after section " << section << " match_key_r "
-                          << match_key_r << ": " << scratch_arena_->used_bytes() << "\n";
+                std::cout << "  Scratch used bytes after sections l/r " << section_l << ","
+                          << section_r << " match_key_r " << match_key_r << ": "
+                          << scratch_arena_->used_bytes() << "\n";
                 scratch_arena_->rewind(m);
+            }
+            section_l = section_r;
+            // once we are back at section_l 0, we are done
+            if (section_l == 0) {
+                break;
             }
         }
 
@@ -522,7 +529,7 @@ public:
 
         timer.start("Sorting Xs_Candidate");
         // auto sorted = radix_sort.sort_to(out, tmp);
-        bool sorted_in_place = radix_sort.sort(out_span, tmp_span, 28, false, scratch_mr);
+        bool sorted_in_place = radix_sort.sort(out_span, tmp_span, params_.get_k(), scratch_mr);
         timings.sort_time_ms = timer.stop();
 
         return BufferSpan<Xs_Candidate> {
@@ -610,7 +617,7 @@ public:
         RadixSort<T1Pairing, uint32_t> radix_sort;
 
         timer_.start("Sorting T1Pairing");
-        bool sorted_in_place = radix_sort.sort(pairings, tmp, 28, false, scratch_arena_);
+        bool sorted_in_place = radix_sort.sort(pairings, tmp, params_.get_k(), scratch_arena_);
         timings.post_sort_time_ms += timer_.stop();
 
         // Result is the sorted span in out_arena.
@@ -691,7 +698,7 @@ public:
         RadixSort<T2Pairing, uint32_t> radix_sort;
 
         timer_.start("Sorting T2Pairing");
-        bool sorted_in_place = radix_sort.sort(pairings, tmp, 28, false, scratch_arena_);
+        bool sorted_in_place = radix_sort.sort(pairings, tmp, params_.get_k(), scratch_arena_);
         timings.post_sort_time_ms += timer_.stop();
 
         // Return sorted data (lives in out_arena)
@@ -770,8 +777,7 @@ public:
         std::span<T3Pairing> tmp(tmp_ptr, pairings.size());
 
         timer_.start("Sorting T3Pairing");
-        bool sorted_in_place
-            = radix_sort.sort(pairings, tmp, params_.get_k() * 2, false, scratch_arena_);
+        bool sorted_in_place = radix_sort.sort(pairings, tmp, params_.get_k() * 2, scratch_arena_);
         timings.post_sort_time_ms += timer_.stop();
 
         BufId out_buffer = sorted_in_place ? out_id : other(out_id);
