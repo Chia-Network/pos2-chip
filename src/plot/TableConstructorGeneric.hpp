@@ -11,31 +11,35 @@
 #include <unordered_set>
 #include <vector>
 
+#include "LayoutPlanner.hpp"
 #include "RadixSort.hpp"
-#include "ResettableArenaResource.hpp"
 #include "common/ParallelForRange.hpp"
 #include "common/Timer.hpp"
 #include "pos/ProofCore.hpp"
 #include "pos/ProofParams.hpp"
 #include "pos/ProofValidator.hpp"
 
-static std::size_t max_pairs_per_table_possible(ProofParams const& params)
+static std::size_t max_pairs_per_section_possible(ProofParams const& params)
 {
     // Your heuristic kept (but please revisit; if too small you'll overflow output span).
-    if (params.get_k() < 28) {
-        return (1ULL << (params.get_k() + 1));
-    }
-    return ((1ULL << params.get_k())) + (1ULL << (params.get_k() - 10));
+    // if (params.get_k() < 28) {
+    //    return (1ULL << (params.get_k() + 1));
+    //}
+    return ((1ULL << (params.get_k() - params.get_num_section_bits())))
+        + (1ULL << (params.get_k() - 8));
 }
 
 template <typename PairingCandidate, typename T_Pairing, typename T_Result>
 class TableConstructorGeneric {
 public:
-    TableConstructorGeneric(
-        int table_id, ProofParams const& proof_params, ResettableArenaResource& scratch)
+    TableConstructorGeneric(int table_id,
+        ProofParams const& proof_params,
+        ResettableArenaResource& target_scratch,
+        ResettableArenaResource& minor_scratch)
         : table_id_(table_id)
         , params_(proof_params)
-        , scratch_arena_(&scratch)
+        , target_scratch_arena_(&target_scratch)
+        , minor_scratch_arena_(&minor_scratch)
         , proof_core_(proof_params)
     {
     }
@@ -127,8 +131,8 @@ public:
         unsigned const num_splits = num_threads; // one chunk per thread
 
         // Allocate split arrays from scratch
-        size_t* l_splits = arena_alloc_n<size_t>(scratch_arena_, num_splits + 1);
-        size_t* r_splits = arena_alloc_n<size_t>(scratch_arena_, num_splits + 1);
+        size_t* l_splits = arena_alloc_n<size_t>(target_scratch_arena_, num_splits + 1);
+        size_t* r_splits = arena_alloc_n<size_t>(target_scratch_arena_, num_splits + 1);
 
         l_splits[0] = 0;
         l_splits[num_splits] = l_size;
@@ -192,7 +196,7 @@ public:
             r_splits[i] = r_idx;
         }
 
-        SplitRange* ranges = arena_alloc_n<SplitRange>(scratch_arena_, num_splits);
+        SplitRange* ranges = arena_alloc_n<SplitRange>(target_scratch_arena_, num_splits);
         for (unsigned i = 0; i < num_splits; ++i) {
             ranges[i] = SplitRange { l_splits[i], l_splits[i + 1], r_splits[i], r_splits[i + 1] };
         }
@@ -209,9 +213,7 @@ public:
     virtual void handle_pair_into(PairingCandidate const& /*l_candidate*/,
         PairingCandidate const& /*r_candidate*/,
         std::span<T_Pairing> /*out_pairs*/,
-        std::atomic<std::size_t>& /*out_count*/,
-        std::size_t /*left_index*/,
-        std::size_t /*right_index*/)
+        std::atomic<std::size_t>& /*out_count*/)
     {
         throw std::runtime_error("handle_pair_into not implemented");
     }
@@ -246,12 +248,8 @@ public:
                 std::size_t start_i = left_index;
                 while (start_i < l_targets.size()
                     && (l_targets[start_i].match_info == match_target_r)) {
-                    handle_pair_into(l_targets[start_i],
-                        r_candidates[current_r_idx],
-                        out_pairs,
-                        out_count,
-                        start_i,
-                        right_index);
+                    handle_pair_into(
+                        l_targets[start_i], r_candidates[current_r_idx], out_pairs, out_count);
                     ++start_i;
                 }
 
@@ -277,26 +275,25 @@ public:
     // =========================
     // Main construct using arenas
     // =========================
-    BufferSpan<T_Result> construct(BufferSpan<PairingCandidate> previous_table_pairs,
-        BufId out_id,
-        ResettableArenaResource& in_arena, // previous table pairs is in here...
-        ResettableArenaResource& out_arena)
+    std::span<T_Result> construct(std::span<PairingCandidate> previous_table_pairs,
+        std::span<T_Pairing> out_pairs,
+        std::span<T_Pairing> tmp_pairs)
     {
-        scratch_arena_->reset();
+        minor_scratch_arena_->reset();
 
         // Prefixes live in scratch
-        Prefix2D prefix = find_candidates_prefixes(previous_table_pairs.view, scratch_arena_);
+        Prefix2D prefix = find_candidates_prefixes(previous_table_pairs, minor_scratch_arena_);
 
-        std::size_t const max_pairs_guess = max_pairs_per_table_possible(params_);
-        std::cout << "T" << table_id_ << ": max_pairs_guess=" << max_pairs_guess
-                  << " sizeof(T_Pairing)=" << sizeof(T_Pairing)
-                  << " bytes=" << (max_pairs_guess * sizeof(T_Pairing))
-                  << " out_cap=" << out_arena.capacity_bytes()
-                  << " out_rem=" << out_arena.remaining_bytes() << "\n";
+        // std::size_t const max_pairs_guess = max_pairs_per_table_possible(params_);
+        // std::cout << "T" << table_id_ << ": max_pairs_guess=" << max_pairs_guess
+        //           << " sizeof(T_Pairing)=" << sizeof(T_Pairing)
+        //           << " bytes=" << (max_pairs_guess * sizeof(T_Pairing))
+        //           << " out_cap=" << out_arena.capacity_bytes()
+        //           << " out_rem=" << out_arena.remaining_bytes() << "\n";
 
         // Output array for pairings lives in OUT arena
-        T_Pairing* out_ptr = arena_alloc_n<T_Pairing>(&out_arena, max_pairs_guess);
-        std::span<T_Pairing> out_pairs(out_ptr, max_pairs_guess);
+        // T_Pairing* out_ptr = arena_alloc_n<T_Pairing>(&out_arena, max_pairs_guess);
+        // std::span<T_Pairing> out_pairs(out_ptr, max_pairs_guess);
 
         std::atomic<std::size_t> out_count { 0 };
 
@@ -304,15 +301,19 @@ public:
         uint32_t const match_target_mask
             = (uint32_t(1) << params_.get_num_match_target_bits(table_id_)) - 1u;
 
-        uint32_t section_l = 0;
+        uint32_t section_l = 3; // pattern will be (3,0), (0,2), (2,1), (1,3)
+        Timer section_timer;
         while (true) {
+            section_timer.start("Section " + std::to_string(section_l) + "-"
+                + std::to_string(proof_core_.matching_section(section_l)));
             uint32_t const section_r = proof_core_.matching_section(section_l);
 
             uint64_t const l_start_u64 = prefix.row(section_l)[0];
             uint64_t const l_end_u64 = prefix.row(section_l)[num_match_keys];
 
             for (uint32_t match_key_r = 0; match_key_r < num_match_keys; ++match_key_r) {
-                auto m = scratch_arena_->mark();
+                auto m = minor_scratch_arena_->mark();
+                target_scratch_arena_->reset();
 
                 uint64_t const r_start_u64 = prefix.row(section_r)[match_key_r];
                 uint64_t const r_end_u64 = prefix.row(section_r)[match_key_r + 1];
@@ -326,18 +327,18 @@ public:
                 std::size_t const r_count = r_end - r_start;
 
                 if (l_count == 0 || r_count == 0) {
-                    scratch_arena_->rewind(m);
+                    minor_scratch_arena_->rewind(m);
                     continue;
                 }
 
-                PairingCandidate* l_ptr = arena_alloc_n<PairingCandidate>(scratch_arena_, l_count);
+                PairingCandidate* l_ptr
+                    = arena_alloc_n<PairingCandidate>(target_scratch_arena_, l_count);
                 std::span<PairingCandidate> l_candidates(l_ptr, l_count);
 
                 timer_.start("Hash matching L candidates");
                 parallel_for_range(uint64_t(0),
                     uint64_t(l_count),
-                    [this, l_ptr, prev = previous_table_pairs.view, l_start, match_key_r](
-                        uint64_t idx) {
+                    [this, l_ptr, prev = previous_table_pairs, l_start, match_key_r](uint64_t idx) {
                         l_ptr[static_cast<std::size_t>(idx)] = matching_target(
                             prev[l_start + static_cast<std::size_t>(idx)], match_key_r);
                     });
@@ -345,11 +346,11 @@ public:
 
                 // R is a view into previous table pairs
                 auto r_candidates = std::span<PairingCandidate const>(
-                    previous_table_pairs.view.data() + r_start, r_count);
+                    previous_table_pairs.data() + r_start, r_count);
 
                 // Sort L using temp buffer in scratch
                 PairingCandidate* tmp_ptr
-                    = arena_alloc_n<PairingCandidate>(scratch_arena_, l_count);
+                    = arena_alloc_n<PairingCandidate>(target_scratch_arena_, l_count);
                 std::span<PairingCandidate> tmp(tmp_ptr, l_count);
 
                 RadixSort<PairingCandidate, uint32_t> radix_sort;
@@ -357,17 +358,11 @@ public:
                 timer_.start("Sorting L candidates");
                 // only need to sort by matching_target bits, as match_info returned by
                 // matching_target only uses those bits.
-                bool l_sorted_in_place = radix_sort.sort(l_candidates,
+                std::span<PairingCandidate> l_sorted = radix_sort.sort(l_candidates,
                     tmp,
                     params_.get_num_match_target_bits(table_id_),
-                    scratch_arena_);
+                    minor_scratch_arena_);
                 timings.sort_time_ms += timer_.stop();
-
-                // RadixSort alternates between the two spans; for 28 bits (3 passes)
-                // the sorted output lives in `tmp`, not `l_candidates`.
-                std::span<PairingCandidate const> l_sorted = l_sorted_in_place
-                    ? std::span<PairingCandidate const>(l_candidates)
-                    : std::span<PairingCandidate const>(tmp);
 
                 unsigned num_threads = std::thread::hardware_concurrency();
                 if (num_threads == 0)
@@ -405,15 +400,16 @@ public:
                         out_count);
                     timings.find_pairs_time_ms += timer_.stop();
                 }
-                // output how big scratch got
-                std::cout << "  Scratch used bytes after sections l/r " << section_l << ","
-                          << section_r << " match_key_r " << match_key_r << ": "
-                          << scratch_arena_->used_bytes() << "\n";
-                scratch_arena_->rewind(m);
+                minor_scratch_arena_->rewind(m);
             }
             section_l = section_r;
-            // once we are back at section_l 0, we are done
-            if (section_l == 0) {
+
+            double section_time_ms = section_timer.stop();
+            std::cout << "  Section " << section_l << "-" << proof_core_.matching_section(section_l)
+                      << " time: " << section_time_ms << " ms";
+
+            // once we are back at starting section_l, we are done
+            if (section_l == 3) {
                 break;
             }
         }
@@ -425,17 +421,15 @@ public:
             throw std::runtime_error("TableConstructorGeneric: output arena capacity exceeded (bad "
                                      "max_pairs_per_table_possible)");
         }
-
-        // post_construct must allocate its returned result in out_arena and return
-        // BufferSpan<T_Result> note in_arena is now depleted (used for previous table pairs)
-        return post_construct_span(out_pairs.first(produced), out_id, out_arena, in_arena);
+        std::cout << "Produced: " << produced << ", capacity: " << out_pairs.size() << " %"
+                  << (100.0 * static_cast<double>(produced) / static_cast<double>(out_pairs.size()))
+                  << "%\n";
+        return post_construct_span(out_pairs.first(produced), tmp_pairs.first(produced));
     }
 
     // called following construct method - typically sort operations
-    virtual BufferSpan<T_Result> post_construct_span(std::span<T_Pairing> /*pairings*/,
-        BufId /*out_id*/,
-        ResettableArenaResource& /*out_arena*/,
-        ResettableArenaResource& /*previous in_arena*/)
+    virtual std::span<T_Result> post_construct_span(
+        std::span<T_Pairing> /*pairings*/, std::span<T_Pairing> /*tmp_pairs*/)
     {
         throw std::runtime_error("post_construct_span not implemented");
     }
@@ -443,7 +437,6 @@ public:
 public:
     struct Timings {
         double hash_time_ms = 0.0;
-        double setup_time_ms = 0.0;
         double sort_time_ms = 0.0;
         double find_pairs_time_ms = 0.0;
         double misc_time_ms = 0.0;
@@ -453,13 +446,12 @@ public:
         {
             std::cout << header << "\n";
             std::cout << "  Hash time: " << hash_time_ms << " ms\n";
-            std::cout << "  Setup time: " << setup_time_ms << " ms\n";
             std::cout << "  Sort time: " << sort_time_ms << " ms\n";
             std::cout << "  Find pairs time: " << find_pairs_time_ms << " ms\n";
             std::cout << "  Post-sort time: " << post_sort_time_ms << " ms\n";
             std::cout << "  Misc time: " << misc_time_ms << " ms\n";
-            double total = hash_time_ms + setup_time_ms + sort_time_ms + find_pairs_time_ms
-                + post_sort_time_ms + misc_time_ms;
+            double total = hash_time_ms + sort_time_ms + find_pairs_time_ms + post_sort_time_ms
+                + misc_time_ms;
             std::cout << "  ------------\n";
             std::cout << "  Total time: " << total << " ms\n";
         }
@@ -469,7 +461,8 @@ protected:
     int table_id_;
     ProofParams params_;
     Timer timer_;
-    ResettableArenaResource* scratch_arena_;
+    ResettableArenaResource* target_scratch_arena_;
+    ResettableArenaResource* minor_scratch_arena_;
 
 public:
     ProofCore proof_core_;
@@ -490,30 +483,21 @@ public:
 
     virtual ~XsConstructor() = default;
 
-    BufferSpan<Xs_Candidate> construct(
-        std::pmr::memory_resource* out_mr, std::pmr::memory_resource* scratch_mr)
+    std::span<Xs_Candidate> construct(std::span<Xs_Candidate> out_xs,
+        std::span<Xs_Candidate> tmp_xs,
+        std::pmr::memory_resource& scratch_mr)
     {
-        if (!out_mr || !scratch_mr) {
-            throw std::runtime_error("XsConstructor: null memory_resource");
-        }
-
         uint64_t const num_xs_u64 = (1ULL << params_.get_k());
         size_t const num_xs = static_cast<size_t>(num_xs_u64);
 
-        // Allocate output + temp from the provided arenas
-        std::pmr::vector<Xs_Candidate> out(out_mr);
-        std::pmr::vector<Xs_Candidate> tmp(scratch_mr);
-
-        try {
-            out.resize(num_xs);
-            tmp.resize(num_xs);
-        }
-        catch (std::bad_alloc const&) {
+        // Check buffers large enough
+        if (out_xs.size() < num_xs || tmp_xs.size() < num_xs) {
             throw std::runtime_error("XsConstructor: buffers too small");
         }
 
-        std::span<Xs_Candidate> out_span(out.data(), out.size());
-        std::span<Xs_Candidate> tmp_span(tmp.data(), tmp.size());
+        // We only use the first num_xs elements
+        auto out_span = out_xs.first(num_xs);
+        auto tmp_span = tmp_xs.first(num_xs);
 
         Timer timer;
         timer.start("Hashing Xs_Candidate");
@@ -529,28 +513,24 @@ public:
 
         timer.start("Sorting Xs_Candidate");
         // auto sorted = radix_sort.sort_to(out, tmp);
-        bool sorted_in_place = radix_sort.sort(out_span, tmp_span, params_.get_k(), scratch_mr);
+        std::span<Xs_Candidate> sorted_span
+            = radix_sort.sort(out_span, tmp_span, params_.get_k(), &scratch_mr);
         timings.sort_time_ms = timer.stop();
 
-        return BufferSpan<Xs_Candidate> {
-            .where = sorted_in_place ? BufId::A : BufId::B,
-            .view = sorted_in_place ? out_span : tmp_span,
-        };
+        return sorted_span;
     }
 
     struct Timings {
         double hash_time_ms = 0.0;
-        double setup_time_ms = 0.0;
         double sort_time_ms = 0.0;
 
         void show() const
         {
             std::cout << "XsConstructor Timings:" << std::endl;
             std::cout << "  Hash time: " << hash_time_ms << " ms" << std::endl;
-            std::cout << "  Setup time: " << setup_time_ms << " ms" << std::endl;
             std::cout << "  Sort time: " << sort_time_ms << " ms" << std::endl;
             std::cout << "  ------------" << std::endl;
-            double total = hash_time_ms + setup_time_ms + sort_time_ms;
+            double total = hash_time_ms + sort_time_ms;
             std::cout << "  Total time: " << total << " ms" << std::endl;
         }
     } timings;
@@ -563,8 +543,11 @@ protected:
 class Table1Constructor : public TableConstructorGeneric<Xs_Candidate, T1Pairing, T1Pairing> {
 public:
     // NOTE: this base now requires a scratch arena reference
-    explicit Table1Constructor(ProofParams const& proof_params, ResettableArenaResource& scratch)
-        : TableConstructorGeneric<Xs_Candidate, T1Pairing, T1Pairing>(1, proof_params, scratch)
+    explicit Table1Constructor(ProofParams const& proof_params,
+        ResettableArenaResource& target_scratch,
+        ResettableArenaResource& minor_scratch)
+        : TableConstructorGeneric<Xs_Candidate, T1Pairing, T1Pairing>(
+              1, proof_params, target_scratch, minor_scratch)
     {
     }
 
@@ -581,9 +564,7 @@ public:
     void handle_pair_into(Xs_Candidate const& l_candidate,
         Xs_Candidate const& r_candidate,
         std::span<T1Pairing> out_pairs,
-        std::atomic<std::size_t>& out_count,
-        std::size_t /*left_index*/,
-        std::size_t /*right_index*/) override
+        std::atomic<std::size_t>& out_count) override
     {
         uint32_t x_left = l_candidate.x;
         uint32_t x_right = r_candidate.x;
@@ -605,31 +586,34 @@ public:
     }
 
     // Sort the produced pairings into OUT arena and return them as the stage result span.
-    BufferSpan<T1Pairing> post_construct_span(std::span<T1Pairing> pairings,
-        BufId out_id,
-        ResettableArenaResource& /*out_arena*/,
-        ResettableArenaResource& previous_in_arena) override
+    std::span<T1Pairing> post_construct_span(
+        std::span<T1Pairing> pairings, std::span<T1Pairing> tmp_pairs) override
     {
-        previous_in_arena.reset();
-        T1Pairing* tmp_ptr = arena_alloc_n<T1Pairing>(&previous_in_arena, pairings.size());
-        std::span<T1Pairing> tmp(tmp_ptr, pairings.size());
+        std::cout << "Table1Constructor: post_construct_span sorting " << pairings.size()
+                  << " T1Pairing entries in tmp: " << tmp_pairs.size() << "\n";
+        minor_scratch_arena_->reset();
+        // previous_in_arena.reset();
+        // T1Pairing* tmp_ptr = arena_alloc_n<T1Pairing>(&previous_in_arena, pairings.size());
+        // std::span<T1Pairing> tmp(tmp_ptr, pairings.size());
 
         RadixSort<T1Pairing, uint32_t> radix_sort;
 
         timer_.start("Sorting T1Pairing");
-        bool sorted_in_place = radix_sort.sort(pairings, tmp, params_.get_k(), scratch_arena_);
+        std::span<T1Pairing> sorted_span
+            = radix_sort.sort(pairings, tmp_pairs, params_.get_k(), minor_scratch_arena_);
         timings.post_sort_time_ms += timer_.stop();
 
-        // Result is the sorted span in out_arena.
-        BufId out_buffer = sorted_in_place ? out_id : other(out_id);
-        return BufferSpan<T1Pairing> { out_buffer, sorted_in_place ? pairings : tmp };
+        return sorted_span;
     }
 };
 
 class Table2Constructor : public TableConstructorGeneric<T1Pairing, T2Pairing, T2Pairing> {
 public:
-    explicit Table2Constructor(ProofParams const& proof_params, ResettableArenaResource& scratch)
-        : TableConstructorGeneric<T1Pairing, T2Pairing, T2Pairing>(2, proof_params, scratch)
+    explicit Table2Constructor(ProofParams const& proof_params,
+        ResettableArenaResource& target_scratch,
+        ResettableArenaResource& minor_scratch)
+        : TableConstructorGeneric<T1Pairing, T2Pairing, T2Pairing>(
+              2, proof_params, target_scratch, minor_scratch)
     {
     }
 
@@ -645,9 +629,7 @@ public:
     void handle_pair_into(T1Pairing const& l_candidate,
         T1Pairing const& r_candidate,
         std::span<T2Pairing> out_pairs,
-        std::atomic<std::size_t>& out_count,
-        std::size_t /*left_index*/,
-        std::size_t /*right_index*/) override
+        std::atomic<std::size_t>& out_count) override
     {
         uint64_t const meta_l = l_candidate.meta();
         uint64_t const meta_r = r_candidate.meta();
@@ -686,31 +668,31 @@ public:
         out_pairs[idx] = pairing;
     }
 
-    BufferSpan<T2Pairing> post_construct_span(std::span<T2Pairing> pairings,
-        BufId out_id,
-        ResettableArenaResource& /*out_arena*/,
-        ResettableArenaResource& previous_out_arena) override
+    std::span<T2Pairing> post_construct_span(
+        std::span<T2Pairing> pairings, std::span<T2Pairing> tmp_pairings) override
     {
-        previous_out_arena.reset();
-        T2Pairing* tmp_ptr = arena_alloc_n<T2Pairing>(&previous_out_arena, pairings.size());
-        std::span<T2Pairing> tmp(tmp_ptr, pairings.size());
+        minor_scratch_arena_->reset();
+        // T2Pairing* tmp_ptr = arena_alloc_n<T2Pairing>(&previous_out_arena, pairings.size());
+        // std::span<T2Pairing> tmp(tmp_ptr, pairings.size());
 
         RadixSort<T2Pairing, uint32_t> radix_sort;
 
         timer_.start("Sorting T2Pairing");
-        bool sorted_in_place = radix_sort.sort(pairings, tmp, params_.get_k(), scratch_arena_);
+        std::span<T2Pairing> sorted_span
+            = radix_sort.sort(pairings, tmp_pairings, params_.get_k(), minor_scratch_arena_);
         timings.post_sort_time_ms += timer_.stop();
 
-        // Return sorted data (lives in out_arena)
-        BufId out_buffer = sorted_in_place ? out_id : other(out_id);
-        return BufferSpan<T2Pairing> { out_buffer, sorted_in_place ? pairings : tmp };
+        return sorted_span;
     }
 };
 
 class Table3Constructor : public TableConstructorGeneric<T2Pairing, T3Pairing, T3Pairing> {
 public:
-    explicit Table3Constructor(ProofParams const& proof_params, ResettableArenaResource& scratch)
-        : TableConstructorGeneric<T2Pairing, T3Pairing, T3Pairing>(3, proof_params, scratch)
+    explicit Table3Constructor(ProofParams const& proof_params,
+        ResettableArenaResource& target_scratch,
+        ResettableArenaResource& minor_scratch)
+        : TableConstructorGeneric<T2Pairing, T3Pairing, T3Pairing>(
+              3, proof_params, target_scratch, minor_scratch)
     {
     }
 
@@ -733,9 +715,7 @@ public:
     void handle_pair_into(T2Pairing const& l_candidate,
         T2Pairing const& r_candidate,
         std::span<T3Pairing> out_pairs,
-        std::atomic<std::size_t>& out_count,
-        std::size_t /*left_index*/,
-        std::size_t /*right_index*/) override
+        std::atomic<std::size_t>& out_count) override
     {
         uint64_t const meta_l = l_candidate.meta;
         uint64_t const meta_r = r_candidate.meta;
@@ -762,25 +742,20 @@ public:
         out_pairs[idx] = pairing;
     }
 
-    BufferSpan<T3Pairing> post_construct_span(std::span<T3Pairing> pairings,
-        BufId out_id,
-        ResettableArenaResource& /*out_arena*/,
-        ResettableArenaResource& previous_out_arena) override
+    std::span<T3Pairing> post_construct_span(
+        std::span<T3Pairing> pairings, std::span<T3Pairing> tmp_pairings) override
     {
-        previous_out_arena.reset();
+        minor_scratch_arena_->reset();
 
         // do a radix sort on fragments
         RadixSort<T3Pairing, uint64_t, decltype(&T3Pairing::proof_fragment)> radix_sort(
             &T3Pairing::proof_fragment);
 
-        T3Pairing* tmp_ptr = arena_alloc_n<T3Pairing>(&previous_out_arena, pairings.size());
-        std::span<T3Pairing> tmp(tmp_ptr, pairings.size());
-
         timer_.start("Sorting T3Pairing");
-        bool sorted_in_place = radix_sort.sort(pairings, tmp, params_.get_k() * 2, scratch_arena_);
+        std::span<T3Pairing> sorted_span
+            = radix_sort.sort(pairings, tmp_pairings, params_.get_k() * 2, minor_scratch_arena_);
         timings.post_sort_time_ms += timer_.stop();
 
-        BufId out_buffer = sorted_in_place ? out_id : other(out_id);
-        return BufferSpan<T3Pairing> { out_buffer, sorted_in_place ? pairings : tmp };
+        return sorted_span;
     }
 };

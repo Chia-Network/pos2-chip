@@ -21,8 +21,9 @@ public:
 
     // Sort the vector 'data' in place, using 'buffer' as temporary storage.
     // Sorting is based on the key extracted by key_extractor_.
-    // returns true if sorted in place, false if sorted data is in buffer
-    bool sort(std::span<T> data, std::span<T> buffer, int num_bits, std::pmr::memory_resource* mr)
+    // returns sorted span, which caller can check which of the data or buffer it is in
+    std::span<T> sort(
+        std::span<T> data, std::span<T> buffer, int num_bits, std::pmr::memory_resource* mr)
     {
         int const radix_bits = 10; // Process bits per pass.
         int const radix = 1 << radix_bits;
@@ -130,6 +131,10 @@ public:
                         for (size_t i = start; i < end; ++i) {
                             KeyType key = (data[i].*key_extractor_ >> shift) & radix_mask;
                             size_t outpos = offsets_for_thread[t][key]++;
+                            if (outpos >= num_elements) {
+                                throw std::runtime_error("RadixSort: outpos out of range");
+                            }
+                            assert(outpos < num_elements);
                             buffer[outpos] = data[i];
                         }
                     });
@@ -151,13 +156,8 @@ public:
         if (verbose_)
             timer.stop();
 
-        if (num_passes % 2 == 1) {
-            return false;
-            // if (verbose_)
-            //     std::cout << "Copying sorted data back to original container." << std::endl;
-            // std::copy(buffer.begin(), buffer.end(), data.begin());
-        }
-        return true;
+        return buffer; // sorted data always in buffer, since this is swapped into at end of each
+                       // loop.
     }
 
     void setVerbose(bool v) { verbose_ = v; }

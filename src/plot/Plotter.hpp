@@ -8,78 +8,13 @@
 #include <string>
 #include <vector>
 
+#include "LayoutPlanner.hpp"
 #include "PlotData.hpp"
+#include "TableConstructorGeneric.hpp"
 #include "common/Timer.hpp"
 #include "pos/ProofCore.hpp"
 
-#include "TableConstructorGeneric.hpp"
-
-#include "ResettableArenaResource.hpp"
-
-#if defined(__APPLE__)
-#include <mach/mach.h>
-#elif defined(__linux__)
-#include <fstream>
-#include <sstream>
-#include <unistd.h>
-#elif defined(_WIN32)
-#define NOMINMAX
-#include <psapi.h>
-#include <windows.h>
-#endif
-
-namespace {
-// Best-effort RSS (resident set size) in bytes. Returns nullopt if unavailable.
-inline std::optional<uint64_t> current_rss_bytes()
-{
-#if defined(__APPLE__)
-    mach_task_basic_info info {};
-    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
-    if (task_info(
-            mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count)
-        != KERN_SUCCESS) {
-        return std::nullopt;
-    }
-    return static_cast<uint64_t>(info.resident_size);
-#elif defined(__linux__)
-    // /proc/self/statm: size resident shared text lib data dt (in pages)
-    std::ifstream f("/proc/self/statm");
-    if (!f.is_open())
-        return std::nullopt;
-
-    uint64_t size_pages = 0, resident_pages = 0;
-    f >> size_pages >> resident_pages;
-    if (!f)
-        return std::nullopt;
-
-    long page_size = ::sysconf(_SC_PAGESIZE);
-    if (page_size <= 0)
-        return std::nullopt;
-
-    return resident_pages * static_cast<uint64_t>(page_size);
-#elif defined(_WIN32)
-    PROCESS_MEMORY_COUNTERS_EX pmc {};
-    if (!GetProcessMemoryInfo(
-            GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmc), sizeof(pmc))) {
-        return std::nullopt;
-    }
-    return static_cast<uint64_t>(pmc.WorkingSetSize);
-#else
-    return std::nullopt;
-#endif
-}
-
-inline void print_rss(char const* label)
-{
-    auto rss = current_rss_bytes();
-    if (!rss.has_value()) {
-        std::cout << label << " RSS: (unavailable)\n";
-        return;
-    }
-    double mib = static_cast<double>(*rss) / (1024.0 * 1024.0);
-    std::cout << label << " RSS: " << mib << " MiB\n";
-}
-} // namespace
+#define DEBUG_MEMORY_USAGE_PLOTTING 0
 
 class Plotter {
 public:
@@ -108,62 +43,96 @@ public:
 
         Timer allocationTimer;
         allocationTimer.debugOut = true;
-        size_t max_pairs = max_pairs_per_table_possible(proof_params_);
+        // size_t max_pairs = max_pairs_per_table_possible(proof_params_);
+        size_t max_section_pairs = max_pairs_per_section_possible(proof_params_);
+        size_t num_sections = static_cast<size_t>(proof_params_.get_num_sections());
+        size_t max_pairs = max_section_pairs * num_sections;
+
         size_t max_element_bytes = std::max(
             { sizeof(Xs_Candidate), sizeof(T1Pairing), sizeof(T2Pairing), sizeof(T3Pairing) });
-        // TODO:
-        //   Have buffer for 16 bytes T2 pairing, 12 bytes T1 pairing, and 8 bytes scratch
-        //.  instead of dual 16 bytes buffer. Dual buffer is 16 + 16 + 8 = 40, whereas other is 16 +
-        // 12 + 6 = 34 = 12*34/40 = 10.2GB vs 12GB.
-        // Buffer A is N*16 bytes, B is N*12 bytes, scratch is (N/2)*16 bytes.
-        // [ Buf A: N Xs output (8 bytes). | empty                                 | empty ] [ Buf
-        // A: N Xs input (8 bytes)   | Buf B: N T1 output entries (12 bytes) | 2*N/4 scratch (8
-        // bytes) -> 4 ] = 8 + 12 + 4  = 24 [ Buf A: N T2 output (16 bytes) | Buf B: N T1 input
-        // entries (12 bytes)               | 2*N/4 scratch (12 bytes)-> 6 ] = 16 + 12 + 6 = 34 [
-        // Buf A: N T2 input (16 bytes)  -> 2 overlap | Buf B: N T3 output entries (8 bytes)  |
-        // 2*N/4 scratch (16 bytes)-> 8 ] = 16 + 8 + 8  = 32
-        //                                                                                                         vs 16 + 16 + 8 = 40 bytes per element
-        // [ Buf A: N (8 bytes) | Buf B: N (12 bytes) | Buf C: N (16 bytes) = 8 + 12 + 16 = 36 bytes
-        // per element
-        //
-        // output each size of element
-        // std::cout << "Max element size: " << max_element_bytes << " bytes\n";
-        // std::cout << "Xs_Candidate size: " << sizeof(Xs_Candidate) << " bytes\n";
-        // std::cout << "T1Pairing size: " << sizeof(T1Pairing) << " bytes\n";
-        // std::cout << "T2Pairing size: " << sizeof(T2Pairing) << " bytes\n";
-        // std::cout << "T3Pairing size: " << sizeof(T3Pairing) << " bytes\n";
-        size_t max_bytes_needed = max_element_bytes * max_pairs;
-        size_t max_scratch_bytes = max_bytes_needed / 2; // in a section we output
-        allocationTimer.start("Allocating Arena Buffers: 2 x " + std::to_string(max_bytes_needed)
-            + " bytes and scratch " + std::to_string(max_scratch_bytes) + " bytes");
-        auto mem = TwoResources::allocate_vm(max_bytes_needed, /*prefault=*/true);
 
-        auto scratch = ScratchResources::allocate_vm(max_bytes_needed, /*prefault=*/false);
-        mem.a.reset();
-        mem.b.reset();
-        scratch.arena.reset();
+        size_t minor_scratch_bytes = 512 * 1024; // 512 KiB for minor scratch
 
+        // will split memory into 32 blocks, using pattern outlined in documentation.
+        size_t num_blocks = 32;
+        size_t block_size_bytes = max_section_pairs * max_element_bytes / 4;
+        size_t total_memory_needed = block_size_bytes * num_blocks + minor_scratch_bytes;
+
+        // use a lambda for a local helper
+        auto get_block_pos = [block_size_bytes](size_t block_index) -> size_t {
+            return block_index * block_size_bytes;
+        };
+
+#if DEBUG_MEMORY_USAGE_PLOTTING
+        std::cout << "Planning memory for plotting:" << std::endl;
+        std::cout << "  Max pairs per section: " << max_section_pairs << std::endl;
+        std::cout << "  Number of sections: " << num_sections << std::endl;
+        std::cout << "  Max element size: " << max_element_bytes << " bytes" << std::endl;
+        std::cout << "  Number of blocks: " << num_blocks << std::endl;
+        std::cout << "  Minor scratch bytes: " << minor_scratch_bytes << " bytes" << std::endl;
+        std::cout << "  Block size bytes: " << block_size_bytes << " bytes" << std::endl;
+        std::cout << "  Total memory needed: " << total_memory_needed << " bytes" << std::endl;
+#endif
+        allocationTimer.start("Allocating Buffers: " + std::to_string(total_memory_needed));
+        LayoutPlanner mem(total_memory_needed);
         allocationTimer.stop();
 
-        // 1) Xs
+        // views:
+        auto xs_out = mem.span<Xs_Candidate>(get_block_pos(0), max_pairs);
+        auto xs_tmp = mem.span<Xs_Candidate>(get_block_pos(24), max_pairs);
+        auto minor_scratch_arena
+            = mem.make_arena(total_memory_needed - minor_scratch_bytes, minor_scratch_bytes);
+
+        minor_scratch_arena.reset(); // before use.
         XsConstructor xs_gen_ctor(proof_params_);
-        BufferSpan<Xs_Candidate> xs_candidates
-            = xs_gen_ctor.construct(mem.mr(BufId::A), mem.mr(BufId::B));
+        auto xs_candidates = xs_gen_ctor.construct(xs_out, xs_tmp, minor_scratch_arena);
         xs_gen_ctor.timings.show();
-        std::cout << "Constructed " << xs_candidates.view.size() << " Xs candidates.\n";
+        std::cout << "Constructed " << xs_candidates.size() << " Xs candidates.\n";
+#if DEBUG_MEMORY_USAGE_PLOTTING
+        std::cout << "  Scratch arena size: " << minor_scratch_arena.capacity_bytes() << " bytes\n";
+        std::cout << "  Scratch arena max used: " << minor_scratch_arena.high_watermark_bytes()
+                  << " bytes\n";
+        std::cout << "  Scratch arena % used: "
+                  << (100.0 * static_cast<double>(minor_scratch_arena.high_watermark_bytes())
+                         / static_cast<double>(minor_scratch_arena.capacity_bytes()))
+                  << "%\n";
         print_rss("[After Xs Generation]");
+#endif
 
-        // 2) Table1
-        BufId activeInputBuffer = xs_candidates.where;
-        Table1Constructor t1_ctor(proof_params_, scratch.arena);
-        BufId t1_out = other(activeInputBuffer);
-        mem.arena(t1_out).reset();
+        assert(xs_candidates.data() == xs_tmp.data());
+        // 2) Table 1
+        if (xs_candidates.data() == xs_out.data()) {
+            std::cout
+                << "Sub-optimal: copying Xs candidates to tmp buffer for Table 1 construction.\n";
+            std::copy(xs_out.begin(), xs_out.end(), xs_tmp.begin());
+            xs_candidates = xs_tmp.first(xs_candidates.size());
+        }
 
-        BufferSpan<T1Pairing> t1_pairs = t1_ctor.construct(
-            xs_candidates, t1_out, mem.arena(activeInputBuffer), mem.arena(t1_out));
-        t1_ctor.timings.show("Table 1 Timings:");
-        std::cout << "Constructed " << t1_pairs.view.size() << " Table 1 pairs.\n";
-        print_rss("[After Table1]");
+        std::span<T1Pairing> t1_out = mem.span<T1Pairing>(get_block_pos(0), max_pairs);
+        std::span<T1Pairing> t1_tmp = mem.span<T1Pairing>(get_block_pos(14), max_pairs);
+        auto target_scratch_arena = mem.make_arena(get_block_pos(20), block_size_bytes * 4);
+
+        Table1Constructor t1_ctor(proof_params_, target_scratch_arena, minor_scratch_arena);
+        auto t1_pairs = t1_ctor.construct(xs_candidates, t1_out, t1_tmp);
+        t1_ctor.timings.show("Table 1 Timings");
+#if DEBUG_MEMORY_USAGE_PLOTTING
+        std::cout << "Constructed " << t1_pairs.size() << " T1 entries\n";
+        std::cout << "  Target scratch arena size      : " << target_scratch_arena.capacity_bytes()
+                  << " bytes\n";
+        std::cout << "  Target scratch arena max used  : "
+                  << target_scratch_arena.high_watermark_bytes() << " bytes\n";
+        std::cout << "  Target scratch arena % used    : "
+                  << (100.0 * static_cast<double>(target_scratch_arena.high_watermark_bytes())
+                         / static_cast<double>(target_scratch_arena.capacity_bytes()))
+                  << "%\n";
+#endif
+        assert(t1_pairs.data() == t1_tmp.data());
+        assert(t1_pairs.size() <= max_pairs);
+        if (t1_pairs.data() == t1_out.data()) {
+            std::cout << "Sub-optimal: copying T1 pairs to tmp buffer for Table 1 construction.\n";
+            std::copy(t1_out.begin(), t1_out.end(), t1_tmp.begin());
+            t1_pairs = t1_tmp.first(t1_pairs.size());
+        }
 
 #ifdef RETAIN_X_VALUES
         if (validate_) {
@@ -182,14 +151,40 @@ public:
 #endif
 
         // 3) Table 2
-        Table2Constructor t2_ctor(proof_params_, scratch.arena);
-        BufId t2_out = other(t1_pairs.where);
-        mem.arena(t2_out).reset();
-        BufferSpan<T2Pairing> t2_pairs
-            = t2_ctor.construct(t1_pairs, t2_out, mem.arena(t1_pairs.where), mem.arena(t2_out));
+        std::cout << "Starting Table2 construction" << std::endl;
+
+        // t1 pairs will be overwritten by t2 pairs, but those t1 pairs would not be needed by the
+        // time overwrites happen.
+        std::span<T2Pairing> t2_out = mem.span<T2Pairing>(get_block_pos(0), max_pairs);
+        std::span<T2Pairing> t2_tmp = mem.span<T2Pairing>(get_block_pos(16), max_pairs);
+        target_scratch_arena
+            = mem.make_arena(get_block_pos(26), block_size_bytes * 6); // our t1 scratch bytes
+        minor_scratch_arena.reset();
+
+        Table2Constructor t2_ctor(proof_params_, target_scratch_arena, minor_scratch_arena);
+        auto t2_pairs = t2_ctor.construct(t1_pairs, t2_out, t2_tmp);
         t2_ctor.timings.show("Table 2 Timings:");
-        std::cout << "Constructed " << t2_pairs.view.size() << " Table 2 pairs.\n";
+        std::cout << "Constructed " << t2_pairs.size() << " Table 2 pairs.\n";
+
+#if DEBUG_MEMORY_USAGE_PLOTTING
+        std::cout << "  Minor scratch arena size      : " << minor_scratch_arena.capacity_bytes()
+                  << " bytes\n";
+        std::cout << "  Minor scratch arena max used  : "
+                  << minor_scratch_arena.high_watermark_bytes() << " bytes\n";
+        std::cout << "  Minor scratch arena % used    : "
+                  << (100.0 * static_cast<double>(minor_scratch_arena.high_watermark_bytes())
+                         / static_cast<double>(minor_scratch_arena.capacity_bytes()))
+                  << "%\n";
+        std::cout << "  Target scratch arena size      : " << target_scratch_arena.capacity_bytes()
+                  << " bytes\n";
+        std::cout << "  Target scratch arena max used  : "
+                  << target_scratch_arena.high_watermark_bytes() << " bytes\n";
+        std::cout << "  Target scratch arena % used    : "
+                  << (100.0 * static_cast<double>(target_scratch_arena.high_watermark_bytes())
+                         / static_cast<double>(target_scratch_arena.capacity_bytes()))
+                  << "%\n";
         print_rss("[After Table2]");
+#endif
 
 #ifdef RETAIN_X_VALUES
         if (validate_) {
@@ -205,33 +200,62 @@ public:
         }
 #endif
 
+        assert(t2_pairs.data() == t2_tmp.data());
+        assert(t2_pairs.size() <= max_pairs);
+        if (t2_pairs.data() == t2_out.data()) {
+            std::cout << "Sub-optimal: copying T2 pairs to tmp buffer for Table 2 construction.\n";
+            std::copy(t2_out.begin(), t2_out.end(), t2_tmp.begin());
+            t2_pairs = t2_tmp.first(t2_pairs.size());
+        }
+
         // 4) Table 3
-        Table3Constructor t3_ctor(proof_params_, scratch.arena);
-        BufId t3_out = other(t2_pairs.where);
-        mem.arena(t3_out).reset();
-        BufferSpan<T3Pairing> t3_results
-            = t3_ctor.construct(t2_pairs, t3_out, mem.arena(t2_pairs.where), mem.arena(t3_out));
+        std::cout << "Starting Table3 construction" << std::endl;
+        std::span<T3Pairing> t3_out = mem.span<T3Pairing>(get_block_pos(0), max_pairs);
+        std::span<T3Pairing> t3_tmp = mem.span<T3Pairing>(get_block_pos(8), max_pairs);
+        target_scratch_arena
+            = mem.make_arena(get_block_pos(8), block_size_bytes * 8); // our t2 scratch bytes
+        minor_scratch_arena.reset();
+
+        Table3Constructor t3_ctor(proof_params_, target_scratch_arena, minor_scratch_arena);
+        auto t3_results = t3_ctor.construct(t2_pairs, t3_out, t3_tmp);
         t3_ctor.timings.show("Table 3 Timings:");
-        std::cout << "Constructed " << t3_results.view.size() << " Table 3 entries.\n";
+        std::cout << "Constructed " << t3_results.size() << " Table 3 entries.\n";
+
+#if DEBUG_MEMORY_USAGE_PLOTTING
+        std::cout << "  Minor scratch arena size      : " << minor_scratch_arena.capacity_bytes()
+                  << " bytes\n";
+        std::cout << "  Minor scratch arena max used  : "
+                  << minor_scratch_arena.high_watermark_bytes() << " bytes\n";
+        std::cout << "  Minor scratch arena % used    : "
+                  << (100.0 * static_cast<double>(minor_scratch_arena.high_watermark_bytes())
+                         / static_cast<double>(minor_scratch_arena.capacity_bytes()))
+                  << "%\n";
+        std::cout << "  Target scratch arena size      : " << target_scratch_arena.capacity_bytes()
+                  << " bytes\n";
+        std::cout << "  Target scratch arena max used  : "
+                  << target_scratch_arena.high_watermark_bytes() << " bytes\n";
+        std::cout << "  Target scratch arena % used    : "
+                  << (100.0 * static_cast<double>(target_scratch_arena.high_watermark_bytes())
+                         / static_cast<double>(target_scratch_arena.capacity_bytes()))
+                  << "%\n";
+        std::cout << "----- lifetime high watermarks -----\n";
+        std::cout << "  Lifetime minor scratch arena max used  : "
+                  << minor_scratch_arena.lifetime_high_watermark_bytes() << " bytes\n";
+        std::cout << "  Lifetime Minor scratch arena % used    : "
+                  << (100.0
+                         * static_cast<double>(minor_scratch_arena.lifetime_high_watermark_bytes())
+                         / static_cast<double>(minor_scratch_arena.capacity_bytes()))
+                  << "%\n";
+        std::cout << "  Lifetime Target scratch arena max used     : "
+                  << target_scratch_arena.lifetime_high_watermark_bytes() << " bytes\n";
+        std::cout << "  Lifetime Target scratch arena % used    : "
+                  << (100.0
+                         * static_cast<double>(target_scratch_arena.lifetime_high_watermark_bytes())
+                         / static_cast<double>(target_scratch_arena.capacity_bytes()))
+                  << "%\n";
+
         print_rss("[After Table3]");
-
-        decltype(t1_ctor)::Timings total_timings;
-        total_timings.hash_time_ms = xs_gen_ctor.timings.hash_time_ms + t1_ctor.timings.hash_time_ms
-            + t2_ctor.timings.hash_time_ms + t3_ctor.timings.hash_time_ms;
-        total_timings.setup_time_ms = xs_gen_ctor.timings.setup_time_ms
-            + t1_ctor.timings.setup_time_ms + t2_ctor.timings.setup_time_ms
-            + t3_ctor.timings.setup_time_ms;
-        total_timings.sort_time_ms = xs_gen_ctor.timings.sort_time_ms + t1_ctor.timings.sort_time_ms
-            + t2_ctor.timings.sort_time_ms + t3_ctor.timings.sort_time_ms;
-        total_timings.find_pairs_time_ms = t1_ctor.timings.find_pairs_time_ms
-            + t2_ctor.timings.find_pairs_time_ms + t3_ctor.timings.find_pairs_time_ms;
-        total_timings.post_sort_time_ms = t1_ctor.timings.post_sort_time_ms
-            + t2_ctor.timings.post_sort_time_ms + t3_ctor.timings.post_sort_time_ms;
-        total_timings.misc_time_ms = t1_ctor.timings.misc_time_ms + t2_ctor.timings.misc_time_ms
-            + t3_ctor.timings.misc_time_ms;
-        total_timings.show("Total Plotting Timings:");
-
-        std::cout << "Total plotting time: " << totalPlotTimer.stop() << " ms." << std::endl;
+#endif
 
 #if AES_COUNT_HASHES
         showHashCounts();
@@ -254,17 +278,26 @@ public:
         }
 #endif
 
-        // Free up memory we no longer need.
-        // Keep the arena that backs t3_results.view, reset everything else.
-        scratch.reset_and_discard();
-        mem.reset_and_discard(other(t3_results.where));
-        print_rss("[After Discard]");
+        decltype(t1_ctor)::Timings total_timings;
+        total_timings.hash_time_ms = xs_gen_ctor.timings.hash_time_ms + t1_ctor.timings.hash_time_ms
+            + t2_ctor.timings.hash_time_ms + t3_ctor.timings.hash_time_ms;
+        total_timings.sort_time_ms = xs_gen_ctor.timings.sort_time_ms + t1_ctor.timings.sort_time_ms
+            + t2_ctor.timings.sort_time_ms + t3_ctor.timings.sort_time_ms;
+        total_timings.find_pairs_time_ms = t1_ctor.timings.find_pairs_time_ms
+            + t2_ctor.timings.find_pairs_time_ms + t3_ctor.timings.find_pairs_time_ms;
+        total_timings.post_sort_time_ms = t1_ctor.timings.post_sort_time_ms
+            + t2_ctor.timings.post_sort_time_ms + t3_ctor.timings.post_sort_time_ms;
+        total_timings.misc_time_ms = t1_ctor.timings.misc_time_ms + t2_ctor.timings.misc_time_ms
+            + t3_ctor.timings.misc_time_ms;
+        total_timings.show("Total Plotting Timings:");
 
-        // Return a default-constructed PlotData to avoid relying on specific member names here.
+        std::cout << "Total plotting time: " << totalPlotTimer.stop() << " ms." << std::endl;
+
         auto dummy_data = PlotData {};
+        // Return a default-constructed PlotData to avoid relying on specific member names here.
         std::vector<ProofFragment> t3_proof_fragments;
-        t3_proof_fragments.reserve(t3_results.view.size());
-        for (auto const& t3_pair: t3_results.view) {
+        t3_proof_fragments.reserve(t3_results.size());
+        for (auto const& t3_pair: t3_results) {
             t3_proof_fragments.push_back(t3_pair.proof_fragment);
         }
         dummy_data.t3_proof_fragments = t3_proof_fragments;
