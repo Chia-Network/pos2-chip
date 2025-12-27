@@ -51,6 +51,13 @@ public:
 
         int const num_elements_per_thread = static_cast<int>(num_elements / num_threads);
 
+        // Compute per-thread offsets.
+        std::pmr::vector<std::pmr::vector<uint32_t>> offsets_for_thread(mr);
+        offsets_for_thread.reserve(num_threads);
+        for (size_t t = 0; t < num_threads; ++t) {
+            offsets_for_thread.emplace_back(std::pmr::vector<uint32_t>(radix, 0u, mr));
+        }
+
         for (int pass = 0; pass < num_passes; ++pass) {
             if (verbose_)
                 std::cout << "----- Pass " << pass << " -----" << std::endl;
@@ -98,12 +105,9 @@ public:
             for (size_t i = 1; i < radix; ++i)
                 offsets[i] = offsets[i - 1] + counts[i - 1];
 
-            // Compute per-thread offsets.
-            std::pmr::vector<std::pmr::vector<uint32_t>> offsets_for_thread(mr);
-            offsets_for_thread.reserve(num_threads);
-            for (size_t t = 0; t < num_threads; ++t) {
-                offsets_for_thread.emplace_back(std::pmr::vector<uint32_t>(radix, 0u, mr));
-            }
+            // reset offsets for each thread
+            for (size_t t = 0; t < num_threads; ++t)
+                std::fill(offsets_for_thread[t].begin(), offsets_for_thread[t].end(), 0u);
 
             for (size_t r = 0; r < radix; ++r)
                 offsets_for_thread[0][r] = offsets[r];
