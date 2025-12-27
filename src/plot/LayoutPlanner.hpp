@@ -170,6 +170,7 @@ public:
         , base_(owned_storage_.get())
         , size_(total_bytes)
     {
+        zeroAll(); // for consistent memory usage and making sure all memory is accessible
     }
 
     // Wrap an externally-provided buffer (you keep it alive).
@@ -177,6 +178,7 @@ public:
         : base_(static_cast<std::byte*>(buffer))
         , size_(total_bytes)
     {
+        zeroAll(); // for consistent memory usage and making sure all memory is accessible
     }
 
     // Non-copyable, movable if you want (can default move):
@@ -221,6 +223,13 @@ public:
         // Typically used for temp allocations (radix buffers, prefix arrays, etc.).
         ResettableArenaResource make_arena() const { return ResettableArenaResource(base, bytes); }
     };
+
+    void zeroAll() noexcept
+    {
+        if (base_ != nullptr && size_ > 0) {
+            std::fill_n(base_, size_, std::byte(0));
+        }
+    }
 
     // Get a Region at [offset_bytes, offset_bytes + bytes)
     // Caller is responsible for ensuring overlaps are intentional.
