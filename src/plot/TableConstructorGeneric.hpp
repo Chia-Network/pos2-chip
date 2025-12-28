@@ -279,6 +279,7 @@ public:
         std::span<T_Pairing> out_pairs,
         std::span<T_Pairing> tmp_pairs)
     {
+        std::cout << "Constructing Table " << table_id_ << "...\n";
         minor_scratch_arena_->reset();
 
         // Prefixes live in scratch
@@ -303,6 +304,7 @@ public:
 
         uint32_t section_l = 3; // pattern will be (3,0), (0,2), (2,1), (1,3)
         Timer section_timer;
+        int loop_count = 0;
         while (true) {
             section_timer.start("Section " + std::to_string(section_l) + "-"
                 + std::to_string(proof_core_.matching_section(section_l)));
@@ -405,8 +407,9 @@ public:
             section_l = section_r;
 
             double section_time_ms = section_timer.stop();
-            std::cout << "  Section " << section_l << "-" << proof_core_.matching_section(section_l)
-                      << " time: " << section_time_ms << " ms";
+            std::cout << "  Section " << (loop_count + 1) << "/" << params_.get_num_sections()
+                      << " time: " << section_time_ms << " ms" << std::endl;
+            loop_count++;
 
             // once we are back at starting section_l, we are done
             if (section_l == 3) {
@@ -414,16 +417,15 @@ public:
             }
         }
 
+        // for debugging/testing, should not exceed 100%.
         std::size_t const produced = out_count.load(std::memory_order_relaxed);
+        percentage_capacity_used
+            = (100.0 * static_cast<double>(produced) / static_cast<double>(out_pairs.size()));
         if (produced > out_pairs.size()) {
-            std::cout << "Produced: " << produced << ", capacity: " << out_pairs.size() << "\n";
             // This indicates the estimate was too small or handle_pair_into wrote past capacity.
             throw std::runtime_error("TableConstructorGeneric: output arena capacity exceeded (bad "
                                      "max_pairs_per_table_possible)");
         }
-        std::cout << "Produced: " << produced << ", capacity: " << out_pairs.size() << " %"
-                  << (100.0 * static_cast<double>(produced) / static_cast<double>(out_pairs.size()))
-                  << "%\n";
         return post_construct_span(out_pairs.first(produced), tmp_pairs.first(produced));
     }
 
@@ -456,6 +458,7 @@ public:
             std::cout << "  Total time: " << total << " ms\n";
         }
     } timings;
+    double percentage_capacity_used = 0.0;
 
 protected:
     int table_id_;
