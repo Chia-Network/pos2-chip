@@ -50,10 +50,15 @@ public:
             return {};
 
 #if HAVE_AES
-        std::cout << "Using AES hardware acceleration for hashing." << std::endl;
+        ProgressEvent aes_event {
+            .kind = EventKind::Note, .note_id = NoteId::HasAESHardware, .u64_0 = 1
+        };
+        (*opts.sink).on_event(aes_event);
 #else
-        std::cout << "AES hardware acceleration not available. Using software hashing."
-                  << std::endl;
+        ProgressEvent aes_event {
+            .kind = EventKind::Note, .note_id = NoteId::HasAESHardware, .u64_0 = 0
+        };
+        (*opts.sink).on_event(aes_event);
 #endif
 
         size_t max_section_pairs = max_pairs_per_section_possible(proof_params_);

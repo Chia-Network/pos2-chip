@@ -22,7 +22,12 @@ enum class EventKind : uint8_t {
     Error,
 };
 
-enum class NoteId : uint8_t { None = 0, LayoutTotalBytesAllocated, TableCapacityUsed };
+enum class NoteId : uint8_t {
+    None = 0,
+    LayoutTotalBytesAllocated,
+    HasAESHardware,
+    TableCapacityUsed
+};
 
 struct ProgressEvent {
     EventKind kind;

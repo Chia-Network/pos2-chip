@@ -300,6 +300,10 @@ public:
         uint32_t const match_target_mask
             = (uint32_t(1) << params_.get_num_match_target_bits(table_id_)) - 1u;
 
+        uint32_t const total_match_keys
+            = static_cast<uint32_t>(num_match_keys * params_.get_num_sections());
+        uint32_t processed_match_keys = 0;
+
         uint32_t section_l = 3; // pattern will be (3,0), (0,2), (2,1), (1,3)
         while (true) {
             ScopedEvent section_scope(sink_,
@@ -335,7 +339,8 @@ public:
                         .table_id = (uint8_t)table_id_,
                         .section_l = (uint8_t)section_l,
                         .section_r = (uint8_t)section_r,
-                        .match_key = (uint8_t)match_key_r,
+                        .match_key = processed_match_keys++,
+                        .match_keys_total = total_match_keys,
                         .items_l = l_count,
                         .items_r = r_count });
 
