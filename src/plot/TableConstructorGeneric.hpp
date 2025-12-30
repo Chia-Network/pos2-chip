@@ -15,6 +15,7 @@
 #include "RadixSort.hpp"
 #include "common/ParallelForRange.hpp"
 #include "common/Timer.hpp"
+#include "plot/Progress.hpp"
 #include "pos/ProofCore.hpp"
 #include "pos/ProofParams.hpp"
 #include "pos/ProofValidator.hpp"
@@ -35,12 +36,15 @@ public:
     TableConstructorGeneric(int table_id,
         ProofParams const& proof_params,
         ResettableArenaResource& target_scratch,
-        ResettableArenaResource& minor_scratch)
+        ResettableArenaResource& minor_scratch,
+        IProgressSink& sink = null_progress_sink())
         : table_id_(table_id)
         , params_(proof_params)
         , target_scratch_arena_(&target_scratch)
         , minor_scratch_arena_(&minor_scratch)
+        , sink_(sink)
         , proof_core_(proof_params)
+
     {
     }
 
@@ -279,22 +283,16 @@ public:
         std::span<T_Pairing> out_pairs,
         std::span<T_Pairing> tmp_pairs)
     {
-        std::cout << "Constructing Table " << table_id_ << "...\n";
+        ScopedEvent table_scope(sink_,
+            ProgressEvent { .kind = EventKind::TableBegin,
+                .table_id = (uint8_t)table_id_,
+                .num_items_in = previous_table_pairs.size() });
+        if (table_scope.cancelled())
+            return {};
         minor_scratch_arena_->reset();
 
         // Prefixes live in scratch
         Prefix2D prefix = find_candidates_prefixes(previous_table_pairs, minor_scratch_arena_);
-
-        // std::size_t const max_pairs_guess = max_pairs_per_table_possible(params_);
-        // std::cout << "T" << table_id_ << ": max_pairs_guess=" << max_pairs_guess
-        //           << " sizeof(T_Pairing)=" << sizeof(T_Pairing)
-        //           << " bytes=" << (max_pairs_guess * sizeof(T_Pairing))
-        //           << " out_cap=" << out_arena.capacity_bytes()
-        //           << " out_rem=" << out_arena.remaining_bytes() << "\n";
-
-        // Output array for pairings lives in OUT arena
-        // T_Pairing* out_ptr = arena_alloc_n<T_Pairing>(&out_arena, max_pairs_guess);
-        // std::span<T_Pairing> out_pairs(out_ptr, max_pairs_guess);
 
         std::atomic<std::size_t> out_count { 0 };
 
@@ -303,11 +301,15 @@ public:
             = (uint32_t(1) << params_.get_num_match_target_bits(table_id_)) - 1u;
 
         uint32_t section_l = 3; // pattern will be (3,0), (0,2), (2,1), (1,3)
-        Timer section_timer;
-        int loop_count = 0;
         while (true) {
-            section_timer.start("Section " + std::to_string(section_l) + "-"
-                + std::to_string(proof_core_.matching_section(section_l)));
+            ScopedEvent section_scope(sink_,
+                ProgressEvent { .kind = EventKind::SectionBegin,
+                    .table_id = (uint8_t)table_id_,
+                    .section_l = (uint8_t)section_l,
+                    .section_r = (uint8_t)proof_core_.matching_section(section_l) });
+            if (section_scope.cancelled())
+                return {};
+
             uint32_t const section_r = proof_core_.matching_section(section_l);
 
             uint64_t const l_start_u64 = prefix.row(section_l)[0];
@@ -327,6 +329,15 @@ public:
 
                 std::size_t const l_count = l_end - l_start;
                 std::size_t const r_count = r_end - r_start;
+
+                ScopedEvent match_scope(sink_,
+                    ProgressEvent { .kind = EventKind::MatchKeyBegin,
+                        .table_id = (uint8_t)table_id_,
+                        .section_l = (uint8_t)section_l,
+                        .section_r = (uint8_t)section_r,
+                        .match_key = (uint8_t)match_key_r,
+                        .items_l = l_count,
+                        .items_r = r_count });
 
                 if (l_count == 0 || r_count == 0) {
                     minor_scratch_arena_->rewind(m);
@@ -406,11 +417,6 @@ public:
             }
             section_l = section_r;
 
-            double section_time_ms = section_timer.stop();
-            std::cout << "  Section " << (loop_count + 1) << "/" << params_.get_num_sections()
-                      << " time: " << section_time_ms << " ms" << std::endl;
-            loop_count++;
-
             // once we are back at starting section_l, we are done
             if (section_l == 3) {
                 break;
@@ -426,6 +432,10 @@ public:
             throw std::runtime_error("TableConstructorGeneric: output arena capacity exceeded (bad "
                                      "max_pairs_per_table_possible)");
         }
+        ScopedEvent post_sort(sink_,
+            ProgressEvent { .kind = EventKind::PostSortBegin,
+                .table_id = (uint8_t)table_id_,
+                .produced = produced });
         return post_construct_span(out_pairs.first(produced), tmp_pairs.first(produced));
     }
 
@@ -466,6 +476,7 @@ protected:
     Timer timer_;
     ResettableArenaResource* target_scratch_arena_;
     ResettableArenaResource* minor_scratch_arena_;
+    IProgressSink& sink_;
 
 public:
     ProofCore proof_core_;
@@ -478,9 +489,10 @@ struct Xs_Candidate {
 
 class XsConstructor {
 public:
-    XsConstructor(ProofParams const& proof_params)
+    XsConstructor(ProofParams const& proof_params, IProgressSink& sink = null_progress_sink())
         : params_(proof_params)
         , proof_core_(proof_params)
+        , sink_(sink)
     {
     }
 
@@ -492,6 +504,12 @@ public:
     {
         uint64_t const num_xs_u64 = (1ULL << params_.get_k());
         size_t const num_xs = static_cast<size_t>(num_xs_u64);
+
+        ScopedEvent xs_scope(sink_,
+            ProgressEvent {
+                .kind = EventKind::TableBegin, .table_id = 0, .num_items_in = num_xs_u64 });
+        if (xs_scope.cancelled())
+            return {};
 
         // Check buffers large enough
         if (out_xs.size() < num_xs || tmp_xs.size() < num_xs) {
@@ -514,6 +532,9 @@ public:
 
         RadixSort<Xs_Candidate, uint32_t> radix_sort;
 
+        ScopedEvent sort_scope(sink_,
+            ProgressEvent {
+                .kind = EventKind::PostSortBegin, .table_id = 0, .produced = num_xs_u64 });
         timer.start("Sorting Xs_Candidate");
         // auto sorted = radix_sort.sort_to(out, tmp);
         std::span<Xs_Candidate> sorted_span
@@ -541,6 +562,7 @@ public:
 protected:
     ProofParams params_;
     ProofCore proof_core_;
+    IProgressSink& sink_;
 };
 
 class Table1Constructor : public TableConstructorGeneric<Xs_Candidate, T1Pairing, T1Pairing> {
@@ -548,9 +570,10 @@ public:
     // NOTE: this base now requires a scratch arena reference
     explicit Table1Constructor(ProofParams const& proof_params,
         ResettableArenaResource& target_scratch,
-        ResettableArenaResource& minor_scratch)
+        ResettableArenaResource& minor_scratch,
+        IProgressSink& sink = null_progress_sink())
         : TableConstructorGeneric<Xs_Candidate, T1Pairing, T1Pairing>(
-              1, proof_params, target_scratch, minor_scratch)
+              1, proof_params, target_scratch, minor_scratch, sink)
     {
     }
 
@@ -614,9 +637,10 @@ class Table2Constructor : public TableConstructorGeneric<T1Pairing, T2Pairing, T
 public:
     explicit Table2Constructor(ProofParams const& proof_params,
         ResettableArenaResource& target_scratch,
-        ResettableArenaResource& minor_scratch)
+        ResettableArenaResource& minor_scratch,
+        IProgressSink& sink = null_progress_sink())
         : TableConstructorGeneric<T1Pairing, T2Pairing, T2Pairing>(
-              2, proof_params, target_scratch, minor_scratch)
+              2, proof_params, target_scratch, minor_scratch, sink)
     {
     }
 
@@ -693,9 +717,10 @@ class Table3Constructor : public TableConstructorGeneric<T2Pairing, T3Pairing, T
 public:
     explicit Table3Constructor(ProofParams const& proof_params,
         ResettableArenaResource& target_scratch,
-        ResettableArenaResource& minor_scratch)
+        ResettableArenaResource& minor_scratch,
+        IProgressSink& sink = null_progress_sink())
         : TableConstructorGeneric<T2Pairing, T3Pairing, T3Pairing>(
-              3, proof_params, target_scratch, minor_scratch)
+              3, proof_params, target_scratch, minor_scratch, sink)
     {
     }
 

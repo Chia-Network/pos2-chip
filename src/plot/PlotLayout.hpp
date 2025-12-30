@@ -9,12 +9,7 @@
 #include <type_traits>
 
 #include "LayoutPlanner.hpp"
-
-// forward decls
-struct Xs_Candidate;
-struct T1Pairing;
-struct T2Pairing;
-struct T3Pairing;
+#include "TableConstructorGeneric.hpp"
 
 struct PlotLayout {
     std::size_t max_section_pairs = 0;

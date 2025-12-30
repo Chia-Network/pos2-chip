@@ -1,23 +1,35 @@
 #pragma once
 
+#include <algorithm> // std::max, std::copy
 #include <array>
+#include <cassert> // assert
 #include <cstdint>
+#include <cstdlib> // std::exit, std::strtol
 #include <iostream>
 #include <memory_resource>
 #include <optional>
+#include <stdexcept> // std::runtime_error
 #include <string>
 #include <vector>
 
 #include "PlotData.hpp"
 #include "PlotLayout.hpp"
-#include "TableConstructorGeneric.hpp"
+#include "Progress.hpp"
+#include "TableConstructorGeneric.hpp" // must come before PlotLayout.hpp (defines Xs_Candidate)
 #include "common/Timer.hpp"
 #include "pos/ProofCore.hpp"
 
 #define DEBUG_MEMORY_USAGE_PLOTTING 0
+#define DEVELOPER_PERFORMANCE_TIMINGS 0
 
 class Plotter {
 public:
+    struct Options {
+        bool validate = false;
+        bool verbose = false;
+        IProgressSink* sink = &null_progress_sink(); // optional
+    };
+
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
     Plotter(ProofParams const& proof_params)
         : proof_params_(proof_params)
@@ -26,13 +38,16 @@ public:
     {
     }
 
+    // Default options overload
+    PlotData run() { return run(Options {}); }
+
     // Execute the plotting pipeline
-    PlotData run(bool verbose = false)
+    PlotData run(Options opts)
     {
-        Timer totalPlotTimer;
-        totalPlotTimer.start();
-        std::cout << "Starting plotter..." << std::endl;
-        proof_params_.debugPrint();
+        ScopedEvent plot_scope(
+            *opts.sink, ProgressEvent { .kind = EventKind::PlotBegin, .msg = "plot" });
+        if (plot_scope.cancelled())
+            return {};
 
 #if HAVE_AES
         std::cout << "Using AES hardware acceleration for hashing." << std::endl;
@@ -41,34 +56,45 @@ public:
                   << std::endl;
 #endif
 
-        Timer allocationTimer;
-        allocationTimer.debugOut = verbose;
-        // size_t max_pairs = max_pairs_per_table_possible(proof_params_);
         size_t max_section_pairs = max_pairs_per_section_possible(proof_params_);
         size_t num_sections = static_cast<size_t>(proof_params_.get_num_sections());
+        size_t max_pairs = max_section_pairs * num_sections;
+
         size_t max_element_bytes = std::max(
             { sizeof(Xs_Candidate), sizeof(T1Pairing), sizeof(T2Pairing), sizeof(T3Pairing) });
 
-        // TODO: more bytes needed for more threads.
-        size_t minor_scratch_bytes = 2048 * 1024; // 1 MiB for minor scratch
+        size_t minor_scratch_bytes = 2048 * 1024;
 
-        allocationTimer.start("Allocating Buffers");
-        PlotLayout layout(max_section_pairs, num_sections, max_element_bytes, minor_scratch_bytes);
-        size_t allocated_bytes = layout.total_bytes_allocated();
-        std::cout << "Allocated " << allocated_bytes / (1024 * 1024) << " MiB.\n";
-        allocationTimer.stop();
+        // Allocate layout under a scoped progress event + timer, without making PlotLayout a
+        // pointer.
+        auto layout = [&]() -> PlotLayout {
+            ScopedEvent alloc_scope(*opts.sink,
+                ProgressEvent { .kind = EventKind::AllocationBegin, .msg = "Allocating Buffers" });
+            if (alloc_scope.cancelled())
+                return PlotLayout(0, 0, 0, 0); // or handle via exception/early return policy
+
+            PlotLayout l(max_section_pairs, num_sections, max_element_bytes, minor_scratch_bytes);
+
+            ProgressEvent alloc_end_event {
+                .kind = EventKind::Note,
+                .note_id = NoteId::LayoutTotalBytesAllocated,
+                .u64_0 = l.total_bytes_allocated(), // add generic fields, see below
+            };
+            (*opts.sink).on_event(alloc_end_event);
+
+            return l; // NRVO/move
+        }();
 
         auto xsV = layout.xs();
-        XsConstructor xs_gen_ctor(proof_params_);
+        XsConstructor xs_gen_ctor(proof_params_, *opts.sink);
         auto xs_candidates = xs_gen_ctor.construct(xsV.out, xsV.post_sort_tmp, xsV.minor);
-        if (verbose) {
-            xs_gen_ctor.timings.show();
-            std::cout << "Constructed " << xs_candidates.size() << " Xs candidates.\n";
-        }
+#if DEVELOPER_PERFORMANCE_TIMINGS
+        xs_gen_ctor.timings.show();
+#endif
 
         // shouldn't happen for k28, but can happen on smaller k sizes.
         if (xs_candidates.data() == xsV.out.data()) {
-            if (verbose) {
+            if (opts.verbose) {
                 std::cout << "NOTE Sub-optimal: copying Xs candidates to tmp buffer for Table 1 "
                              "construction.\n";
             }
@@ -77,21 +103,22 @@ public:
         }
 
         auto t1V = layout.t1();
-        Table1Constructor t1_ctor(proof_params_, t1V.target, t1V.minor);
+        Table1Constructor t1_ctor(proof_params_, t1V.target, t1V.minor, *opts.sink);
         auto t1_pairs = t1_ctor.construct(xs_candidates, t1V.out, t1V.post_sort_tmp);
-        if (verbose) {
-            t1_ctor.timings.show("Table 1 Timings");
-            std::cout << "Percentage of Table 1 output capacity used: "
-                      << t1_ctor.percentage_capacity_used << " %\n";
-            std::cout << "Constructed " << t1_pairs.size() << " Table 1 pairs.\n";
-        }
+#if DEVELOPER_PERFORMANCE_TIMINGS
+        t1_ctor.timings.show("Table 1 Timings");
+        std::cout << "Percentage of Table 1 output capacity used: "
+                  << t1_ctor.percentage_capacity_used << " %\n";
+#endif
 
         assert(t1_pairs.size() <= max_pairs);
+        if (t1_pairs.size() > max_pairs) {
+            throw std::runtime_error("Table 1 construction exceeded allocated capacity.");
+        }
         if (t1_pairs.data() == t1V.out.data()) {
-            if (verbose) {
-                std::cout
-                    << "Sub-optimal: copying T1 pairs to tmp buffer for Table 1 construction.\n";
-            }
+#if DEVELOPER_PERFORMANCE_TIMINGS
+            std::cout << "Sub-optimal: copying T1 pairs to tmp buffer for Table 1 construction.\n";
+#endif
             std::copy(t1V.out.begin(), t1V.out.end(), t1V.post_sort_tmp.begin());
             t1_pairs = t1V.post_sort_tmp.first(t1_pairs.size());
         }
@@ -114,14 +141,14 @@ public:
 
         // Table 2
         auto t2V = layout.t2();
-        Table2Constructor t2_ctor(proof_params_, t2V.target, t2V.minor);
+        Table2Constructor t2_ctor(proof_params_, t2V.target, t2V.minor, *opts.sink);
         auto t2_pairs = t2_ctor.construct(t1_pairs, t2V.out, t2V.post_sort_tmp);
-        if (verbose) {
-            t2_ctor.timings.show("Table 2 Timings:");
-            std::cout << "Percentage of Table 2 output capacity used: "
-                      << t2_ctor.percentage_capacity_used << " %\n";
-            std::cout << "Constructed " << t2_pairs.size() << " Table 2 pairs.\n";
-        }
+#if DEVELOPER_PERFORMANCE_TIMINGS
+        t2_ctor.timings.show("Table 2 Timings");
+        std::cout << "Percentage of Table 2 output capacity used: "
+                  << t2_ctor.percentage_capacity_used << " %\n";
+        std::cout << "Constructed " << t2_pairs.size() << " Table 2 pairs.\n";
+#endif
 
 #ifdef RETAIN_X_VALUES
         if (validate_) {
@@ -139,30 +166,24 @@ public:
 
         assert(t2_pairs.size() <= max_pairs);
         if (t2_pairs.data() == t2V.out.data()) {
-            if (verbose) {
-                std::cout << "NOTE Sub-optimal: copying T2 pairs to tmp buffer for Table 2 "
-                             "construction.\n";
-            }
+#if DEVELOPER_PERFORMANCE_TIMINGS
+            std::cout << "NOTE Sub-optimal: copying T2 pairs to tmp buffer for Table 2 "
+                         "construction.\n";
+#endif
             std::copy(t2V.out.begin(), t2V.out.end(), t2V.post_sort_tmp.begin());
             t2_pairs = t2V.post_sort_tmp.first(t2_pairs.size());
         }
 
-        // 4) Table 3
-        std::cout << "Table3 construction" << std::endl;
-
+        // Table 3
         auto t3V = layout.t3();
-        Table3Constructor t3_ctor(proof_params_, t3V.target, t3V.minor);
+        Table3Constructor t3_ctor(proof_params_, t3V.target, t3V.minor, *opts.sink);
         auto t3_results = t3_ctor.construct(t2_pairs, t3V.out, t3V.post_sort_tmp);
-        if (verbose) {
-            t3_ctor.timings.show("Table 3 Timings:");
-            std::cout << "Percentage of Table 3 output capacity used: "
-                      << t3_ctor.percentage_capacity_used << " %\n";
-            std::cout << "Constructed " << t3_results.size() << " Table 3 entries.\n";
-        }
-
-        if (verbose) {
-            layout.print_mem_stats();
-        }
+#if DEVELOPER_PERFORMANCE_TIMINGS
+        t3_ctor.timings.show("Table 3 Timings:");
+        std::cout << "Percentage of Table 3 output capacity used: "
+                  << t3_ctor.percentage_capacity_used << " %\n";
+        layout.print_mem_stats();
+#endif
 
 #if AES_COUNT_HASHES
         showHashCounts();
@@ -185,23 +206,21 @@ public:
         }
 #endif
 
-        if (verbose) {
-            decltype(t1_ctor)::Timings total_timings;
-            total_timings.hash_time_ms = xs_gen_ctor.timings.hash_time_ms
-                + t1_ctor.timings.hash_time_ms + t2_ctor.timings.hash_time_ms
-                + t3_ctor.timings.hash_time_ms;
-            total_timings.sort_time_ms = xs_gen_ctor.timings.sort_time_ms
-                + t1_ctor.timings.sort_time_ms + t2_ctor.timings.sort_time_ms
-                + t3_ctor.timings.sort_time_ms;
-            total_timings.find_pairs_time_ms = t1_ctor.timings.find_pairs_time_ms
-                + t2_ctor.timings.find_pairs_time_ms + t3_ctor.timings.find_pairs_time_ms;
-            total_timings.post_sort_time_ms = t1_ctor.timings.post_sort_time_ms
-                + t2_ctor.timings.post_sort_time_ms + t3_ctor.timings.post_sort_time_ms;
-            total_timings.misc_time_ms = t1_ctor.timings.misc_time_ms + t2_ctor.timings.misc_time_ms
-                + t3_ctor.timings.misc_time_ms;
-            total_timings.show("Total Plotting Timings:");
-        }
-        std::cout << "Total plotting time: " << totalPlotTimer.stop() << " ms." << std::endl;
+        // Show total timings
+#if DEVELOPER_PERFORMANCE_TIMINGS
+        decltype(t1_ctor)::Timings total_timings;
+        total_timings.hash_time_ms = xs_gen_ctor.timings.hash_time_ms + t1_ctor.timings.hash_time_ms
+            + t2_ctor.timings.hash_time_ms + t3_ctor.timings.hash_time_ms;
+        total_timings.sort_time_ms = xs_gen_ctor.timings.sort_time_ms + t1_ctor.timings.sort_time_ms
+            + t2_ctor.timings.sort_time_ms + t3_ctor.timings.sort_time_ms;
+        total_timings.find_pairs_time_ms = t1_ctor.timings.find_pairs_time_ms
+            + t2_ctor.timings.find_pairs_time_ms + t3_ctor.timings.find_pairs_time_ms;
+        total_timings.post_sort_time_ms = t1_ctor.timings.post_sort_time_ms
+            + t2_ctor.timings.post_sort_time_ms + t3_ctor.timings.post_sort_time_ms;
+        total_timings.misc_time_ms = t1_ctor.timings.misc_time_ms + t2_ctor.timings.misc_time_ms
+            + t3_ctor.timings.misc_time_ms;
+        total_timings.show("Total Plotting Timings:");
+#endif
 
         auto plot_data = PlotData {};
         // copy out the proof fragments
@@ -212,9 +231,9 @@ public:
         }
         plot_data.t3_proof_fragments = t3_proof_fragments;
 
-        if (verbose) {
-            print_rss("[After Plot copy out]");
-        }
+#if DEVELOPER_PERFORMANCE_TIMINGS
+        print_rss("[After Plot copy out]");
+#endif
 
         return plot_data;
     }

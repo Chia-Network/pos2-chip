@@ -14,6 +14,120 @@ static void print_usage(char const* prog)
               << "    [strength]     : optional, defaults to 2\n";
 }
 
+class ConsoleSink final : public IProgressSink {
+public:
+    explicit ConsoleSink(bool verbose) : verbose_(verbose) {}
+
+    bool on_event(ProgressEvent const& e) noexcept override
+    {
+        switch (e.kind) {
+        case EventKind::PlotBegin:
+            std::cout << "Plotting started...\n";
+            break;
+        case EventKind::PlotEnd:
+            std::cout << "Plotting ended. Total time: "
+                      << std::chrono::duration<double, std::milli>(e.elapsed).count() << " ms\n";
+            break;
+        case EventKind::AllocationBegin:
+            if (verbose_)
+                std::cout << "Allocating memory for plotting...\n";
+            break;
+        case EventKind::AllocationEnd:
+            if (verbose_) {
+                std::cout << "Memory allocation completed. Time: "
+                          << std::chrono::duration<double, std::milli>(e.elapsed).count()
+                          << " ms\n";
+            }
+            break;
+        case EventKind::TableBegin:
+            if (verbose_)
+                std::cout << "Constructing Table " << int(e.table_id) << " from "
+                          << int(e.num_items_in) << " items...\n";
+            break;
+        case EventKind::TableEnd:
+            if (verbose_) {
+                std::cout << "Table " << int(e.table_id) << " constructed. Time: "
+                          << std::chrono::duration<double, std::milli>(e.elapsed).count()
+                          << " ms\n";
+            }
+            break;
+        case EventKind::MatchKeyBegin:
+            if (verbose_) {
+                std::cout << "    T" << int(e.table_id) << " matching key " << e.match_key
+                          << " (section " << int(e.section_l) << "-" << int(e.section_r)
+                          << ") with " << e.items_l << " left items and " << e.items_r
+                          << " right items...\n";
+            }
+            break;
+        case EventKind::MatchKeyEnd:
+            if (verbose_) {
+                std::cout << "    T" << int(e.table_id) << " matching key " << e.match_key
+                          << " completed. Time: "
+                          << std::chrono::duration<double, std::milli>(e.elapsed).count()
+                          << " ms\n";
+            }
+            break;
+        case EventKind::SectionBegin:
+            if (verbose_) {
+                std::cout << "  T" << int(e.table_id) << " section " << int(e.section_l) << "-"
+                          << int(e.section_r) << " started...\n";
+            }
+            break;
+        case EventKind::SectionEnd:
+            if (verbose_) {
+                std::cout << "  T" << int(e.table_id) << " section " << int(e.section_l) << "-"
+                          << int(e.section_r) << " time: "
+                          << std::chrono::duration<double, std::milli>(e.elapsed).count()
+                          << " ms\n";
+            }
+            break;
+        case EventKind::PostSortBegin:
+            if (verbose_) {
+                std::cout << "  T" << int(e.table_id) << " post-sort started for " << e.produced
+                          << " entries...\n";
+            }
+            break;
+        case EventKind::PostSortEnd:
+            if (verbose_) {
+                std::cout << "  T" << int(e.table_id) << " post-sort completed. Time: "
+                          << std::chrono::duration<double, std::milli>(e.elapsed).count()
+                          << " ms\n";
+            }
+            break;
+        case EventKind::Note:
+            if (verbose_) {
+                switch (e.note_id) {
+                case NoteId::LayoutTotalBytesAllocated:
+                    std::cout << "Note: Total bytes allocated for layout: " << e.u64_0
+                              << " bytes\n";
+                    break;
+                case NoteId::TableCapacityUsed:
+                    std::cout << "Note: Table " << int(e.table_id)
+                              << " capacity used: " << e.f64_0 * 100.0 << "%\n";
+                    break;
+                default:
+                    std::cout << "Note: " << e.msg << "\n";
+                    break;
+                }
+            }
+            break;
+        case EventKind::Warning:
+            std::cerr << "Warning: " << e.msg << "\n";
+            break;
+        case EventKind::Error:
+            std::cerr << "Error: " << e.msg << "\n";
+            break;
+
+        default:
+            break;
+        }
+        return true; // continue
+    }
+
+private:
+    bool verbose_ = false;
+};
+
 // example usage: ./plotter test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
 // 2
 int main(int argc, char* argv[])
@@ -59,12 +173,18 @@ try {
 
     Timer timer;
     timer.start("Plotting");
+
+    ConsoleSink sink(/*verbose=*/true);
+    Plotter::Options opt;
+    opt.validate = false;
+    opt.verbose = false;
+    opt.sink = &sink;
+
     ProofParams params(Utils::hexToBytes(plot_id_hex).data(),
         numeric_cast<uint8_t>(k),
         numeric_cast<uint8_t>(strength));
     Plotter plotter(params);
-    plotter.setValidate(true);
-    PlotData plot = plotter.run();
+    PlotData plot = plotter.run(opt);
     timer.stop();
     std::cout << "Plotting completed.\n";
     std::cout << "----------------------" << std::endl;
