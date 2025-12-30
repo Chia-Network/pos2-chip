@@ -615,12 +615,7 @@ public:
     std::span<T1Pairing> post_construct_span(
         std::span<T1Pairing> pairings, std::span<T1Pairing> tmp_pairs) override
     {
-        std::cout << "Table1Constructor: post_construct_span sorting " << pairings.size()
-                  << " T1Pairing entries in tmp: " << tmp_pairs.size() << "\n";
         minor_scratch_arena_->reset();
-        // previous_in_arena.reset();
-        // T1Pairing* tmp_ptr = arena_alloc_n<T1Pairing>(&previous_in_arena, pairings.size());
-        // std::span<T1Pairing> tmp(tmp_ptr, pairings.size());
 
         RadixSort<T1Pairing, uint32_t> radix_sort;
 
