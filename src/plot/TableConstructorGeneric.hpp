@@ -378,7 +378,7 @@ public:
                 // matching_target only uses those bits.
                 std::span<PairingCandidate> l_sorted = radix_sort.sort(l_candidates,
                     tmp,
-                    params_.get_num_match_target_bits(table_id_),
+                    numeric_cast<int>(params_.get_num_match_target_bits(table_id_)),
                     minor_scratch_arena_);
                 timings.sort_time_ms += timer_.stop();
 
