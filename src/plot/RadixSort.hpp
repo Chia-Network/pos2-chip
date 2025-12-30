@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <memory_resource>
 #include <span>
 #include <thread>
 #include <vector>
@@ -20,34 +21,51 @@ public:
 
     // Sort the vector 'data' in place, using 'buffer' as temporary storage.
     // Sorting is based on the key extracted by key_extractor_.
-    void sort(std::span<T> data, std::span<T> buffer, int num_bits = 32, bool verbose = false)
+    // returns sorted span, which caller can check which of the data or buffer it is in
+    std::span<T> sort(
+        std::span<T> data, std::span<T> buffer, int num_bits, std::pmr::memory_resource* mr)
     {
-        int const radix_bits = 8; // Process 8 bits per pass.
+        int const radix_bits = 10; // Process bits per pass.
         int const radix = 1 << radix_bits;
         int const radix_mask = radix - 1;
         int const num_passes = (num_bits + radix_bits - 1) / radix_bits; // Number of passes needed.
-        size_t const num_threads = std::thread::hardware_concurrency();
+
+        size_t num_threads = std::thread::hardware_concurrency();
+        if (num_threads == 0)
+            num_threads = 1;
+
         size_t const num_elements = data.size();
 
         Timer timer;
-        if (verbose) {
+        if (verbose_) {
             std::cout << "RadixSort: Sorting " << num_elements << " elements with " << num_threads
                       << " threads on " << num_bits << " bits" << std::endl;
             timer.start();
         }
 
-        std::vector<std::vector<uint32_t>> counts_by_thread(
-            num_threads, std::vector<uint32_t>(radix, 0));
+        std::pmr::vector<std::pmr::vector<uint32_t>> counts_by_thread(mr);
+        counts_by_thread.reserve(num_threads);
+        for (size_t t = 0; t < num_threads; ++t) {
+            counts_by_thread.emplace_back(std::pmr::vector<uint32_t>(radix, 0u, mr));
+        }
+
         int const num_elements_per_thread = static_cast<int>(num_elements / num_threads);
 
+        // Compute per-thread offsets.
+        std::pmr::vector<std::pmr::vector<uint32_t>> offsets_for_thread(mr);
+        offsets_for_thread.reserve(num_threads);
+        for (size_t t = 0; t < num_threads; ++t) {
+            offsets_for_thread.emplace_back(std::pmr::vector<uint32_t>(radix, 0u, mr));
+        }
+
         for (int pass = 0; pass < num_passes; ++pass) {
-            if (verbose)
+            if (verbose_)
                 std::cout << "----- Pass " << pass << " -----" << std::endl;
             int shift = pass * radix_bits;
 
             // Count phase: each thread counts keys.
             Timer countPhaseTimer;
-            if (verbose)
+            if (verbose_)
                 countPhaseTimer.start("Count phase");
 
             {
@@ -70,13 +88,13 @@ public:
                 }
             }
 
-            if (verbose) {
+            if (verbose_) {
                 countPhaseTimer.stop();
                 countPhaseTimer.start("Prefix sum phase");
             }
 
             // Merge counts to global counts.
-            std::vector<uint32_t> counts(radix, 0);
+            std::pmr::vector<uint32_t> counts(radix, 0u, mr);
             for (size_t t = 0; t < num_threads; ++t) {
                 for (size_t r = 0; r < radix; ++r)
                     counts[r] += counts_by_thread[t][r];
@@ -87,9 +105,10 @@ public:
             for (size_t i = 1; i < radix; ++i)
                 offsets[i] = offsets[i - 1] + counts[i - 1];
 
-            // Compute per-thread offsets.
-            std::vector<std::vector<uint32_t>> offsets_for_thread(
-                num_threads, std::vector<uint32_t>(radix, 0));
+            // reset offsets for each thread
+            for (size_t t = 0; t < num_threads; ++t)
+                std::fill(offsets_for_thread[t].begin(), offsets_for_thread[t].end(), 0u);
+
             for (size_t r = 0; r < radix; ++r)
                 offsets_for_thread[0][r] = offsets[r];
             for (size_t t = 1; t < num_threads; ++t) {
@@ -98,12 +117,12 @@ public:
                         = offsets_for_thread[t - 1][r] + counts_by_thread[t - 1][r];
             }
 
-            if (verbose)
+            if (verbose_)
                 countPhaseTimer.stop();
 
             // Redistribution phase: place elements in sorted order into buffer.
             Timer redistributionTimer;
-            if (verbose)
+            if (verbose_)
                 redistributionTimer.start("Redistribution phase");
 
             {
@@ -116,6 +135,10 @@ public:
                         for (size_t i = start; i < end; ++i) {
                             KeyType key = (data[i].*key_extractor_ >> shift) & radix_mask;
                             size_t outpos = offsets_for_thread[t][key]++;
+                            if (outpos >= num_elements) {
+                                throw std::runtime_error("RadixSort: outpos out of range");
+                            }
+                            assert(outpos < num_elements);
                             buffer[outpos] = data[i];
                         }
                     });
@@ -133,16 +156,17 @@ public:
         // If an odd number of passes was performed, 'data' still points
         // to the original container and 'buffer' holds the sorted data.
         // Copy the sorted data back into the caller's container.
-        if (num_passes % 2 == 1) {
-            if (verbose)
-                std::cout << "Copying sorted data back to original container." << std::endl;
-            std::copy(buffer.begin(), buffer.end(), data.begin());
-        }
 
-        if (verbose)
+        if (verbose_)
             timer.stop();
+
+        return buffer; // sorted data always in buffer, since this is swapped into at end of each
+                       // loop.
     }
 
+    void setVerbose(bool v) { verbose_ = v; }
+
 private:
+    bool verbose_ = false;
     KeyExtractor key_extractor_;
 };
