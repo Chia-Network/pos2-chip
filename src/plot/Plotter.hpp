@@ -236,10 +236,6 @@ public:
         }
         plot_data.t3_proof_fragments = t3_proof_fragments;
 
-#if DEVELOPER_PERFORMANCE_TIMINGS
-        print_rss("[After Plot copy out]");
-#endif
-
         return plot_data;
     }
 
