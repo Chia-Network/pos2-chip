@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <iostream> // VerboseConsoleSink uses std::cout/cerr
 #include <string_view> // only for convenient printing/conversion in sinks
+#include <type_traits>
 
 // Stable-layout string view for ABI / C tooling consumption.
 struct StringView {
@@ -78,10 +79,31 @@ struct ProgressEvent {
     StringView msg {}; // stable layout for C tooling
 };
 
-// return false to request cancellation (optional)
-struct IProgressSink {
+// POD function table for tooling / C ABI.
+// Convention: return 0 to continue, non-zero to request cancellation.
+struct ProgressSinkProcs {
+    using OnEventProc = int32_t (*)(ProgressEvent const*);
+    OnEventProc on_event_proc = nullptr;
+};
+
+// For C/tooling ABI, the important properties are standard-layout + trivially-copyable.
+static_assert(std::is_standard_layout_v<ProgressSinkProcs>);
+static_assert(std::is_trivially_copyable_v<ProgressSinkProcs>);
+
+// C++ sink interface:
+// - Still virtual (for C++ side)
+// - Optionally forwards to `on_event_proc` if set (for tooling bridges).
+// - Tooling-facing POD structs should avoid virtuals and use explicit C function pointers instead.
+struct IProgressSink : ProgressSinkProcs {
     virtual ~IProgressSink() = default;
-    virtual bool on_event(ProgressEvent const& e) noexcept = 0;
+
+    virtual bool on_event(ProgressEvent const& e) noexcept
+    {
+        if (on_event_proc != nullptr) {
+            return on_event_proc(&e) == 0;
+        }
+        return true;
+    }
 };
 
 // default no-op sink
