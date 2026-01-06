@@ -26,7 +26,7 @@ class Plotter {
 public:
     struct Options {
         bool validate = false;
-        bool verbose = false;
+        bool verbose = false; // (kept for API compatibility; Plotter no longer prints)
         IProgressSink* sink = &null_progress_sink(); // optional
     };
 
@@ -44,8 +44,9 @@ public:
     // Execute the plotting pipeline
     PlotData run(Options opts)
     {
-        ScopedEvent plot_scope(
-            *opts.sink, ProgressEvent { .kind = EventKind::PlotBegin, .msg = "plot" });
+        IProgressSink& sink = *opts.sink;
+
+        ScopedEvent plot_scope(sink, ProgressEvent { .kind = EventKind::PlotBegin });
         if (plot_scope.cancelled())
             return {};
 
@@ -53,12 +54,12 @@ public:
         ProgressEvent aes_event {
             .kind = EventKind::Note, .note_id = NoteId::HasAESHardware, .u64_0 = 1
         };
-        (*opts.sink).on_event(aes_event);
+        sink.on_event(aes_event);
 #else
         ProgressEvent aes_event {
             .kind = EventKind::Note, .note_id = NoteId::HasAESHardware, .u64_0 = 0
         };
-        (*opts.sink).on_event(aes_event);
+        sink.on_event(aes_event);
 #endif
 
         size_t max_section_pairs = max_pairs_per_section_possible(proof_params_);
@@ -73,8 +74,7 @@ public:
         // Allocate layout under a scoped progress event + timer, without making PlotLayout a
         // pointer.
         auto layout = [&]() -> PlotLayout {
-            ScopedEvent alloc_scope(*opts.sink,
-                ProgressEvent { .kind = EventKind::AllocationBegin, .msg = "Allocating Buffers" });
+            ScopedEvent alloc_scope(sink, ProgressEvent { .kind = EventKind::AllocationBegin });
             if (alloc_scope.cancelled())
                 return PlotLayout(0, 0, 0, 0); // or handle via exception/early return policy
 
@@ -85,13 +85,13 @@ public:
                 .note_id = NoteId::LayoutTotalBytesAllocated,
                 .u64_0 = l.total_bytes_allocated(), // add generic fields, see below
             };
-            (*opts.sink).on_event(alloc_end_event);
+            sink.on_event(alloc_end_event);
 
             return l; // NRVO/move
         }();
 
         auto xsV = layout.xs();
-        XsConstructor xs_gen_ctor(proof_params_, *opts.sink);
+        XsConstructor xs_gen_ctor(proof_params_, sink);
         auto xs_candidates = xs_gen_ctor.construct(xsV.out, xsV.post_sort_tmp, xsV.minor);
 #if DEVELOPER_PERFORMANCE_TIMINGS
         xs_gen_ctor.timings.show();
@@ -99,16 +99,16 @@ public:
 
         // shouldn't happen for k28, but can happen on smaller k sizes.
         if (xs_candidates.data() == xsV.out.data()) {
-            if (opts.verbose) {
-                std::cout << "NOTE Sub-optimal: copying Xs candidates to tmp buffer for Table 1 "
-                             "construction.\n";
-            }
+            sink.on_event(ProgressEvent {
+                .kind = EventKind::Warning,
+                .msg = "Sub-optimal: copying Xs candidates to tmp buffer for Table 1 construction.",
+            });
             std::copy(xsV.out.begin(), xsV.out.end(), xsV.post_sort_tmp.begin());
             xs_candidates = xsV.post_sort_tmp.first(xs_candidates.size());
         }
 
         auto t1V = layout.t1();
-        Table1Constructor t1_ctor(proof_params_, t1V.target, t1V.minor, *opts.sink);
+        Table1Constructor t1_ctor(proof_params_, t1V.target, t1V.minor, sink);
         auto t1_pairs = t1_ctor.construct(xs_candidates, t1V.out, t1V.post_sort_tmp);
 #if DEVELOPER_PERFORMANCE_TIMINGS
         t1_ctor.timings.show("Table 1 Timings");
@@ -146,7 +146,7 @@ public:
 
         // Table 2
         auto t2V = layout.t2();
-        Table2Constructor t2_ctor(proof_params_, t2V.target, t2V.minor, *opts.sink);
+        Table2Constructor t2_ctor(proof_params_, t2V.target, t2V.minor, sink);
         auto t2_pairs = t2_ctor.construct(t1_pairs, t2V.out, t2V.post_sort_tmp);
 #if DEVELOPER_PERFORMANCE_TIMINGS
         t2_ctor.timings.show("Table 2 Timings");
@@ -181,7 +181,7 @@ public:
 
         // Table 3
         auto t3V = layout.t3();
-        Table3Constructor t3_ctor(proof_params_, t3V.target, t3V.minor, *opts.sink);
+        Table3Constructor t3_ctor(proof_params_, t3V.target, t3V.minor, sink);
         auto t3_results = t3_ctor.construct(t2_pairs, t3V.out, t3V.post_sort_tmp);
 #if DEVELOPER_PERFORMANCE_TIMINGS
         t3_ctor.timings.show("Table 3 Timings:");

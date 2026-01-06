@@ -339,7 +339,8 @@ public:
                         .table_id = (uint8_t)table_id_,
                         .section_l = (uint8_t)section_l,
                         .section_r = (uint8_t)section_r,
-                        .match_key = processed_match_keys++,
+                        .match_key = match_key_r,
+                        .processed_match_keys = processed_match_keys++,
                         .match_keys_total = total_match_keys,
                         .items_l = l_count,
                         .items_r = r_count });

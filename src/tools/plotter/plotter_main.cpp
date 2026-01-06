@@ -3,7 +3,9 @@
 #include "plot/Plotter.hpp"
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
+#include <future>
 #include <iostream>
 #include <string>
 
@@ -18,393 +20,43 @@ static void print_usage(char const* prog)
         << "    [verbose]      : optional, 0 (default) for progress bar, 1 for verbose output\n";
 }
 
-class ConsoleSink final : public IProgressSink {
-public:
-    explicit ConsoleSink(bool verbose) : verbose_(verbose) {}
+static void render_progress_line(
+    AtomicProgressSnapshot s, std::chrono::steady_clock::time_point start)
+{
+    double frac = s.fraction;
+    if (frac < 0.0)
+        frac = 0.0;
+    if (frac > 1.0)
+        frac = 1.0;
 
-    bool on_event(ProgressEvent const& e) noexcept override
-    {
-        switch (e.kind) {
-        case EventKind::PlotBegin:
-            std::cout << "Plotting started...\n";
-            break;
-        case EventKind::PlotEnd:
-            std::cout << "Plotting ended. Total time: "
-                      << std::chrono::duration<double, std::milli>(e.elapsed).count() << " ms\n";
-            break;
-        case EventKind::AllocationBegin:
-            if (verbose_)
-                std::cout << "Allocating memory for plotting...\n";
-            break;
-        case EventKind::AllocationEnd:
-            if (verbose_) {
-                std::cout << "Memory allocation completed. Time: "
-                          << std::chrono::duration<double, std::milli>(e.elapsed).count()
-                          << " ms\n";
-            }
-            break;
-        case EventKind::TableBegin:
-            if (verbose_)
-                std::cout << "Constructing Table " << int(e.table_id) << " from "
-                          << int(e.num_items_in) << " items...\n";
-            break;
-        case EventKind::TableEnd:
-            if (verbose_) {
-                std::cout << "Table " << int(e.table_id) << " constructed. Time: "
-                          << std::chrono::duration<double, std::milli>(e.elapsed).count()
-                          << " ms\n";
-            }
-            break;
-        case EventKind::MatchKeyBegin:
-            if (verbose_) {
-                std::cout << "    T" << int(e.table_id) << " matching key " << e.match_key
-                          << " (section " << int(e.section_l) << "-" << int(e.section_r)
-                          << ") with " << e.items_l << " left items and " << e.items_r
-                          << " right items...\n";
-            }
-            break;
-        case EventKind::MatchKeyEnd:
-            if (verbose_) {
-                std::cout << "    T" << int(e.table_id) << " matching key " << e.match_key
-                          << " completed. Time: "
-                          << std::chrono::duration<double, std::milli>(e.elapsed).count()
-                          << " ms\n";
-            }
-            break;
-        case EventKind::SectionBegin:
-            if (verbose_) {
-                std::cout << "  T" << int(e.table_id) << " section " << int(e.section_l) << "-"
-                          << int(e.section_r) << " started...\n";
-            }
-            break;
-        case EventKind::SectionEnd:
-            if (verbose_) {
-                std::cout << "  T" << int(e.table_id) << " section " << int(e.section_l) << "-"
-                          << int(e.section_r) << " time: "
-                          << std::chrono::duration<double, std::milli>(e.elapsed).count()
-                          << " ms\n";
-            }
-            break;
-        case EventKind::PostSortBegin:
-            if (verbose_) {
-                std::cout << "  T" << int(e.table_id) << " post-sort started for " << e.produced
-                          << " entries...\n";
-            }
-            break;
-        case EventKind::PostSortEnd:
-            if (verbose_) {
-                std::cout << "  T" << int(e.table_id) << " post-sort completed. Time: "
-                          << std::chrono::duration<double, std::milli>(e.elapsed).count()
-                          << " ms\n";
-            }
-            break;
-        case EventKind::Note:
-            if (verbose_) {
-                switch (e.note_id) {
-                case NoteId::LayoutTotalBytesAllocated:
-                    std::cout << "Note: Total bytes allocated for layout: " << e.u64_0
-                              << " bytes\n";
-                    break;
-                case NoteId::TableCapacityUsed:
-                    std::cout << "Note: Table " << int(e.table_id)
-                              << " capacity used: " << e.f64_0 * 100.0 << "%\n";
-                    break;
-                case NoteId::HasAESHardware:
-                    std::cout << "Note: AES hardware acceleration is "
-                              << (e.u64_0 ? "available." : "not available.") << "\n";
-                    break;
-                default:
-                    std::cout << "Note: " << e.msg << "\n";
-                    break;
-                }
-            }
-            break;
-        case EventKind::Warning:
-            std::cerr << "Warning: " << e.msg << "\n";
-            break;
-        case EventKind::Error:
-            std::cerr << "Error: " << e.msg << "\n";
-            break;
+    constexpr int width = 28;
+    int filled = int(frac * width + 0.5);
+    if (filled < 0)
+        filled = 0;
+    if (filled > width)
+        filled = width;
 
-        default:
-            break;
-        }
-        return true; // continue
-    }
+    std::string bar;
+    bar.reserve(width + 2);
+    bar.push_back('[');
+    for (int i = 0; i < width; ++i)
+        bar.push_back(i < filled ? '=' : ' ');
+    bar.push_back(']');
 
-private:
-    bool verbose_ = false;
-};
+    int pct = int(frac * 100.0 + 0.5);
+    if (pct > 100)
+        pct = 100;
 
-class ProgressBarSink final : public IProgressSink {
-public:
-    explicit ProgressBarSink(bool show_tables = true) : show_tables_(show_tables) {}
+    auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 
-    enum class TablePhase : uint8_t { MatchKeys, PostSort, Done };
+    std::cout << "\r" << bar << " " << pct << "% " << plot_state_name(s.state);
 
-    TablePhase phase_ = TablePhase::MatchKeys;
-    double phase_progress_ = 0.0; // 0..1 within phase
+    if (s.table_id)
+        std::cout << " T" << int(s.table_id);
 
-    static constexpr double kMatchKeysWeight = 0.90;
-    static constexpr double kPostSortWeight = 0.10;
-
-    double table_fraction() const
-    {
-        switch (phase_) {
-        case TablePhase::MatchKeys:
-            return kMatchKeysWeight * phase_progress_;
-        case TablePhase::PostSort:
-            return kMatchKeysWeight + kPostSortWeight * phase_progress_;
-        case TablePhase::Done:
-            return 1.0;
-        }
-        return 0.0;
-    }
-
-    bool on_event(ProgressEvent const& e) noexcept override
-    {
-        using clock = std::chrono::steady_clock;
-
-        switch (e.kind) {
-        case EventKind::PlotBegin:
-            start_ = clock::now();
-            printed_line_ = false;
-            std::cout << "Plotting...\n";
-            break;
-
-        case EventKind::TableBegin:
-            cur_table_ = e.table_id;
-            // Optional: table begin line (milestone)
-            if (show_tables_) {
-                flush_line_(); // finish any in-place line
-                // std::cout << "T" << int(cur_table_) << "...\n";
-            }
-            break;
-
-        case EventKind::SectionBegin:
-            section_l_ = e.section_l;
-            section_r_ = e.section_r;
-            break;
-
-        case EventKind::MatchKeyBegin:
-            // Treat MatchKeyBegin as progress tick; don't print.
-            match_key_ = e.match_key;
-            match_total_ = (e.match_keys_total ? e.match_keys_total : match_total_);
-            // Some events might have counts; keep if present
-            if (e.items_l)
-                items_l_ = e.items_l;
-            if (e.items_r)
-                items_r_ = e.items_r;
-            maybe_render_();
-            break;
-
-        case EventKind::MatchKeyEnd:
-            // Also can tick progress here if you prefer end-of-work
-            phase_ = TablePhase::MatchKeys;
-            if (e.match_keys_total > 0) {
-                phase_progress_
-                    = std::min(1.0, double(e.match_key + 1) / double(e.match_keys_total));
-            }
-            maybe_render_();
-            break;
-
-        case EventKind::PostSortBegin:
-            phase_ = TablePhase::PostSort;
-            phase_progress_ = 0.0;
-            force_render_(); // show “post-sort…” immediately
-            break;
-
-        case EventKind::PostSortEnd:
-            phase_ = TablePhase::PostSort;
-            phase_progress_ = 1.0;
-            force_render_(); // now bar can hit 100%
-            break;
-
-        case EventKind::TableEnd:
-            phase_ = TablePhase::Done;
-            phase_progress_ = 1.0;
-            force_render_();
-            flush_line_();
-            if (show_tables_) {
-                double ms = std::chrono::duration<double, std::milli>(e.elapsed).count();
-                std::cout << "T" << int(e.table_id) << " done in " << ms << " ms";
-                if (e.produced)
-                    std::cout << "  produced=" << e.produced;
-                std::cout << "\n";
-            }
-            break;
-
-        case EventKind::Note:
-            if (e.note_id == NoteId::LayoutTotalBytesAllocated) {
-                total_bytes_alloc_ = e.u64_0;
-            }
-            else if (e.note_id == NoteId::TableCapacityUsed) {
-                table_cap_used_[e.table_id] = e.f64_0; // store fraction 0..1
-            }
-            else if (e.note_id == NoteId::HasAESHardware) {
-                if (e.u64_0) {
-                    std::cout << "✅ AES hardware acceleration available for hashing.\n";
-                }
-                else {
-                    std::cout
-                        << "❌ AES hardware acceleration not available; using software hashing.\n";
-                }
-            }
-            break;
-
-        case EventKind::PlotEnd: {
-            flush_line_();
-            double ms = std::chrono::duration<double, std::milli>(e.elapsed).count();
-            std::cout << "Done in " << ms << " ms";
-            if (total_bytes_alloc_) {
-                std::cout << "  total mem=" << format_bytes_(total_bytes_alloc_);
-            }
-            std::cout << "\n";
-            break;
-        }
-
-        case EventKind::Warning:
-            flush_line_();
-            std::cerr << "Warning: " << e.msg << "\n";
-            break;
-
-        case EventKind::Error:
-            flush_line_();
-            std::cerr << "Error: " << e.msg << "\n";
-            break;
-
-        default:
-            break;
-        }
-
-        return true;
-    }
-
-private:
-    void maybe_render_() noexcept
-    {
-        using clock = std::chrono::steady_clock;
-        auto now = clock::now();
-        if (now - last_render_ < min_period_)
-            return;
-        last_render_ = now;
-        render_line_();
-    }
-
-    void force_render_() noexcept
-    {
-        render_line_();
-        last_render_ = std::chrono::steady_clock::now();
-    }
-
-    void render_line_() noexcept
-    {
-        // Compute fraction from match keys if we can
-        double frac = 0.0;
-        if (match_total_ > 0) {
-            // If match_key_ is a "completed count", clamp is fine.
-            // If match_key_ is an index, you probably want (match_key_ + 1) / total on End events.
-            frac = std::clamp(double(match_key_) / double(match_total_), 0.0, 1.0);
-        }
-
-        // Force 100% when done (and optionally during post-sort you might not want to show 100%)
-        if (phase_ == TablePhase::Done) {
-            frac = 1.0;
-        }
-
-        constexpr int width = 28;
-        int filled = int(frac * width + 0.5);
-        if (filled > width)
-            filled = width;
-
-        auto elapsed
-            = std::chrono::duration<double>(std::chrono::steady_clock::now() - start_).count();
-
-        std::string bar;
-        bar.reserve(width + 2);
-        bar.push_back('[');
-        for (int i = 0; i < width; ++i)
-            bar.push_back(i < filled ? '=' : ' ');
-        bar.push_back(']');
-
-        int pct = int(frac * 100.0 + 0.5);
-        if (pct > 100)
-            pct = 100;
-        if (phase_ == TablePhase::Done)
-            pct = 100;
-
-        // One-line, overwrite-in-place
-        std::cout << "\r" << bar << "  T" << int(cur_table_) << " ";
-
-        // Status field: print a fixed-width token to avoid leftover chars
-        // (Assumes section indices are single-digit; widen/pad if needed.)
-        if (phase_ == TablePhase::PostSort) {
-            std::cout << "srt  "; // 5 chars
-        }
-        else if (phase_ == TablePhase::MatchKeys) {
-            // e.g. "3-0  " fixed-ish width
-            std::cout << int(section_l_) << "-" << int(section_r_) << "  ";
-        }
-        else { // Done
-            std::cout << "done "; // 5 chars
-        }
-
-        // Percentage fixed width: "  7%", " 42%", "100%"
-        std::cout << " ";
-        if (pct < 10)
-            std::cout << "  ";
-        else if (pct < 100)
-            std::cout << " ";
-        std::cout << pct << "%  ";
-
-        std::cout << elapsed << "s";
-
-        // Clear to end-of-line so shorter updates don't leave garbage behind
-        // (If you want to avoid ANSI when redirected, gate this on isatty().)
-        std::cout << "\x1b[K" << std::flush;
-
-        printed_line_ = true;
-    }
-
-    void flush_line_() noexcept
-    {
-        if (!printed_line_)
-            return;
-        std::cout << "\n";
-        printed_line_ = false;
-    }
-
-    static std::string format_bytes_(uint64_t b)
-    {
-        static constexpr char const* suf[] = { "B", "KiB", "MiB", "GiB", "TiB" };
-        double v = double(b);
-        int i = 0;
-        while (v >= 1024.0 && i < 4) {
-            v /= 1024.0;
-            ++i;
-        }
-        char buf[64];
-        std::snprintf(buf, sizeof(buf), "%.2f %s", v, suf[i]);
-        return std::string(buf);
-    }
-
-private:
-    bool show_tables_ = true;
-
-    std::chrono::steady_clock::time_point start_ {};
-    std::chrono::steady_clock::time_point last_render_ {};
-    std::chrono::milliseconds min_period_ { 150 };
-
-    bool printed_line_ = false;
-
-    uint8_t cur_table_ = 0;
-    uint8_t section_l_ = 0, section_r_ = 0;
-    uint32_t match_key_ = 0, match_total_ = 0;
-    uint64_t items_l_ = 0, items_r_ = 0;
-
-    uint64_t total_bytes_alloc_ = 0;
-    double table_cap_used_[8] = {}; // small fixed array; index by table_id
-};
+    std::cout << " " << elapsed << "s"
+              << "\x1b[K" << std::flush;
+}
 
 // example usage: ./plotter test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
 // 2
@@ -462,24 +114,38 @@ try {
         return 1;
     }
 
-    ConsoleSink console_sink(verbose);
-    ProgressBarSink progress_sink(/*show_tables=*/true);
-    IProgressSink* chosen_sink = verbose ? static_cast<IProgressSink*>(&console_sink)
-                                         : static_cast<IProgressSink*>(&progress_sink);
-
     Plotter::Options opt;
     opt.validate = false;
     opt.verbose = verbose;
-    opt.sink = chosen_sink;
 
     ProofParams params(Utils::hexToBytes(plot_id_hex).data(),
         numeric_cast<uint8_t>(k),
         numeric_cast<uint8_t>(strength));
     Plotter plotter(params);
-    PlotData plot = plotter.run(opt);
-    std::cout << "----------------------\n";
-    std::cout << "Total T3 entries: " << plot.t3_proof_fragments.size() << "\n";
-    std::cout << "----------------------" << std::endl;
+
+    PlotData plot;
+
+    if (verbose) {
+        VerboseConsoleSink console_sink;
+        opt.sink = &console_sink;
+        plot = plotter.run(opt);
+        std::cout << "Total T3 entries: " << plot.t3_proof_fragments.size() << "\n";
+    }
+    else {
+        AtomicProgressSink atomic_sink;
+        opt.sink = &atomic_sink;
+
+        auto start = std::chrono::steady_clock::now();
+        auto fut = std::async(std::launch::async, [&]() { return plotter.run(opt); });
+
+        while (fut.wait_for(std::chrono::milliseconds(500)) != std::future_status::ready) {
+            render_progress_line(atomic_sink.snapshot(), start);
+        }
+        render_progress_line(atomic_sink.snapshot(), start);
+        std::cout << "\n";
+
+        plot = fut.get();
+    }
 
 #ifdef RETAIN_X_VALUES
     bool validate = true;
@@ -511,14 +177,18 @@ try {
         filename += "_xvalues";
 #endif
         filename += '_' + plot_id_hex + ".bin";
-        Timer timer;
-        timer.start("Writing plot file: " + filename);
+        Timer writeTimer;
+        writeTimer.start();
+        std::cout << "Writing plot to " << filename << "...\n";
         size_t bytes_written = PlotFile::writeData(
             filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
-        double write_time_ms = timer.stop();
-
+        double write_time_ms = writeTimer.stop();
         double bits_per_entry = (static_cast<double>(bytes_written) * 8.0)
             / static_cast<double>(plot.t3_proof_fragments.size());
+        if (bytes_written == 0) {
+            std::cerr << "Error: No data written to plot file.\n";
+            return 1;
+        }
         std::cout << "Wrote plot file: " << filename << " (" << bytes_written << " bytes) "
                   << "[" << bits_per_entry << " bits/entry]" << " in " << write_time_ms << " ms\n";
     }
