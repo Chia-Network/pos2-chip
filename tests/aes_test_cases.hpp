@@ -1,5 +1,8 @@
+#pragma once
+#include <array>
+
 // Paste the emitted list here from the emit regression test:
-constexpr uint32_t kAesRegression[41] = { 127783594,
+inline constexpr std::array<uint32_t, 41> kAesRegression = { 127783594,
     124767263,
     141145580,
     258627148,

@@ -150,7 +150,7 @@ TEST_CASE("AesHash emit regression list to CLI")
 
     std::cout << "/* AesHash regression list: k=" << k << ", plot_id[i] = i*11+5 */\n";
     std::cout << "Update in tests/aes_test_cases.hpp\n";
-    std::cout << "constexpr uint32_t kAesRegression[" << sw.size() << "] = {";
+    std::cout << "inline constexpr std::array<uint32_t, " << sw.size() << "> kAesRegression = {";
     for (size_t i = 0; i < sw.size(); ++i) {
         std::cout << sw[i];
         if (i + 1 < sw.size())
@@ -171,9 +171,8 @@ TEST_CASE("AesHash fixed regression list matches")
 
     auto sw = aes_regression_results<true>(hasher);
 
-    size_t n = sizeof(kAesRegression) / sizeof(kAesRegression[0]);
-    REQUIRE(sw.size() == n);
-    for (size_t i = 0; i < n; ++i) {
+    REQUIRE(sw.size() == kAesRegression.size());
+    for (size_t i = 0; i < kAesRegression.size(); ++i) {
         REQUIRE(sw[i] == kAesRegression[i]);
     }
 }
