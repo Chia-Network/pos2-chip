@@ -77,6 +77,41 @@ TEST_CASE("AesHash pairing soft vs hardware")
 }
 #endif
 
+namespace {
+template <bool Soft>
+std::vector<uint32_t> aes_regression_results(AesHash const& hasher)
+{
+    std::vector<uint32_t> out;
+    out.reserve(53);
+
+    for (uint32_t x: { 0u, 1u, 0x12345678u, 0xFFFFFFFFu, 0xABCDEF12u }) {
+        out.push_back(hasher.g_x<Soft>(x));
+    }
+
+    for (int extra_bits: { 0, 1 }) {
+        for (uint64_t meta: { 0ULL, 0x0123456789ABCDEFULL, 0xFEDCBA9876543210ULL }) {
+            out.push_back(hasher.matching_target<Soft>(1, 0xDEADBEEF, meta, extra_bits));
+            out.push_back(hasher.matching_target<Soft>(3, 0x0123ABCD, meta, extra_bits));
+        }
+    }
+
+    auto push_pairing = [&](uint64_t ml, uint64_t mr, int extra_bits) {
+        auto r = hasher.pairing<Soft>(ml, mr, extra_bits);
+        out.push_back(r.r[0]);
+        out.push_back(r.r[1]);
+        out.push_back(r.r[2]);
+        out.push_back(r.r[3]);
+    };
+    for (int extra_bits: { 0, 1 }) {
+        push_pairing(0x0123456789ABCDEFULL, 0x0FEDCBA987654321ULL, extra_bits);
+        push_pairing(0ULL, 0ULL, extra_bits);
+        push_pairing(0xFFFFFFFFFFFFFFFFULL, 0xAAAAAAAAAAAAAAAAULL, extra_bits);
+    }
+
+    return out;
+}
+} // namespace
+
 #if HAVE_AES
 TEST_CASE("AesHash regression list soft vs hardware")
 {
@@ -85,8 +120,8 @@ TEST_CASE("AesHash regression list soft vs hardware")
         plot_id[i] = static_cast<uint8_t>(i * 11 + 5);
     int k = 28;
     AesHash hasher(plot_id.data(), k);
-    auto hw = hasher.regression_results<false>();
-    auto sw = hasher.regression_results<true>();
+    auto hw = aes_regression_results<false>(hasher);
+    auto sw = aes_regression_results<true>(hasher);
 
     REQUIRE(hw.size() == sw.size());
     for (size_t i = 0; i < hw.size(); ++i) {
@@ -106,10 +141,10 @@ TEST_CASE("AesHash emit regression list to CLI")
     int k = 28;
     AesHash hasher(plot_id.data(), k);
 
-    auto sw = hasher.regression_results<true>();
+    auto sw = aes_regression_results<true>(hasher);
 
 #if HAVE_AES
-    auto hw = hasher.regression_results<false>();
+    auto hw = aes_regression_results<false>(hasher);
     REQUIRE(hw == sw);
 #endif
 
@@ -134,7 +169,7 @@ TEST_CASE("AesHash fixed regression list matches")
     int k = 28;
     AesHash hasher(plot_id.data(), k);
 
-    auto sw = hasher.regression_results<true>();
+    auto sw = aes_regression_results<true>(hasher);
 
     size_t n = sizeof(kAesRegression) / sizeof(kAesRegression[0]);
     REQUIRE(sw.size() == n);
