@@ -68,6 +68,38 @@ public:
 private:
     static constexpr bool is_pow2(std::size_t x) noexcept { return x && ((x & (x - 1)) == 0); }
 
+    struct DetailedBadAlloc final : std::bad_alloc {
+        enum class Reason : std::uint8_t {
+            AlignmentOverflow,
+            OutOfCapacity,
+        };
+
+        std::array<char, 256> msg {};
+
+        DetailedBadAlloc(Reason reason,
+            std::size_t bytes,
+            std::size_t align,
+            std::size_t p,
+            std::size_t aligned,
+            std::size_t cap) noexcept
+        {
+            char const* r
+                = (reason == Reason::AlignmentOverflow) ? "alignment overflow" : "out of capacity";
+            std::snprintf(msg.data(),
+                msg.size(),
+                "ResettableArenaResource allocation failed (%s): bytes=%zu align=%zu off=%zu "
+                "aligned=%zu cap=%zu",
+                r,
+                bytes,
+                align,
+                p,
+                aligned,
+                cap);
+        }
+
+        char const* what() const noexcept override { return msg.data(); }
+    };
+
     void* do_allocate(std::size_t bytes, std::size_t align) override
     {
         assert(base_ != nullptr || cap_ == 0);
@@ -91,17 +123,19 @@ private:
         std::size_t p = off_;
         std::size_t aligned = 0;
 
-        if (is_pow2(align)) {
-            aligned = (p + (align - 1)) & ~(align - 1);
-        }
-        else {
-            // defensive fallback (shouldn't normally happen)
-            aligned = ((p + (align - 1)) / align) * align;
+        assert(is_pow2(align));
+        aligned = (p + (align - 1)) & ~(align - 1);
+
+        // If (p + (align-1)) overflowed, aligned can wrap below p.
+        if (aligned < p) {
+            throw DetailedBadAlloc(
+                DetailedBadAlloc::Reason::AlignmentOverflow, bytes, align, p, aligned, cap_);
         }
 
-        // overflow/consistency guard
-        if (aligned < p || aligned + bytes > cap_) {
-            throw std::bad_alloc {};
+        // Also guards against (aligned + bytes) overflow.
+        if (aligned > cap_ || bytes > (cap_ - aligned)) {
+            throw DetailedBadAlloc(
+                DetailedBadAlloc::Reason::OutOfCapacity, bytes, align, p, aligned, cap_);
         }
 
         off_ = aligned + bytes;
