@@ -54,25 +54,18 @@ TEST_CASE("AesHash pairing soft vs hardware")
     int k = 16;
     AesHash hasher(plot_id.data(), k);
 
-    auto check_equal = [](AesHash::Result128 a, AesHash::Result128 b) {
-        REQUIRE(a.r[0] == b.r[0]);
-        REQUIRE(a.r[1] == b.r[1]);
-        REQUIRE(a.r[2] == b.r[2]);
-        REQUIRE(a.r[3] == b.r[3]);
-    };
-
     for (int extra_bits: { 0, 1 }) {
         auto r1 = hasher.pairing<false>(0x0123456789ABCDEFULL, 0x0FEDCBA987654321ULL, extra_bits);
         auto r2 = hasher.pairing<true>(0x0123456789ABCDEFULL, 0x0FEDCBA987654321ULL, extra_bits);
-        check_equal(r1, r2);
+        REQUIRE(r1 == r2);
 
         r1 = hasher.pairing<false>(0ULL, 0ULL, extra_bits);
         r2 = hasher.pairing<true>(0ULL, 0ULL, extra_bits);
-        check_equal(r1, r2);
+        REQUIRE(r1 == r2);
 
         r1 = hasher.pairing<false>(0xFFFFFFFFFFFFFFFFULL, 0xAAAAAAAAAAAAAAAAULL, extra_bits);
         r2 = hasher.pairing<true>(0xFFFFFFFFFFFFFFFFULL, 0xAAAAAAAAAAAAAAAAULL, extra_bits);
-        check_equal(r1, r2);
+        REQUIRE(r1 == r2);
     }
 }
 #endif

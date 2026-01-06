@@ -44,10 +44,20 @@ public:
 
     struct Result64 {
         uint32_t r[2];
+
+        constexpr bool operator==(Result64 const& o) const noexcept
+        {
+            return r[0] == o.r[0] && r[1] == o.r[1];
+        }
     };
 
     struct Result128 {
         uint32_t r[4];
+
+        constexpr bool operator==(Result128 const& o) const noexcept
+        {
+            return r[0] == o.r[0] && r[1] == o.r[1] && r[2] == o.r[2] && r[3] == o.r[3];
+        }
     };
 
     // Templated hash function that uses the preloaded AES keys.
