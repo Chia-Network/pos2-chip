@@ -22,12 +22,17 @@
 
 static std::size_t max_pairs_per_section_possible(ProofParams const& params)
 {
-    // Your heuristic kept (but please revisit; if too small you'll overflow output span).
-    // if (params.get_k() < 28) {
-    //    return (1ULL << (params.get_k() + 1));
-    //}
+    int extra_margin_bits = 0; // default for k28
+    extra_margin_bits = 8 - ((28 - params.get_k()) / 2);
+    // k28 will have 8 extra margin bits: 67108864 + 1048576
+    // k26 will have 7 extra margin bits: 16777216 + 524288
+    // k24 will have 6 extra margin bits: 4194304 + 264144
+    // k22 will have 5 extra margin bits: 1048576 + 131072
+    // k20 will have 4 extra margin bits: 262144 + 65536
+    // k18 will have 3 extra margin bits: 65536 + 32768
+
     return ((1ULL << (params.get_k() - params.get_num_section_bits())))
-        + (1ULL << (params.get_k() - 8));
+        + (1ULL << (params.get_k() - extra_margin_bits));
 }
 
 template <typename PairingCandidate, typename T_Pairing, typename T_Result>
