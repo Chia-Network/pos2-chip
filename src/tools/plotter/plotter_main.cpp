@@ -125,6 +125,12 @@ try {
 
     PlotData plot;
 
+#if HAVE_AES
+    std::cout << "Using AES hardware acceleration." << std::endl;
+#else
+    std::cout << "AES hardware acceleration not available." << std::endl;
+#endif
+
     if (verbose) {
         VerboseConsoleSink console_sink;
         opt.sink = &console_sink;

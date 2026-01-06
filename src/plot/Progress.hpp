@@ -2,8 +2,30 @@
 #pragma once
 #include <atomic>
 #include <chrono>
+#include <cstddef> // size_t
 #include <cstdint>
-#include <string_view>
+#include <iostream> // VerboseConsoleSink uses std::cout/cerr
+#include <string_view> // only for convenient printing/conversion in sinks
+
+// Stable-layout string view for ABI / C tooling consumption.
+struct StringView {
+    char const* data = nullptr;
+    size_t length = 0;
+
+    constexpr bool empty() const noexcept { return length == 0; }
+};
+
+template <size_t N>
+constexpr StringView sv_lit(char const (&s)[N]) noexcept
+{
+    static_assert(N > 0);
+    return StringView { s, N - 1 }; // exclude trailing '\0'
+}
+
+inline std::string_view to_std_sv(StringView s) noexcept
+{
+    return std::string_view(s.data ? s.data : "", s.length);
+}
 
 enum class EventKind : uint8_t {
     PlotBegin,
@@ -53,7 +75,7 @@ struct ProgressEvent {
 
     std::chrono::nanoseconds elapsed {}; // for *End events* usually
 
-    std::string_view msg {}; // optional (should be static or caller-owned)
+    StringView msg {}; // stable layout for C tooling
 };
 
 // return false to request cancellation (optional)
@@ -343,18 +365,22 @@ public:
                 std::cout << "Note: AES hardware acceleration is "
                           << (e.u64_0 ? "available" : "not available") << "\n";
                 break;
-            default:
-                if (!e.msg.empty())
-                    std::cout << "Note: " << e.msg << "\n";
+            default: {
+                auto m = to_std_sv(e.msg);
+                if (!m.empty())
+                    std::cout << "Note: " << m << "\n";
                 break;
             }
+            }
             break;
+
         case EventKind::Warning:
-            std::cerr << "Warning: " << e.msg << "\n";
+            std::cerr << "Warning: " << to_std_sv(e.msg) << "\n";
             break;
         case EventKind::Error:
-            std::cerr << "Error: " << e.msg << "\n";
+            std::cerr << "Error: " << to_std_sv(e.msg) << "\n";
             break;
+
         default:
             break;
         }

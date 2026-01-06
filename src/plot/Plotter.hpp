@@ -101,7 +101,8 @@ public:
         if (xs_candidates.data() == xsV.out.data()) {
             sink.on_event(ProgressEvent {
                 .kind = EventKind::Warning,
-                .msg = "Sub-optimal: copying Xs candidates to tmp buffer for Table 1 construction.",
+                .msg = sv_lit(
+                    "Sub-optimal: copying Xs candidates to tmp buffer for Table 1 construction."),
             });
             std::copy(xsV.out.begin(), xsV.out.end(), xsV.post_sort_tmp.begin());
             xs_candidates = xsV.post_sort_tmp.first(xs_candidates.size());
