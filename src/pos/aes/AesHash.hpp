@@ -2,6 +2,7 @@
 
 #include "intrin_portable.h"
 #include "soft_aes.hpp"
+#include <array>
 #include <vector>
 
 constexpr int AES_G_ROUNDS = 16;
@@ -43,12 +44,8 @@ public:
     }
 
     struct Result64 {
-        uint32_t r[2];
-
-        constexpr bool operator==(Result64 const& o) const noexcept
-        {
-            return r[0] == o.r[0] && r[1] == o.r[1];
-        }
+        std::array<uint32_t, 2> r;
+        constexpr bool operator==(Result64 const& o) const noexcept = default;
     };
 
     struct Result128 {
