@@ -4,7 +4,6 @@ use std::io::{Error, Read, Result};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use serde_big_array::BigArray;
 
 mod bits;
 
@@ -54,7 +53,10 @@ unsafe extern "C" {
         k: u8,
         strength: u8,
         plot_id: *const u8,
+        index: u8,
+        meta_group: u16,
         memo: *const u8,
+        memo_length: u8,
     ) -> bool;
 }
 
@@ -123,18 +125,24 @@ pub fn create_v2_plot(
     k: u8,
     strength: u8,
     plot_id: &Bytes32,
-    memo: &[u8; 32 + 48 + 32],
+    index: u8,
+    meta_group: u16,
+    memo: &[u8],
 ) -> Result<()> {
     let Some(filename) = filename.to_str() else {
         return Err(Error::other("invalid path"));
+    };
+
+    if memo.len() > 255 {
+        return Err(Error::other("invalid memo"));
     };
 
     let filename = CString::new(filename)?;
     // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
     // filename is the full path, null terminated
     // plot_id must point to 32 bytes of plot ID
-    // memo must point to 32 + 48 + 32 bytes, containing the:
-    // * pool contract puzzle hash
+    // memo must point to bytes containing:
+    // * pool contract puzzle hash or pool public key
     // * farmer public key
     // * plot secret key
     // returns true on success
@@ -144,7 +152,10 @@ pub fn create_v2_plot(
             k,
             strength,
             plot_id.as_ptr(),
+            index,
+            meta_group,
             memo.as_ptr(),
+            memo.len() as u8,
         )
     };
     if success {
@@ -181,11 +192,10 @@ pub fn serialize_quality(
 pub struct Prover {
     path: PathBuf,
     plot_id: Bytes32,
-    puzzle_hash: [u8; 32],
-    #[serde(with = "BigArray")]
-    farmer_pk: [u8; 48],
-    local_sk: [u8; 32],
+    memo: Vec<u8>,
     strength: u8,
+    index: u8,
+    meta_group: u16,
     size: u8,
 }
 
@@ -200,10 +210,11 @@ impl Prover {
         // 32 bytes: plot ID
         // 1 byte:   k-size
         // 1 byte:   strength, defaults to 2
-        // 32 bytes: puzzle hash
-        // 48 bytes: farmer public key
-        // 32 bytes: local secret key
-        let mut header = [0_u8; 4 + 1 + 32 + 1 + 1 + 32 + 48 + 32];
+        // 1 byte:   index
+        // 2 bytes:  meta group
+        // 1 byte:   memo length (either 112 or 128)
+        // varies:   memo
+        let mut header = [0_u8; 4 + 1 + 32 + 1 + 1 + 1 + 2 + 1 + 128];
         file.read_exact(&mut header)?;
 
         let mut offset: usize = 0;
@@ -229,20 +240,24 @@ impl Prover {
         }
         offset += 1;
 
-        let puzzle_hash: [u8; 32] = header[offset..(offset + 32)].try_into().unwrap();
-        offset += 32;
-        let farmer_pk: [u8; 48] = header[offset..(offset + 48)].try_into().unwrap();
-        offset += 48;
-        let local_sk: [u8; 32] = header[offset..(offset + 32)].try_into().unwrap();
-        //offset += 32;
+        let index = header[offset];
+        offset += 1;
+
+        let meta_group = u16::from_le_bytes(header[offset..offset + 2].try_into().unwrap());
+        offset += 2;
+
+        let memo_len = header[offset];
+        offset += 1;
+
+        let memo: &[u8] = &header[offset..(offset + memo_len as usize)];
 
         Ok(Prover {
             path: plot_path.to_path_buf(),
             plot_id,
-            puzzle_hash,
-            farmer_pk,
-            local_sk,
+            memo: memo.to_vec(),
             strength,
+            index,
+            meta_group,
             size,
         })
     }
@@ -290,8 +305,8 @@ impl Prover {
         self.path.to_string_lossy().into_owned()
     }
 
-    pub fn get_memo(&self) -> ([u8; 32], [u8; 48], [u8; 32]) {
-        (self.puzzle_hash, self.farmer_pk, self.local_sk)
+    pub fn get_memo(&self) -> &[u8] {
+        &self.memo
     }
 }
 
