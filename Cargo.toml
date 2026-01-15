@@ -6,7 +6,7 @@ lto = "thin"
 
 [workspace.dependencies]
 chia-bls = "0.29.0"
-chia-pos2 = { path = "crates/chia-pos2", version = "0.1.2" }
+chia-pos2 = { path = "crates/chia-pos2", version = "0.2.0" }
 blake3 = "1.8.2"
 cc = { version = "1.2.16", features = ["parallel"] }
 rstest = "0.26.1"
