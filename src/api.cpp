@@ -106,8 +106,8 @@ bool create_plot(char const* filename,
     uint8_t const k,
     uint8_t const strength,
     uint8_t const* plot_id,
-    uint8_t const index,
-    uint16_t const meta_group,
+    uint16_t const index,
+    uint8_t const meta_group,
     uint8_t const* memo,
     uint8_t const memo_length)
 try {

@@ -37,8 +37,8 @@ public:
     static size_t writeData(std::string const& filename,
         PlotData const& data,
         ProofParams const& params,
-        uint8_t const index,
-        uint16_t const meta_group,
+        uint16_t const index,
+        uint8_t const meta_group,
         std::span<uint8_t const> const memo)
     {
         uint64_t const range_per_chunk = (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS));
@@ -51,8 +51,8 @@ public:
     static size_t writeData(std::string const& filename,
         ChunkedProofFragments const& data,
         ProofParams const& params,
-        uint8_t const index,
-        uint16_t const meta_group,
+        uint16_t const index,
+        uint8_t const meta_group,
         std::span<uint8_t const> const memo)
     {
         size_t bytes_written = 0;
@@ -73,8 +73,8 @@ public:
         out.write(reinterpret_cast<char const*>(&k), 1);
         out.write(reinterpret_cast<char const*>(&match_key_bits), 1);
 
-        out.write(reinterpret_cast<char const*>(&index), 1);
-        out.write(reinterpret_cast<char const*>(&meta_group), 2);
+        out.write(reinterpret_cast<char const*>(&index), 2);
+        out.write(reinterpret_cast<char const*>(&meta_group), 1);
 
         uint8_t const memo_size = static_cast<uint8_t>(memo.size());
         out.write(reinterpret_cast<char const*>(&memo_size), 1);
@@ -187,10 +187,10 @@ public:
         uint8_t strength;
         in.read(reinterpret_cast<char*>(&strength), sizeof(strength));
 
-        uint8_t index;
+        uint16_t index;
         in.read(reinterpret_cast<char*>(&index), sizeof(index));
 
-        uint16_t meta_group;
+        uint8_t meta_group;
         in.read(reinterpret_cast<char*>(&meta_group), sizeof(meta_group));
 
         ProofParams params(plot_id_bytes, k, strength);
@@ -356,8 +356,8 @@ public:
 private:
     struct PlotFileHeader {
         ProofParams params;
-        uint8_t index;
-        uint16_t meta_group;
+        uint16_t index;
+        uint8_t meta_group;
 #ifdef RETAIN_X_VALUES_TO_T3
         std::vector<std::array<uint32_t, 8>> xs_correlating_to_proof_fragments;
 #endif

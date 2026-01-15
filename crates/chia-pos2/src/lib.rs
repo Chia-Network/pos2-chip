@@ -53,8 +53,8 @@ unsafe extern "C" {
         k: u8,
         strength: u8,
         plot_id: *const u8,
-        index: u8,
-        meta_group: u16,
+        index: u16,
+        meta_group: u8,
         memo: *const u8,
         memo_length: u8,
     ) -> bool;
@@ -125,8 +125,8 @@ pub fn create_v2_plot(
     k: u8,
     strength: u8,
     plot_id: &Bytes32,
-    index: u8,
-    meta_group: u16,
+    index: u16,
+    meta_group: u8,
     memo: &[u8],
 ) -> Result<()> {
     let Some(filename) = filename.to_str() else {
@@ -194,8 +194,8 @@ pub struct Prover {
     plot_id: Bytes32,
     memo: Vec<u8>,
     strength: u8,
-    index: u8,
-    meta_group: u16,
+    index: u16,
+    meta_group: u8,
     size: u8,
 }
 
@@ -210,8 +210,8 @@ impl Prover {
         // 32 bytes: plot ID
         // 1 byte:   k-size
         // 1 byte:   strength, defaults to 2
-        // 1 byte:   index
-        // 2 bytes:  meta group
+        // 2 bytes:  index
+        // 1 byte:   meta group
         // 1 byte:   memo length (either 112 or 128)
         // varies:   memo
         let mut header = [0_u8; 4 + 1 + 32 + 1 + 1 + 1 + 2 + 1 + 128];
@@ -240,11 +240,11 @@ impl Prover {
         }
         offset += 1;
 
-        let index = header[offset];
-        offset += 1;
-
-        let meta_group = u16::from_le_bytes(header[offset..offset + 2].try_into().unwrap());
+        let index = u16::from_le_bytes(header[offset..offset + 2].try_into().unwrap());
         offset += 2;
+
+        let meta_group = header[offset];
+        offset += 1;
 
         let memo_len = header[offset];
         offset += 1;
