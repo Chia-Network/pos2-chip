@@ -43,7 +43,7 @@ TEST_CASE("plot-read-write")
 
     timer.start("Writing plot file: " + file_name);
     PlotFile::writeData(
-        file_name, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
+        file_name, plot, plotter.getProofParams(), 0, 0, std::array<uint8_t, 32 + 48 + 32>({}));
     timer.stop();
 
     timer.start("Reading plot file: " + file_name);

@@ -17,10 +17,20 @@ fn create_test_plots() {
         if !exists(path).expect("exists") {
             let strength = 2 + i % 3;
             let k = 18;
+            let index = 0;
+            let meta_group = 0;
             let plot_id: Vec<u8> = std::iter::repeat_n(i, 32).collect();
             let memo = [0_u8; 112];
-            create_v2_plot(path, k, strength, &plot_id.try_into().unwrap(), &memo)
-                .expect("create_v2_plot()");
+            create_v2_plot(
+                path,
+                k,
+                strength,
+                &plot_id.try_into().unwrap(),
+                index,
+                meta_group,
+                &memo,
+            )
+            .expect("create_v2_plot()");
         }
         p.push(Prover::new(path).expect("Prover::new()"));
     }

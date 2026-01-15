@@ -35,7 +35,7 @@ try {
         return 1;
     }
 
-    int k = std::atoi(argv[2]);
+    int const k = std::atoi(argv[2]);
     std::string plot_id_hex = argv[3];
     int strength = 2;
     if (argc == 5) {
@@ -104,7 +104,7 @@ try {
         filename += '_' + plot_id_hex + ".bin";
         timer.start("Writing plot file: " + filename);
         size_t bytes_written = PlotFile::writeData(
-            filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
+            filename, plot, plotter.getProofParams(), 0, 0, std::array<uint8_t, 32 + 48 + 32>({}));
         timer.stop();
 
         double bits_per_entry = (static_cast<double>(bytes_written) * 8.0)

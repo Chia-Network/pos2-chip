@@ -97,8 +97,8 @@ catch (std::exception const& e) {
 
 // filename is the full path, null terminated
 // plot_id must point to 32 bytes of plot ID
-// memo must point to 32 + 48 + 32 bytes, containing the:
-// * pool contract puzzle hash
+// memo must point to memo_length bytes, containing the:
+// * pool contract puzzle hash or pool public key
 // * farmer public key
 // * plot secret key
 // returns true on success
@@ -106,7 +106,10 @@ bool create_plot(char const* filename,
     uint8_t const k,
     uint8_t const strength,
     uint8_t const* plot_id,
-    uint8_t const* memo)
+    uint16_t const index,
+    uint8_t const meta_group,
+    uint8_t const* memo,
+    uint8_t const memo_length)
 try {
 
     if ((k & 1) == 1)
@@ -117,7 +120,9 @@ try {
     PlotFile::writeData(filename,
         plot,
         plotter.getProofParams(),
-        std::span<uint8_t const, 32 + 48 + 32>(memo, memo + 32 + 48 + 32));
+        index,
+        meta_group,
+        std::span<uint8_t const>(memo, memo + memo_length));
     return true;
 }
 catch (std::exception const& e) {
