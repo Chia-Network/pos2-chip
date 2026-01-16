@@ -30,11 +30,7 @@ static void render_progress_line(
         frac = 1.0;
 
     constexpr int width = 28;
-    int filled = int(frac * width + 0.5);
-    if (filled < 0)
-        filled = 0;
-    if (filled > width)
-        filled = width;
+    int const filled = std::clamp(int(frac * width + 0.5), 0, width);
 
     std::string bar;
     bar.reserve(width + 2);

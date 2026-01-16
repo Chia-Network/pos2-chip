@@ -611,7 +611,7 @@ public:
             return;
 
         // Reserve one slot in the shared output array
-        std::size_t idx = out_count.fetch_add(1, std::memory_order_seq_cst);
+        std::size_t idx = out_count.fetch_add(1);
 
         // IMPORTANT: If idx >= out_pairs.size(), you're out of capacity.
         // You cannot safely throw from worker threads. Choose a policy.
@@ -692,7 +692,7 @@ public:
         };
 
         // Reserve one slot in shared output
-        std::size_t const idx = out_count.fetch_add(1, std::memory_order_seq_cst);
+        std::size_t const idx = out_count.fetch_add(1);
 
         // Capacity policy: prevent OOB write; base will sanity-check after the fact.
         if (idx >= out_pairs.size())
@@ -769,7 +769,7 @@ public:
         }
 #endif
 
-        const std::size_t idx = out_count.fetch_add(1, std::memory_order_seq_cst);
+        const std::size_t idx = out_count.fetch_add(1);
         if (idx >= out_pairs.size())
             return; // prevent OOB; base will detect overflow by count
 

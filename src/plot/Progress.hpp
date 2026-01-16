@@ -74,13 +74,18 @@ struct ProgressEvent {
     uint64_t u64_1 = 0;
     double f64_0 = 0.0;
 
-    std::chrono::nanoseconds elapsed {}; // for *End events* usually
+    // C-ABI friendly: elapsed time in nanoseconds (for *End events* usually).
+    uint64_t elapsed = 0;
 
-    StringView msg {}; // stable layout for C tooling
+    // C-ABI friendly: optional null-terminated message string (may be nullptr).
+    char const* msg = nullptr;
 };
 
+// Ensure C/tooling ABI friendliness.
+static_assert(std::is_standard_layout_v<ProgressEvent>);
+static_assert(std::is_trivially_copyable_v<ProgressEvent>);
+
 // POD function table for tooling / C ABI.
-// Convention: return 0 to continue, non-zero to request cancellation.
 struct ProgressSinkProcs {
     using OnEventProc = int32_t (*)(ProgressEvent const*);
     OnEventProc on_event_proc = nullptr;
@@ -131,7 +136,11 @@ public:
     {
         if (cancelled_)
             return;
-        ev_.elapsed = std::chrono::steady_clock::now() - start_;
+
+        ev_.elapsed = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start_)
+                .count());
+
         // Convert Begin->End event kind:
         ev_.kind = end_kind(ev_.kind);
         sink_.on_event(ev_);
@@ -177,7 +186,9 @@ enum class PlotState : uint8_t {
     Error,
 };
 
-inline std::string_view plot_state_name(PlotState s) noexcept
+// Return a null-terminated string literal so consumers can print it directly without copying
+// into a new buffer to add a 0-terminator.
+inline char const* plot_state_name(PlotState s) noexcept
 {
     switch (s) {
     case PlotState::Idle:
@@ -212,9 +223,9 @@ public:
     AtomicProgressSnapshot snapshot() const noexcept
     {
         AtomicProgressSnapshot s;
-        s.fraction = fraction_.load(std::memory_order_relaxed);
-        s.state = static_cast<PlotState>(state_.load(std::memory_order_relaxed));
-        s.table_id = table_id_.load(std::memory_order_relaxed);
+        s.fraction = fraction_.load();
+        s.state = static_cast<PlotState>(state_.load());
+        s.table_id = table_id_.load();
         return s;
     }
 
@@ -295,7 +306,7 @@ private:
         return 0.0;
     }
 
-    static double table_weight_(uint8_t table_id) noexcept
+    static double table_weight_([[maybe_unused]] uint8_t table_id) noexcept
     {
         (void)table_id;
         return kPerTable;
@@ -331,14 +342,20 @@ public:
             break;
         case EventKind::PlotEnd:
             std::cout << "Plotting ended. Total time: "
-                      << std::chrono::duration<double, std::milli>(e.elapsed).count() << " ms\n";
+                      << std::chrono::duration<double, std::milli>(
+                             std::chrono::nanoseconds(e.elapsed))
+                             .count()
+                      << " ms\n";
             break;
         case EventKind::AllocationBegin:
             std::cout << "Allocating memory for plotting...\n";
             break;
         case EventKind::AllocationEnd:
             std::cout << "Memory allocation completed. Time: "
-                      << std::chrono::duration<double, std::milli>(e.elapsed).count() << " ms\n";
+                      << std::chrono::duration<double, std::milli>(
+                             std::chrono::nanoseconds(e.elapsed))
+                             .count()
+                      << " ms\n";
             break;
         case EventKind::TableBegin:
             std::cout << "Constructing Table " << int(e.table_id) << " from " << int(e.num_items_in)
@@ -346,7 +363,10 @@ public:
             break;
         case EventKind::TableEnd:
             std::cout << "Table " << int(e.table_id) << " constructed. Time: "
-                      << std::chrono::duration<double, std::milli>(e.elapsed).count() << " ms\n";
+                      << std::chrono::duration<double, std::milli>(
+                             std::chrono::nanoseconds(e.elapsed))
+                             .count()
+                      << " ms\n";
             break;
         case EventKind::SectionBegin:
             std::cout << "  T" << int(e.table_id) << " section " << int(e.section_l) << "-"
@@ -354,8 +374,10 @@ public:
             break;
         case EventKind::SectionEnd:
             std::cout << "  T" << int(e.table_id) << " section " << int(e.section_l) << "-"
-                      << int(e.section_r)
-                      << " time: " << std::chrono::duration<double, std::milli>(e.elapsed).count()
+                      << int(e.section_r) << " time: "
+                      << std::chrono::duration<double, std::milli>(
+                             std::chrono::nanoseconds(e.elapsed))
+                             .count()
                       << " ms\n";
             break;
         case EventKind::MatchKeyBegin:
@@ -365,14 +387,20 @@ public:
         case EventKind::MatchKeyEnd:
             std::cout << "    T" << int(e.table_id) << " matching key " << e.match_key
                       << " completed. Time: "
-                      << std::chrono::duration<double, std::milli>(e.elapsed).count() << " ms\n";
+                      << std::chrono::duration<double, std::milli>(
+                             std::chrono::nanoseconds(e.elapsed))
+                             .count()
+                      << " ms\n";
             break;
         case EventKind::PostSortBegin:
             std::cout << "  T" << int(e.table_id) << " post-sort started...\n";
             break;
         case EventKind::PostSortEnd:
             std::cout << "  T" << int(e.table_id) << " post-sort completed. Time: "
-                      << std::chrono::duration<double, std::milli>(e.elapsed).count() << " ms\n";
+                      << std::chrono::duration<double, std::milli>(
+                             std::chrono::nanoseconds(e.elapsed))
+                             .count()
+                      << " ms\n";
             break;
         case EventKind::Note:
             switch (e.note_id) {
@@ -387,20 +415,18 @@ public:
                 std::cout << "Note: AES hardware acceleration is "
                           << (e.u64_0 ? "available" : "not available") << "\n";
                 break;
-            default: {
-                auto m = to_std_sv(e.msg);
-                if (!m.empty())
-                    std::cout << "Note: " << m << "\n";
+            default:
+                if (e.msg != nullptr && e.msg[0] != '\0')
+                    std::cout << "Note: " << e.msg << "\n";
                 break;
-            }
             }
             break;
 
         case EventKind::Warning:
-            std::cerr << "Warning: " << to_std_sv(e.msg) << "\n";
+            std::cerr << "Warning: " << (e.msg ? e.msg : "") << "\n";
             break;
         case EventKind::Error:
-            std::cerr << "Error: " << to_std_sv(e.msg) << "\n";
+            std::cerr << "Error: " << (e.msg ? e.msg : "") << "\n";
             break;
 
         default:

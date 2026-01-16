@@ -66,8 +66,6 @@ public:
     std::size_t lifetime_high_watermark_bytes() const noexcept { return lifetime_high_watermark_; }
 
 private:
-    static constexpr bool is_pow2(std::size_t x) noexcept { return x && ((x & (x - 1)) == 0); }
-
     struct DetailedBadAlloc final : std::bad_alloc {
         enum class Reason : std::uint8_t {
             AlignmentOverflow,

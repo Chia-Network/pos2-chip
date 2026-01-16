@@ -863,7 +863,7 @@ public:
 
                             auto pairing = proof_core.pairing_t1(xx1, xx2);
                             if (pairing.has_value()) {
-                                int pos = t1_num_matches.fetch_add(1, std::memory_order_relaxed);
+                                int pos = t1_num_matches.fetch_add(1);
                                 if (pos >= max_matches) {
                                     std::cerr << "ERROR: Too many matches\n";
                                     std::exit(1);
@@ -937,8 +937,7 @@ public:
 
                                 auto pairing = proof_core.pairing_t1(xx1, xx2);
                                 if (pairing.has_value()) {
-                                    int const pos
-                                        = t1_num_matches.fetch_add(1, std::memory_order_relaxed);
+                                    int const pos = t1_num_matches.fetch_add(1);
                                     if (pos >= max_matches) {
                                         std::cerr << "ERROR: Too many matches\n";
                                         std::exit(1);
