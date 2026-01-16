@@ -182,6 +182,8 @@ try {
         Timer writeTimer;
         writeTimer.start();
         std::cout << "Writing plot to " << filename << "...\n";
+        // TODO: for now we only plot with plot index and meta group 0. Later we will adjust
+        // filenaming and allow for groups/indexes.
         size_t bytes_written = PlotFile::writeData(
             filename, plot, plotter.getProofParams(), 0, 0, std::array<uint8_t, 32 + 48 + 32>({}));
         double write_time_ms = writeTimer.stop();

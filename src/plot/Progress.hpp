@@ -5,28 +5,7 @@
 #include <cstddef> // size_t
 #include <cstdint>
 #include <iostream> // VerboseConsoleSink uses std::cout/cerr
-#include <string_view> // only for convenient printing/conversion in sinks
 #include <type_traits>
-
-// Stable-layout string view for ABI / C tooling consumption.
-struct StringView {
-    char const* data = nullptr;
-    size_t length = 0;
-
-    constexpr bool empty() const noexcept { return length == 0; }
-};
-
-template <size_t N>
-constexpr StringView sv_lit(char const (&s)[N]) noexcept
-{
-    static_assert(N > 0);
-    return StringView { s, N - 1 }; // exclude trailing '\0'
-}
-
-inline std::string_view to_std_sv(StringView s) noexcept
-{
-    return std::string_view(s.data ? s.data : "", s.length);
-}
 
 enum class EventKind : uint8_t {
     PlotBegin,
