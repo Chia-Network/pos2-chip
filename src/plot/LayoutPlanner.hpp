@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit> // std::has_single_bit
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -121,7 +122,7 @@ private:
         std::size_t p = off_;
         std::size_t aligned = 0;
 
-        assert(is_pow2(align));
+        assert(std::has_single_bit(align));
         aligned = (p + (align - 1)) & ~(align - 1);
 
         // If (p + (align-1)) overflowed, aligned can wrap below p.
