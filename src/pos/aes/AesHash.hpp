@@ -2,6 +2,8 @@
 
 #include "intrin_portable.h"
 #include "soft_aes.hpp"
+#include <array>
+#include <vector>
 
 constexpr int AES_G_ROUNDS = 16;
 constexpr int AES_PAIRING_ROUNDS = 16;
@@ -42,11 +44,13 @@ public:
     }
 
     struct Result64 {
-        uint32_t r[2];
+        std::array<uint32_t, 2> r;
+        constexpr bool operator==(Result64 const& o) const noexcept = default;
     };
 
     struct Result128 {
-        uint32_t r[4];
+        std::array<uint32_t, 4> r;
+        constexpr bool operator==(Result128 const& o) const noexcept = default;
     };
 
     // Templated hash function that uses the preloaded AES keys.

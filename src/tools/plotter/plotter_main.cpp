@@ -75,7 +75,7 @@ try {
         return 1;
     }
 
-    int k = std::atoi(argv[2]);
+    int const k = std::atoi(argv[2]);
     std::string plot_id_hex = argv[3];
     int strength = 2;
     bool verbose = false;
@@ -183,8 +183,9 @@ try {
         writeTimer.start();
         std::cout << "Writing plot to " << filename << "...\n";
         size_t bytes_written = PlotFile::writeData(
-            filename, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
+            filename, plot, plotter.getProofParams(), 0, 0, std::array<uint8_t, 32 + 48 + 32>({}));
         double write_time_ms = writeTimer.stop();
+
         double bits_per_entry = (static_cast<double>(bytes_written) * 8.0)
             / static_cast<double>(plot.t3_proof_fragments.size());
         if (bytes_written == 0) {
