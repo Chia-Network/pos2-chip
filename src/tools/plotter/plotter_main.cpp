@@ -1,17 +1,57 @@
 #include "common/Utils.hpp"
 #include "plot/PlotFile.hpp"
 #include "plot/Plotter.hpp"
+#include <algorithm>
+#include <cctype>
+#include <chrono>
 #include <cstdlib>
+#include <future>
 #include <iostream>
 #include <string>
 
 static void print_usage(char const* prog)
 {
-    std::cerr << "Usage:\n"
-              << "  " << prog << " test <k> <plot_id_hex> [strength]\n"
-              << "    <k>            : even integer between 18 and 32\n"
-              << "    <plot_id_hex>  : 64 hex characters\n"
-              << "    [strength]     : optional, defaults to 2\n";
+    std::cerr
+        << "Usage:\n"
+        << "  " << prog << " test <k> <plot_id_hex> [strength] [verbose]\n"
+        << "    <k>            : even integer between 18 and 32\n"
+        << "    <plot_id_hex>  : 64 hex characters\n"
+        << "    [strength]     : optional, defaults to 2\n"
+        << "    [verbose]      : optional, 0 (default) for progress bar, 1 for verbose output\n";
+}
+
+static void render_progress_line(
+    AtomicProgressSnapshot s, std::chrono::steady_clock::time_point start)
+{
+    double frac = s.fraction;
+    if (frac < 0.0)
+        frac = 0.0;
+    if (frac > 1.0)
+        frac = 1.0;
+
+    constexpr int width = 28;
+    int const filled = std::clamp(int(frac * width + 0.5), 0, width);
+
+    std::string bar;
+    bar.reserve(width + 2);
+    bar.push_back('[');
+    for (int i = 0; i < width; ++i)
+        bar.push_back(i < filled ? '=' : ' ');
+    bar.push_back(']');
+
+    int pct = int(frac * 100.0 + 0.5);
+    if (pct > 100)
+        pct = 100;
+
+    auto elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+    std::cout << "\r" << bar << " " << pct << "% " << plot_state_name(s.state);
+
+    if (s.table_id)
+        std::cout << " T" << int(s.table_id);
+
+    std::cout << " " << elapsed << "s"
+              << "\x1b[K" << std::flush;
 }
 
 // example usage: ./plotter test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
@@ -29,8 +69,8 @@ try {
         return 1;
     }
 
-    // Expect: prog test <k> <plot_id_hex> [strength=2 (default)]
-    if (argc < 4 || argc > 5) {
+    // Expect: prog test <k> <plot_id_hex> [strength=2 (default)] [verbose=0]
+    if (argc < 4 || argc > 6) {
         print_usage(argv[0]);
         return 1;
     }
@@ -38,8 +78,21 @@ try {
     int const k = std::atoi(argv[2]);
     std::string plot_id_hex = argv[3];
     int strength = 2;
-    if (argc == 5) {
-        strength = std::atoi(argv[4]);
+    bool verbose = false;
+
+    if (argc >= 5) {
+        // If argv[4] is "0" or "1" treat it as verbose; otherwise treat as strength
+        std::string a4 = argv[4];
+        if (a4 == "0" || a4 == "1") {
+            verbose = (std::atoi(a4.c_str()) != 0);
+        }
+        else {
+            strength = std::atoi(a4.c_str());
+        }
+    }
+    if (argc == 6) {
+        // argv[5] is explicit verbose flag (0 or 1)
+        verbose = (std::atoi(argv[5]) != 0);
     }
 
     if ((k < 18) || (k > 32) || (k % 2 != 0)) {
@@ -57,20 +110,44 @@ try {
         return 1;
     }
 
-    Timer timer;
-    timer.start("Plotting");
+    Plotter::Options opt;
+    opt.validate = false;
+    opt.verbose = verbose;
+
     ProofParams params(Utils::hexToBytes(plot_id_hex).data(),
         numeric_cast<uint8_t>(k),
         numeric_cast<uint8_t>(strength));
     Plotter plotter(params);
-    plotter.setValidate(true);
-    PlotData plot = plotter.run();
-    timer.stop();
-    std::cout << "Plotting completed.\n";
-    std::cout << "----------------------" << std::endl;
 
-    std::cout << "Total T3 entries: " << plot.t3_proof_fragments.size() << "\n";
-    std::cout << "----------------------" << std::endl;
+    PlotData plot;
+
+#if HAVE_AES
+    std::cout << "Using AES hardware acceleration." << std::endl;
+#else
+    std::cout << "AES hardware acceleration not available." << std::endl;
+#endif
+
+    if (verbose) {
+        VerboseConsoleSink console_sink;
+        opt.sink = &console_sink;
+        plot = plotter.run(opt);
+        std::cout << "Total T3 entries: " << plot.t3_proof_fragments.size() << "\n";
+    }
+    else {
+        AtomicProgressSink atomic_sink;
+        opt.sink = &atomic_sink;
+
+        auto start = std::chrono::steady_clock::now();
+        auto fut = std::async(std::launch::async, [&]() { return plotter.run(opt); });
+
+        while (fut.wait_for(std::chrono::milliseconds(500)) != std::future_status::ready) {
+            render_progress_line(atomic_sink.snapshot(), start);
+        }
+        render_progress_line(atomic_sink.snapshot(), start);
+        std::cout << "\n";
+
+        plot = fut.get();
+    }
 
 #ifdef RETAIN_X_VALUES
     bool validate = true;
@@ -102,15 +179,23 @@ try {
         filename += "_xvalues";
 #endif
         filename += '_' + plot_id_hex + ".bin";
-        timer.start("Writing plot file: " + filename);
+        Timer writeTimer;
+        writeTimer.start();
+        std::cout << "Writing plot to " << filename << "...\n";
+        // TODO: for now we only plot with plot index and meta group 0. Later we will adjust
+        // filenaming and allow for groups/indexes.
         size_t bytes_written = PlotFile::writeData(
             filename, plot, plotter.getProofParams(), 0, 0, std::array<uint8_t, 32 + 48 + 32>({}));
-        timer.stop();
+        double write_time_ms = writeTimer.stop();
 
         double bits_per_entry = (static_cast<double>(bytes_written) * 8.0)
             / static_cast<double>(plot.t3_proof_fragments.size());
+        if (bytes_written == 0) {
+            std::cerr << "Error: No data written to plot file.\n";
+            return 1;
+        }
         std::cout << "Wrote plot file: " << filename << " (" << bytes_written << " bytes) "
-                  << "[" << bits_per_entry << " bits/entry]" << std::endl;
+                  << "[" << bits_per_entry << " bits/entry]" << " in " << write_time_ms << " ms\n";
     }
 
     return 0;
