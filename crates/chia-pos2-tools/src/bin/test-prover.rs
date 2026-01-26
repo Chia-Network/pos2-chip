@@ -28,12 +28,22 @@ fn main() {
 
     let k = 18;
     let strength = 2;
+    let index = 0;
+    let meta_group = 0;
     let plot_filename = format!("k-18-test-{}.plot2", hex::encode(plot_id));
     let plot_filename = Path::new(&plot_filename);
     if !exists(plot_filename).expect("exists failed") {
         println!("generating plot: {}", plot_filename.display());
-        create_v2_plot(plot_filename, k, strength, &plot_id, &[32; 64 + 48])
-            .expect("create_v2_plot");
+        create_v2_plot(
+            plot_filename,
+            k,
+            strength,
+            &plot_id,
+            index,
+            meta_group,
+            &[32; 64 + 48],
+        )
+        .expect("create_v2_plot");
     }
 
     let mut seed = args.seed;

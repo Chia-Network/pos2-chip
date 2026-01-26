@@ -55,10 +55,10 @@ public:
         }
         //  Validate table 2 pairing
         if (!proof_core_.validate_match_info_pairing(
-                2, result_l->meta, result_l->match_info, result_r->match_info)) {
+                2, result_l->meta(), result_l->match_info, result_r->match_info)) {
             return std::nullopt;
         }
-        return proof_core_.pairing_t2(result_l->meta, result_r->meta);
+        return proof_core_.pairing_t2(result_l->meta(), result_r->meta());
     }
 
     std::optional<T3Pairing> validate_table_3_pairs(uint32_t const* x_values)

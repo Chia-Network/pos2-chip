@@ -28,7 +28,7 @@ TEST_CASE("plot-k18-strength2-4-5")
         switch (trial) {
         case 0:
             plot_strength = 2;
-            challenge_hex = "dc03000000000000000000000000000000000000000000000000000000000000";
+            challenge_hex = "da03000000000000000000000000000000000000000000000000000000000000";
             break;
         case 1:
             plot_strength = 4;
@@ -64,8 +64,12 @@ TEST_CASE("plot-k18-strength2-4-5")
             + std::to_string(plot_strength) + "_" + plot_id_hex + ".bin";
 
         timer.start("Writing plot file: " + plot_file_name);
-        PlotFile::writeData(
-            plot_file_name, plot, plotter.getProofParams(), std::array<uint8_t, 32 + 48 + 32>({}));
+        PlotFile::writeData(plot_file_name,
+            plot,
+            plotter.getProofParams(),
+            0,
+            0,
+            std::array<uint8_t, 32 + 48 + 32>({}));
         timer.stop();
 
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);

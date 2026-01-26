@@ -37,19 +37,23 @@ public:
     static size_t writeData(std::string const& filename,
         PlotData const& data,
         ProofParams const& params,
-        std::span<uint8_t const, 32 + 48 + 32> const memo)
+        uint16_t const index,
+        uint8_t const meta_group,
+        std::span<uint8_t const> const memo)
     {
         uint64_t const range_per_chunk = (1ULL << (params.get_k() + CHUNK_SPAN_RANGE_BITS));
         ChunkedProofFragments chunked_data
             = ChunkedProofFragments::convertToChunkedProofFragments(data, range_per_chunk);
-        return writeData(filename, chunked_data, params, memo);
+        return writeData(filename, chunked_data, params, index, meta_group, memo);
     }
 
     // returns bytes written
     static size_t writeData(std::string const& filename,
         ChunkedProofFragments const& data,
         ProofParams const& params,
-        std::span<uint8_t const, 32 + 48 + 32> const memo)
+        uint16_t const index,
+        uint8_t const meta_group,
+        std::span<uint8_t const> const memo)
     {
         size_t bytes_written = 0;
 
@@ -69,6 +73,11 @@ public:
         out.write(reinterpret_cast<char const*>(&k), 1);
         out.write(reinterpret_cast<char const*>(&match_key_bits), 1);
 
+        out.write(reinterpret_cast<char const*>(&index), 2);
+        out.write(reinterpret_cast<char const*>(&meta_group), 1);
+
+        uint8_t const memo_size = static_cast<uint8_t>(memo.size());
+        out.write(reinterpret_cast<char const*>(&memo_size), 1);
         out.write(reinterpret_cast<char const*>(memo.data()), memo.size());
 
         // Write chunk index + chunk bodies:
@@ -178,12 +187,22 @@ public:
         uint8_t strength;
         in.read(reinterpret_cast<char*>(&strength), sizeof(strength));
 
+        uint16_t index;
+        in.read(reinterpret_cast<char*>(&index), sizeof(index));
+
+        uint8_t meta_group;
+        in.read(reinterpret_cast<char*>(&meta_group), sizeof(meta_group));
+
         ProofParams params(plot_id_bytes, k, strength);
 
-        // skip puzzle hash, farmer PK and local SK
-        in.seekg(32 + 48 + 32, std::ifstream::cur);
+        uint8_t memo_length = 0;
+        in.read(reinterpret_cast<char*>(&memo_length), sizeof(memo_length));
+        // skip memo
+        in.seekg(memo_length, std::ifstream::cur);
 
         PlotFileHeader header(params);
+        header.index = index;
+        header.meta_group = meta_group;
 
         // Read number of chunks
         uint64_t num_chunks = 0;
@@ -337,6 +356,8 @@ public:
 private:
     struct PlotFileHeader {
         ProofParams params;
+        uint16_t index;
+        uint8_t meta_group;
 #ifdef RETAIN_X_VALUES_TO_T3
         std::vector<std::array<uint32_t, 8>> xs_correlating_to_proof_fragments;
 #endif

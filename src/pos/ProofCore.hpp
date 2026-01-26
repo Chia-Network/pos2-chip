@@ -37,9 +37,22 @@ struct Chain {
 // chaining end
 
 struct T1Pairing {
-    uint64_t meta; // 2k-bit meta value.
-    uint32_t match_info; // k-bit match info.
+    uint32_t meta_lo;
+    uint32_t meta_hi;
+    uint32_t match_info;
+
+    uint64_t meta() const noexcept { return uint64_t(meta_lo) | (uint64_t(meta_hi) << 32); }
+
+    static T1Pairing make(uint64_t meta, uint32_t match) noexcept
+    {
+        T1Pairing p {};
+        p.meta_lo = uint32_t(meta);
+        p.meta_hi = uint32_t(meta >> 32);
+        p.match_info = match;
+        return p;
+    }
 };
+static_assert(sizeof(T1Pairing) == 12);
 
 struct T2Pairing {
     uint64_t meta; // 2k-bit meta value.
@@ -80,8 +93,10 @@ public:
     {
         size_t num_match_target_bits = params_.get_num_match_target_bits(table_id);
         // size_t num_meta_bits = params_.get_num_meta_bits(table_id);
-        return hashing.matching_target(
-            table_id, match_key, meta, static_cast<int>(num_match_target_bits));
+        return hashing.matching_target(numeric_cast<uint32_t>(table_id),
+            match_key,
+            meta,
+            static_cast<int>(num_match_target_bits));
     }
 
     // pairing_t1:
@@ -89,28 +104,19 @@ public:
     // Returns: a T1Pairing with match_info (k bits) and meta (2k bits).
     std::optional<T1Pairing> pairing_t1(uint32_t x_l, uint32_t x_r)
     {
-        // fast test for matching to speed up solver.
-        /*if (params_.get_num_match_key_bits(1) == 4)
-        {
-            if (!match_filter_16(x_l & 0xFFFFU, x_r & 0xFFFFU))
-                return std::nullopt;
-        }
-        else */
-        if (params_.get_num_match_key_bits(1) == 2) {
-            if (!match_filter_4(x_l & 0xFFFFU, x_r & 0xFFFFU))
-                return std::nullopt;
-        }
-        else {
-            std::cerr << "pairing_t1: match_filter not supported for this table." << std::endl;
-            abort();
+        int const num_test_bits = params_.get_num_match_key_bits(1);
+        PairingResult pair = hashing.pairing_t1(x_l,
+            x_r,
+            static_cast<int>(params_.get_k()),
+            static_cast<int>(params_.get_num_pairing_meta_bits()),
+            num_test_bits);
+        if (pair.test_result != 0) {
+            return std::nullopt;
         }
 
-        PairingResult pair = hashing.pairing(x_l, x_r, static_cast<int>(params_.get_k()));
+        uint64_t const meta = (static_cast<uint64_t>(x_l) << params_.get_k()) | x_r;
 
-        T1Pairing result = { .meta = static_cast<uint64_t>(x_l) << params_.get_k() | x_r,
-            .match_info = pair.match_info_result };
-
-        return result;
+        return T1Pairing::make(meta, pair.match_info_result);
     }
 
     // pairing_t2:
@@ -118,12 +124,11 @@ public:
     // Returns: a T2Pairing with match_info (k bits), meta (2k bits), and x_bits (k bits).
     std::optional<T2Pairing> pairing_t2(uint64_t const meta_l, uint64_t meta_r)
     {
-        int num_test_bits = params_.get_num_match_key_bits(2); // synonymous with get_strength()
-        uint64_t out_meta_bits = params_.get_num_pairing_meta_bits();
-        PairingResult pair = hashing.pairing(meta_l,
+        int const num_test_bits = params_.get_num_match_key_bits(2);
+        PairingResult pair = hashing.pairing_t2(meta_l,
             meta_r,
             static_cast<int>(params_.get_k()),
-            static_cast<int>(out_meta_bits),
+            static_cast<int>(params_.get_num_pairing_meta_bits()),
             num_test_bits);
         if (pair.test_result != 0) {
             return std::nullopt;
@@ -145,16 +150,8 @@ public:
     std::optional<T3Pairing> pairing_t3(
         uint64_t meta_l, uint64_t meta_r, uint32_t x_bits_l, uint32_t x_bits_r)
     {
-        int num_test_bits = params_.get_num_match_key_bits(3); // synonymous with get_strength()
-        /*
-        // commented out is an alternative explicit filter that would slow down plotting but not
-        necessarily improve attack resistance significantly. if (!hashing.t3_pairing_filter(meta_l,
-        meta_r, static_cast<int>(params_.get_num_pairing_meta_bits()),
-                                    params_.get_num_match_key_bits(3)))
-            return std::nullopt;
-        */
-
-        PairingResult pair = hashing.pairing(meta_l, meta_r, 0, 0, num_test_bits);
+        int const num_test_bits = params_.get_num_match_key_bits(3);
+        PairingResult pair = hashing.pairing_t3(meta_l, meta_r, num_test_bits);
 
         // pairing filter test
         if (pair.test_result != 0)
