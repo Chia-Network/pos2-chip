@@ -1,9 +1,10 @@
-option(CP_BUILD_TESTS "Build tests. Defaults to OFF, unless the 'CI' environment variable is set to '1'" OFF)
-
 # Default to building tests when in CI mode and `CP_BUILD_TESTS` is not explicitly defined.
-if(NOT DEFINED CP_BUILD_TESTS AND DEFINED ENV{CI} AND "$ENV{CI}" STREQUAL "1")
-    set(CP_BUILD_TESTS ON)
+set(_cp_build_tests_default OFF)
+if(NOT DEFINED CP_BUILD_TESTS AND DEFINED ENV{CI} AND "$ENV{CI}" STREQUAL "true")
+  set(_cp_build_tests_default ON)
 endif()
+
+option(CP_BUILD_TESTS "Build tests. Defaults to OFF, unless the 'CI' environment variable is set to '1'" ${_cp_build_tests_default})
 
 option(CP_RETAIN_X_VALUES "Retain X values for testing." OFF)
 
