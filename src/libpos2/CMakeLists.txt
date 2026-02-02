@@ -6,3 +6,8 @@ set_target_properties(lib_pos2 PROPERTIES
 )
 
 target_link_libraries(lib_pos2 PUBLIC pos2_base)
+
+install(TARGETS lib_pos2
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+)
