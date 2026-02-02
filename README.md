@@ -45,7 +45,7 @@ This repository provides a **public reference implementation** of the new ProofÂ
    ./build-release.sh
    ```
 
-   **Option B:** Use CMake
+   **Option B:** Use CMake directly
 
    First, build with `Release` mode to enable optimizations:
    ```bash
@@ -148,3 +148,21 @@ Example:
 
 > [!NOTE]
 > Plot files are changing frequently, so use the plotter to generate a new plot to then test it.
+
+### Tests
+To build the tests, set the option `-DCP_BUILD_TESTS=ON` when configuring.
+
+Example:
+```bash
+cmake -B build -DCP_BUILD_TESTS=ON .
+```
+
+Or you can use the `run-tests.sh` script
+```bash
+./run-tests.sh
+```
+
+See the `run-tests.sh` script for more documentation.
+
+> [!NOTE]
+Building tests is enabled by default when building from CI.
