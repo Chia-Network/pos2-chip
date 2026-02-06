@@ -227,31 +227,6 @@ public:
         section2 = inverse_matching_section(section);
     }
 
-    // Static match filters:
-    static bool match_filter_16(uint32_t x, uint32_t y)
-    {
-        uint32_t v = (x + y) & 0xFFFFU;
-        v = v * v;
-        uint32_t r = 0;
-        r ^= v >> 24;
-        r ^= v >> 17;
-        r ^= v >> 11;
-        r ^= v >> 4;
-        return (r & 15U) == 1;
-    }
-
-    static bool match_filter_4(uint32_t x, uint32_t y)
-    {
-        uint32_t v = (x + y) & 0xFFFFU;
-        v = v * v;
-        uint32_t r = 0;
-        r ^= v >> 25;
-        r ^= v >> 16;
-        r ^= v >> 10;
-        r ^= v >> 2;
-        return (((r >> 2) + r) & 3U) == 2;
-    }
-
     struct SelectedChallengeSets {
         uint32_t fragment_set_A_index;
         uint32_t fragment_set_B_index;
