@@ -73,13 +73,13 @@ done
 # configure if needed or if build type mismatch
 ensure_configured() {
   if [[ ! -f "$BUILD_DIR/CMakeCache.txt" ]]; then
-    cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+    cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCP_BUILD_TESTS=ON
     return
   fi
   # if cache has different CMAKE_BUILD_TYPE, reconfigure
   if ! grep -q "CMAKE_BUILD_TYPE:STRING=$BUILD_TYPE" "$BUILD_DIR/CMakeCache.txt" 2>/dev/null; then
     echo "Reconfiguring for build type: $BUILD_TYPE"
-    cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+    cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCP_BUILD_TESTS=ON
   fi
 }
 

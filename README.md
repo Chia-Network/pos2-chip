@@ -45,7 +45,7 @@ This repository provides a **public reference implementation** of the new ProofÂ
    ./build-release.sh
    ```
 
-   **Option B:** Use CMake
+   **Option B:** Use CMake directly
 
    First, build with `Release` mode to enable optimizations:
    ```bash
@@ -70,7 +70,7 @@ This repository provides a **public reference implementation** of the new ProofÂ
 From the root of your build directory, invoke the plotter executable:
 
 ```
-./build/src/tools/plotter/plotter <k> [sub_k]
+./build/plotter <k> [sub_k]
 ```
 
 By default it uses the sample plot ID and parameters defined in tools/plotter/src/main.cpp. To customize, edit that file or supply your own main() implementation.
@@ -98,12 +98,12 @@ For running on a testnet, k=24, sub_k=18 will likely be recommended. The reason 
 
 To use k=18 with the default sub_k:
 ```bash
-./build/src/tools/plotter/plotter 18
+./build/plotter 18
 ```
 
 To use k=28 and sub_k=20
 ```bash
-./build/src/tools/plotter/plotter 28 20
+./build/plotter 28 20
 ```
 
 ## Running the Solver
@@ -115,14 +115,14 @@ Coming soon.
 ### Benchmark Mode
 
 ```bash
-./build/src/tools/solver/solver benchmark <k-size>
+./build/solver benchmark <k-size>
 ```
 
 Where `<k-size>` is an integer value for the solverâ€™s k parameter (e.g. 28).
 
 Example:
 ```bash
-./build/src/tools/solver/solver benchmark 32
+./build/solver benchmark 32
 ```
 
 Outputs timing and performance metrics for reconstructing proofs.
@@ -135,7 +135,7 @@ Reads the plot, prints its parameters, and runs the a chaining test for getting 
 > Currently the solver does not accept a challenge to choose a proof from the plot. Coming soon (TM).
 
 ```bash
-./build/src/tools/solver/solver prove <plot-file>
+./build/solver prove <plot-file>
 ```
 
 Where `<plot-file>` is the path to a plot file to test.
@@ -143,8 +143,26 @@ Where `<plot-file>` is the path to a plot file to test.
 Example:
 
 ```bash
-./build/src/tools/solver/solver prove /path/to/plot.bin
+./build/solver prove /path/to/plot.bin
 ```
 
 > [!NOTE]
 > Plot files are changing frequently, so use the plotter to generate a new plot to then test it.
+
+### Tests
+To build the tests, set the option `-DCP_BUILD_TESTS=ON` when configuring.
+
+Example:
+```bash
+cmake -B build -DCP_BUILD_TESTS=ON .
+```
+
+Or you can use the `run-tests.sh` script
+```bash
+./run-tests.sh
+```
+
+See the `run-tests.sh` script for more documentation.
+
+> [!NOTE]
+Building tests is enabled by default when building from CI.
