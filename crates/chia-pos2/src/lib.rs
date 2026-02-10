@@ -68,9 +68,9 @@ pub fn solve_proof(
     k: u8,
     strength: u8,
 ) -> Vec<u8> {
-    let mut proof = [0_u32; 512];
+    let mut proof = [0_u32; 128];
     // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
-    // proof must point to exactly 64 proof fragments (each a uint64_t)
+    // proof must point to exactly 128 proof fragments (each a uint32_t)
     // plot ID must point to exactly 32 bytes
     // output must point to exactly 512 32-bit integers
     if !unsafe {
@@ -97,8 +97,8 @@ pub fn validate_proof_v2(
 ) -> Option<QualityChain> {
     let x_values = bits::expand_bits(proof, size)?;
 
-    if x_values.len() != NUM_CHAIN_LINKS * 32 {
-        // a full proof has exactly 512 x-values. This is invalid or incomplete
+    if x_values.len() != 128 {
+        // a full proof has exactly 128 x-values. This is invalid or incomplete
         return None;
     }
 
