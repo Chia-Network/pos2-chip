@@ -57,7 +57,6 @@ target_compile_options(fse PRIVATE
       /Oy
       /GL
       /D
-      /MT
       /Zi
     >
     $<$<CONFIG:Debug>:
@@ -65,7 +64,6 @@ target_compile_options(fse PRIVATE
       /Od
       /we
       /RTC1
-      /MDd
       /Zi
     >
   >
