@@ -135,17 +135,15 @@ public:
     //__host__ __device__
     uint8_t const* get_plot_id_bytes() const { return plot_id_bytes_; }
 
-    std::array<uint8_t, 32> get_grouped_plot_id() const
+    std::array<uint8_t, 32> get_plot_id() const
     {
-        // grouped plot id is the normal plot id with the two bytes zeroed out
-        // this allows up to 65536 grouped plots (or 60TB)
-        // may want to bump this up another level and leave the farmer to handle grouping
-
-        std::array<uint8_t, 32> grouped_plot_id_bytes;
-        std::memcpy(grouped_plot_id_bytes.data(), plot_id_bytes_, 32);
-        grouped_plot_id_bytes[30] = 0;
-        grouped_plot_id_bytes[31] = 0;
-        return grouped_plot_id_bytes;
+        // plot id is the unique identifier for a plot
+        // generated from a hash of the group plot id, plot index, and meta group
+        // The caller is responsible for generating the plot id from the group plot id, plot index,
+        // and meta group
+        std::array<uint8_t, 32> plot_id_array;
+        std::memcpy(plot_id_array.data(), plot_id_bytes_, 32);
+        return plot_id_array;
     }
 
     int get_k() const { return numeric_cast<int>(k_); }
