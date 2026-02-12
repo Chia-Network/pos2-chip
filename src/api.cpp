@@ -58,7 +58,6 @@ catch (std::exception const& e) {
     return 0;
 }
 
-// proof must point to exactly TOTAL_PROOF_FRAGMENTS_IN_PROOF (16) proof fragments (each a uint64_t)
 // plot ID must point to exactly 32 bytes
 // output must point to exactly TOTAL_XS_IN_PROOF (128) 32-bit integers
 bool solve_partial_proof(QualityChain const* quality,
