@@ -356,6 +356,57 @@ mod tests {
     use super::*;
     use rstest::rstest;
 
+    /// Creates a v2 plot if missing, runs 100 challenges, solves proofs, validates,
+    /// and round-trips proof -> quality_string and checks it matches the original quality.
+    #[test]
+    fn test_plot_roundtrip() {
+        let k = 20u8;
+        let strength = 2u8;
+        let index = 0u16;
+        let meta_group = 0u8;
+        let plot_id: Bytes32 = [0xab; 32];
+        let memo = [0u8; 112];
+        let plot_path = std::env::temp_dir().join("pos2_chia_test_k20.plot");
+
+        if !plot_path.exists() {
+            create_v2_plot(&plot_path, k, strength, &plot_id, index, meta_group, &memo)
+                .expect("create_v2_plot");
+        }
+
+        let prover = Prover::new(&plot_path).expect("open prover");
+        assert_eq!(prover.size(), k);
+        assert_eq!(prover.get_strength(), strength);
+        let plot_id = *prover.plot_id();
+
+        let mut num_proofs = 0;
+        let mut challenge = [0u8; 32];
+        for challenge_idx in 0..300u32 {
+            challenge[0..4].copy_from_slice(&challenge_idx.to_le_bytes());
+
+            let qualities = prover
+                .get_qualities_for_challenge(&challenge)
+                .expect("get_qualities_for_challenge");
+
+            for quality in qualities {
+                let proof = solve_proof(&quality, &plot_id, k, strength);
+                assert!(!proof.is_empty(), "failed to solve proof");
+                num_proofs += 1;
+                let validated = validate_proof_v2(&plot_id, k, &challenge, strength, &proof);
+                assert!(
+                    validated.is_some(),
+                    "proof should validate for challenge {challenge_idx}",
+                );
+                let recovered = quality_string_from_proof(&plot_id, k, strength, &proof);
+                let recovered = recovered.expect("quality_string_from_proof");
+                assert_eq!(
+                    quality.chain_links, recovered.chain_links,
+                    "challenge {challenge_idx}: quality roundtrip must match",
+                );
+            }
+        }
+        assert_eq!(num_proofs, 9);
+    }
+
     #[rstest]
     fn test_serialize_quality(
         #[values(1, 0xff00, 0x777777)] step_size: u64,
