@@ -48,6 +48,18 @@ unsafe extern "C" {
         output: *mut u32,
     ) -> bool;
 
+    // Converts full proof to quality string (does not validate).
+    // plot_id must point to 32 bytes
+    // proof to TOTAL_XS_IN_PROOF (128) uint32_t
+    // quality is output
+    fn proof_to_quality_string(
+        plot_id: *const u8,
+        k: u8,
+        strength: u8,
+        proof: *const u32,
+        quality: *mut QualityChain,
+    ) -> bool;
+
     fn create_plot(
         filename: *const c_char,
         k: u8,
@@ -118,6 +130,35 @@ pub fn validate_proof_v2(
         )
     };
     if valid { Some(quality) } else { None }
+}
+
+/// Converts full proof bytes to quality string (does not validate the proof).
+/// Returns `Some(quality)` on success, `None` if proof format is invalid or conversion fails.
+pub fn quality_string_from_proof(
+    plot_id: &Bytes32,
+    k: u8,
+    strength: u8,
+    proof: &[u8],
+) -> Option<QualityChain> {
+    let x_values = bits::expand_bits(proof, k)?;
+
+    if x_values.len() != NUM_CHAIN_LINKS * 8 {
+        return None;
+    }
+
+    let mut quality = QualityChain::default();
+    // SAFETY: plot_id 32 bytes, proof 128 u32s, quality is output. See src/api.cpp.
+    let ok = unsafe {
+        // Call the C API (extern declared above); avoid name shadowing via alias.
+        proof_to_quality_string(
+            plot_id.as_ptr(),
+            k,
+            strength,
+            x_values.as_ptr(),
+            &mut quality,
+        )
+    };
+    if ok { Some(quality) } else { None }
 }
 
 pub fn create_v2_plot(
