@@ -58,6 +58,29 @@ catch (std::exception const& e) {
     return 0;
 }
 
+// Converts full proof bytes to quality string (does not validate the proof).
+// plot_id must point to 32 bytes
+// proof must point to 128 uint32_t values
+// quality must point to a 16 ProofFragments
+bool proof_to_quality_string(uint8_t const* plot_id,
+    uint8_t const k,
+    uint8_t const strength,
+    uint32_t const* proof,
+    QualityChain* quality)
+try {
+    if ((k & 1) == 1)
+        throw std::invalid_argument("k must be even");
+    ProofParams params(plot_id, k, strength);
+    ProofFragmentCodec codec(params);
+    quality->chain_links = codec.fullProofXValuesToQualityString(
+        std::span<uint32_t const, TOTAL_XS_IN_PROOF>(proof, proof + TOTAL_XS_IN_PROOF));
+    return true;
+}
+catch (std::exception const& e) {
+    std::cerr << e.what() << std::endl;
+    return false;
+}
+
 // plot ID must point to exactly 32 bytes
 // output must point to exactly TOTAL_XS_IN_PROOF (128) 32-bit integers
 bool solve_partial_proof(QualityChain const* quality,
