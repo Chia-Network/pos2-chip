@@ -8,6 +8,7 @@
 constexpr int AES_G_ROUNDS = 16;
 constexpr int AES_PAIRING_ROUNDS = 16;
 constexpr int AES_MATCHING_TARGET_ROUNDS = 16;
+constexpr int AES_CHAINING_ROUNDS = 16;
 
 #define AES_COUNT_HASHES 0
 #if AES_COUNT_HASHES
@@ -126,6 +127,24 @@ public:
         result.r[2] = static_cast<uint32_t>(rx_vec_i128_z(state));
         result.r[3] = static_cast<uint32_t>(rx_vec_i128_w(state));
         return result;
+    }
+
+    // TODO: add chain hash here, that takes as input a uint64_t and returns a uint64_t, and is used
+    // for chaining in the proof. It would be similar to pairing but with different input loading
+    // and output extraction.
+    template <bool Soft>
+    uint64_t chain(uint64_t input) const
+    {
+        int32_t i0 = static_cast<int32_t>(input & 0xFFFFFFFFULL);
+        int32_t i1 = static_cast<int32_t>((input >> 32) & 0xFFFFFFFFULL);
+        rx_vec_i128 state = rx_set_int_vec_i128(/*i3*/ 0, /*i2*/ 0, i1, i0);
+        for (int r = 0; r < AES_CHAINING_ROUNDS; ++r) {
+            state = aesenc<Soft>(state, round_key_1);
+            state = aesenc<Soft>(state, round_key_2);
+        }
+        uint64_t lo = static_cast<uint32_t>(rx_vec_i128_x(state));
+        uint64_t hi = static_cast<uint32_t>(rx_vec_i128_y(state));
+        return lo | (hi << 32);
     }
 
 private:

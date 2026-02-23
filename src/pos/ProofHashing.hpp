@@ -119,6 +119,15 @@ public:
         return BlakeHash::hash_block_256(block_words);
     }
 
+    uint64_t chain_hash(uint64_t input) const
+    {
+#if HAVE_AES
+        return aes_.chain<false>(input);
+#else
+        return aes_.chain<true>(input);
+#endif
+    }
+
 private:
     ProofParams params_;
     AesHash aes_;

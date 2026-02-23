@@ -7,17 +7,15 @@ This repository provides a **public reference implementation** of the new ProofÂ
 - **`lib/fse/`** â€” vendored FSE compression library
 - **`tools/src/plotter/`** â€” example C++ plotter executable using the above
 - **`tools/src/solver/`** - solver benchmarking and testing
+- **`tools/src/prover/`** - finding proofs given challenges
 
 ---
 
 ## Features
 
 - Headerâ€‘only, C++20 PoSpace core (`ProofCore`, hashing, parameters, validator, etc.)
-- Example **plotter** tool demonstrating the plot pipeline and writing a plot (but does not yet compress data)
-- **Solver** tool for benchmarking solve times for k28/30/32 sizes on CPUs.
-
-> [!NOTE]
-> The reference implementations do not optimize for memory usage, and consume much more memory than the upcoming production versions.
+- Example **plotter** tool demonstrating the plot pipeline and writing a plot
+- **Solver** tool for benchmarking solve times on CPUs.
 
 ---
 
@@ -70,35 +68,20 @@ This repository provides a **public reference implementation** of the new ProofÂ
 From the root of your build directory, invoke the plotter executable:
 
 ```
-./build/src/tools/plotter/plotter <k> [sub_k]
+./build/src/tools/plotter/plotter <k>
 ```
 
 By default it uses the sample plot ID and parameters defined in tools/plotter/src/main.cpp. To customize, edit that file or supply your own main() implementation.
 
-### About k
+### About strength
 
-`k` determines the size of the plot. For testing, valid `k`-sizes are even numbers from 18 to 32. For mainnet, only 28, 30, and 32 will be allowed.
-
-For your reference, the current plot size for k=18 is ~6.5 MB. For k=28, it's ~5 GB. The final optimized sizes are expected to be about 75% smaller than the current sizes.
-
-### About sub_k
-
-Each increment of `sub_k` doubles the number of unique Proof Fragments an attacker must solve for. The goal is to achieve bit drop saturation in order to maximize resistance against compression.
-
-The only k/sub_k combinations expected to be valid on mainnet are:
-* k=28, sub_k=20
-* k=30, sub_k=21
-* k=32, sub_k=22
-
-If running code-based or CI tests, then k=18, sub_k=15 is recommended.
-
-For running on a testnet, k=24, sub_k=18 will likely be recommended. The reason for the larger values on testnet is to lower the variance on plot size and output.
+`strength` influences the effective plot filter. Higher strength, means that your plot will be accessed less frequently for responding to challenges.
 
 ### Examples
 
-To use k=18 with the default sub_k:
+To use k=28:
 ```bash
-./build/src/tools/plotter/plotter 18
+./build/src/tools/plotter/plotter test 28 2
 ```
 
 To use k=28 and sub_k=20

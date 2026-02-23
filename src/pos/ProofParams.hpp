@@ -150,8 +150,8 @@ public:
 
     int get_chaining_set_bits() const
     {
-        // this achieves bit saturation on T2 pairs.
-        return (get_k() >> 1) - 2;
+        // 9 bits (512) tuned as security/hdd usage sweet spot
+        return CHAIN_SET_BITS;
     }
 
     uint32_t get_chaining_set_size() const { return 1 << get_chaining_set_bits(); }
