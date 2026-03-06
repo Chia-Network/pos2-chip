@@ -20,6 +20,11 @@ target_compile_definitions(fse PUBLIC
 set(is_gcc_or_clang $<OR:$<C_COMPILER_ID:GNU>,$<C_COMPILER_ID:Clang>,$<C_COMPILER_ID:AppleClang>>)
 set(is_msvc $<C_COMPILER_ID:MSVC>)
 
+install(TARGETS fse
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+)
+
 # These follow what's on the Makefile/vcxproj of the official build
 target_compile_options(fse PRIVATE
   $<${is_gcc_or_clang}:
@@ -52,7 +57,6 @@ target_compile_options(fse PRIVATE
       /Oy
       /GL
       /D
-      /MT
       /Zi
     >
     $<$<CONFIG:Debug>:
@@ -60,7 +64,6 @@ target_compile_options(fse PRIVATE
       /Od
       /we
       /RTC1
-      /MDd
       /Zi
     >
   >

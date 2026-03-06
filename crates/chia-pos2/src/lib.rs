@@ -48,6 +48,18 @@ unsafe extern "C" {
         output: *mut u32,
     ) -> bool;
 
+    // Converts full proof to quality string (does not validate).
+    // plot_id must point to 32 bytes
+    // proof to TOTAL_XS_IN_PROOF (128) uint32_t
+    // quality is output
+    fn proof_to_quality_string(
+        plot_id: *const u8,
+        k: u8,
+        strength: u8,
+        proof: *const u32,
+        quality: *mut QualityChain,
+    ) -> bool;
+
     fn create_plot(
         filename: *const c_char,
         k: u8,
@@ -68,9 +80,9 @@ pub fn solve_proof(
     k: u8,
     strength: u8,
 ) -> Vec<u8> {
-    let mut proof = [0_u32; 512];
+    let mut proof = [0_u32; 128];
     // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
-    // proof must point to exactly 64 proof fragments (each a uint64_t)
+    // proof must point to exactly 128 x-values (each a uint32_t)
     // plot ID must point to exactly 32 bytes
     // output must point to exactly 512 32-bit integers
     if !unsafe {
@@ -97,8 +109,8 @@ pub fn validate_proof_v2(
 ) -> Option<QualityChain> {
     let x_values = bits::expand_bits(proof, size)?;
 
-    if x_values.len() != NUM_CHAIN_LINKS * 32 {
-        // a full proof has exactly 512 x-values. This is invalid or incomplete
+    if x_values.len() != NUM_CHAIN_LINKS * 8 {
+        // a full proof has exactly 128 x-values. This is invalid or incomplete
         return None;
     }
 
@@ -118,6 +130,35 @@ pub fn validate_proof_v2(
         )
     };
     if valid { Some(quality) } else { None }
+}
+
+/// Converts full proof bytes to quality string (does not validate the proof).
+/// Returns `Some(quality)` on success, `None` if proof format is invalid or conversion fails.
+pub fn quality_string_from_proof(
+    plot_id: &Bytes32,
+    k: u8,
+    strength: u8,
+    proof: &[u8],
+) -> Option<QualityChain> {
+    let x_values = bits::expand_bits(proof, k)?;
+
+    if x_values.len() != NUM_CHAIN_LINKS * 8 {
+        return None;
+    }
+
+    let mut quality = QualityChain::default();
+    // SAFETY: plot_id 32 bytes, proof 128 u32s, quality is output. See src/api.cpp.
+    let ok = unsafe {
+        // Call the C API (extern declared above); avoid name shadowing via alias.
+        proof_to_quality_string(
+            plot_id.as_ptr(),
+            k,
+            strength,
+            x_values.as_ptr(),
+            &mut quality,
+        )
+    };
+    if ok { Some(quality) } else { None }
 }
 
 pub fn create_v2_plot(
@@ -314,6 +355,57 @@ impl Prover {
 mod tests {
     use super::*;
     use rstest::rstest;
+
+    /// Creates a v2 plot if missing, runs 100 challenges, solves proofs, validates,
+    /// and round-trips proof -> quality_string and checks it matches the original quality.
+    #[test]
+    fn test_plot_roundtrip() {
+        let k = 20u8;
+        let strength = 2u8;
+        let index = 0u16;
+        let meta_group = 0u8;
+        let plot_id: Bytes32 = [0xab; 32];
+        let memo = [0u8; 112];
+        let plot_path = std::env::temp_dir().join("pos2_chia_test_k20.plot");
+
+        if !plot_path.exists() {
+            create_v2_plot(&plot_path, k, strength, &plot_id, index, meta_group, &memo)
+                .expect("create_v2_plot");
+        }
+
+        let prover = Prover::new(&plot_path).expect("open prover");
+        assert_eq!(prover.size(), k);
+        assert_eq!(prover.get_strength(), strength);
+        let plot_id = *prover.plot_id();
+
+        let mut num_proofs = 0;
+        let mut challenge = [0u8; 32];
+        for challenge_idx in 0..300u32 {
+            challenge[0..4].copy_from_slice(&challenge_idx.to_le_bytes());
+
+            let qualities = prover
+                .get_qualities_for_challenge(&challenge)
+                .expect("get_qualities_for_challenge");
+
+            for quality in qualities {
+                let proof = solve_proof(&quality, &plot_id, k, strength);
+                assert!(!proof.is_empty(), "failed to solve proof");
+                num_proofs += 1;
+                let validated = validate_proof_v2(&plot_id, k, &challenge, strength, &proof);
+                assert!(
+                    validated.is_some(),
+                    "proof should validate for challenge {challenge_idx}",
+                );
+                let recovered = quality_string_from_proof(&plot_id, k, strength, &proof);
+                let recovered = recovered.expect("quality_string_from_proof");
+                assert_eq!(
+                    quality.chain_links, recovered.chain_links,
+                    "challenge {challenge_idx}: quality roundtrip must match",
+                );
+            }
+        }
+        assert_eq!(num_proofs, 9);
+    }
 
     #[rstest]
     fn test_serialize_quality(

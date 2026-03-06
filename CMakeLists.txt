@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.15)
 project(pos2-chip LANGUAGES C CXX)
 
-enable_testing()
-
 include(Options.cmake)
+if(CP_BUILD_TESTS)
+    include(CTest)
+endif()
 
 # ─── Enforce C++20 ─────────────────────
 set(CMAKE_CXX_STANDARD          20)
@@ -18,10 +19,8 @@ else()
 endif()
 
 add_subdirectory(lib/fse)
+add_subdirectory(src)
 
-add_subdirectory(src/tools/plotter)
-add_subdirectory(src/tools/solver)
-add_subdirectory(src/tools/prover)
-add_subdirectory(src/tools/analytics)
-
-add_subdirectory(tests)
+if (CP_BUILD_TESTS)
+    add_subdirectory(tests)
+endif()

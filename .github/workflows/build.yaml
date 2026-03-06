@@ -94,8 +94,8 @@ jobs:
       - name: Benchmark (Windows)
         if: ${{ matrix.mode == 'Release' && startsWith(matrix.os, 'windows') }}
         run: |
-          build\src\tools\solver\${{ matrix.mode }}\solver.exe benchmark 28
+          build\solver.exe benchmark 28
       - name: Benchmark
         if: ${{ matrix.mode == 'Release' && !startsWith(matrix.os, 'windows') }}
         run: |
-          build/src/tools/solver/solver benchmark 28
+          build/solver benchmark 28
