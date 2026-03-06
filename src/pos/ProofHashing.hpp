@@ -143,6 +143,9 @@ inline uint32_t mask32(int const bits) { return numeric_cast<uint32_t>((uint64_t
 
 inline uint32_t ProofHashing::g(uint32_t x)
 {
+    if (params_.is_testnet()) {
+        x ^= TESTNET_G_XOR_CONST;
+    }
 #if HAVE_AES
     return aes_.g_x<false>(x);
 #else

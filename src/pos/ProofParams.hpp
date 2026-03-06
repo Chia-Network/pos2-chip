@@ -25,9 +25,13 @@ public:
     //   plot_id_bytes: pointer to a 32-byte plot ID.
     //   k: number of bits per x, must be even
     //   match_key_bits: the number of match key bits for table 3
-    ProofParams(uint8_t const* const plot_id_bytes, uint8_t const k, uint8_t const strength)
+    ProofParams(uint8_t const* const plot_id_bytes,
+        uint8_t const k,
+        uint8_t const strength,
+        uint8_t const testnet = 0)
         : k_(k)
         , strength_(strength)
+        , testnet_(testnet)
     {
         // strength must be >= 2
         if (strength_ < 2) {
@@ -173,6 +177,8 @@ public:
     // Returns the number of match key bits for table 3
     uint8_t get_match_key_bits() const { return strength_; }
 
+    bool is_testnet() const { return testnet_ != 0; }
+
     void debugPrint() const
     {
         std::cout << "Plot ID: ";
@@ -195,4 +201,5 @@ private:
     uint8_t plot_id_bytes_[32]; // Fixed-size storage for the 32-byte plot ID.
     uint8_t k_; // Half of the block size (i.e., 2*k bits total).
     uint8_t strength_; // strength of the plot
+    uint8_t testnet_; // 0 = mainnet, 1 = testnet
 };
