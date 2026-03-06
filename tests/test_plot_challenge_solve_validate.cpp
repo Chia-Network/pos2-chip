@@ -11,8 +11,7 @@ TEST_SUITE_BEGIN("plot-challenge-solve-verify");
 TEST_CASE("plot-k18-strength2-4-5")
 {
 #ifdef NDEBUG
-    const size_t N_TRIALS = 1; // 3; // strength 2, 4, 5 -- this will be updated to more trials
-                               // later pending strength changes
+    const size_t N_TRIALS = 3; // strength 2, 4, 5 -- then strength 2 testnet
     size_t const MAX_CHAINS_PER_CHALLENGE_TO_TEST = 1; // 3; // check up to 3 chains from challenge
 #else
     const size_t N_TRIALS = 1; // strength 2 only
@@ -21,6 +20,7 @@ TEST_CASE("plot-k18-strength2-4-5")
     // for this test plot was generated with a prover scan to fine a challenge returning one or more
     // quality chains
     for (size_t trial = 0; trial < N_TRIALS; trial++) {
+        uint8_t testnet = 0;
         uint8_t plot_strength;
         std::string challenge_hex;
         // challenges for trials are found by running "prover check" on a plot of the given strength
@@ -28,15 +28,20 @@ TEST_CASE("plot-k18-strength2-4-5")
         switch (trial) {
         case 0:
             plot_strength = 2;
-            challenge_hex = "da03000000000000000000000000000000000000000000000000000000000000";
+            challenge_hex = "8503000000000000000000000000000000000000000000000000000000000000";
             break;
         case 1:
             plot_strength = 4;
-            challenge_hex = "6000000000000000000000000000000000000000000000000000000000000000";
+            challenge_hex = "e603000000000000000000000000000000000000000000000000000000000000";
             break;
         case 2:
             plot_strength = 5;
-            challenge_hex = "62000000000000000000000000000000000000000000000000000000000000";
+            challenge_hex = "e703000000000000000000000000000000000000000000000000000000000000";
+            break;
+        case 3:
+            plot_strength = 2;
+            challenge_hex = "e703000000000000000000000000000000000000000000000000000000000000";
+            testnet = 1;
             break;
         default:
             // return error
@@ -55,13 +60,14 @@ TEST_CASE("plot-k18-strength2-4-5")
         timer.debugOut = true;
         timer.start("Plot Creation");
 
-        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, plot_strength);
+        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, plot_strength, testnet);
         Plotter plotter(proof_params);
         PlotData plot = plotter.run();
         timer.stop();
 
         std::string plot_file_name = (std::string("plot_") + "k") + std::to_string(k) + "_"
-            + std::to_string(plot_strength) + "_" + plot_id_hex + ".bin";
+            + std::to_string(plot_strength) + "_" + (testnet ? "testnet_" : "") + plot_id_hex
+            + ".bin";
 
         timer.start("Writing plot file: " + plot_file_name);
         PlotFile::writeData(plot_file_name,

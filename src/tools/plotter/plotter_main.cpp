@@ -8,6 +8,7 @@
 #include <future>
 #include <iostream>
 #include <string>
+#include <vector>
 
 static void print_usage(char const* prog)
 {
@@ -17,7 +18,10 @@ static void print_usage(char const* prog)
         << "    <k>            : even integer between 18 and 32\n"
         << "    <plot_id_hex>  : 64 hex characters\n"
         << "    [strength]     : optional, defaults to 2\n"
-        << "    [verbose]      : optional, 0 (default) for progress bar, 1 for verbose output\n";
+        << "    [plot_index]   : optional, defaults to 0\n"
+        << "    [meta_group]   : optional, defaults to 0\n"
+        << "    [verbose]      : optional, 0 (default) for progress bar, 1 for verbose output\n"
+        << "    [--testnet]    : optional, use testnet parameters\n";
 }
 
 static void render_progress_line(
@@ -69,20 +73,42 @@ try {
         return 1;
     }
 
-    // Expect: prog test <k> <plot_id_hex> [strength=2 (default)] [verbose=0]
-    if (argc < 4 || argc > 6) {
+    // Expect: prog test <k> <plot_id_hex> [strength=2 (default)] [plotIndex=0 (default)]
+    // [metaGroup=0 (default)] [verbose=0] [--testnet]
+    if (argc < 4) {
         print_usage(argv[0]);
         return 1;
     }
 
-    int const k = std::atoi(argv[2]);
-    std::string plot_id_hex = argv[3];
+    // Scan for --testnet flag and remove it from argv before positional parsing
+    bool testnet = false;
+    std::vector<char*> positional_args;
+    positional_args.push_back(argv[0]);
+    positional_args.push_back(argv[1]);
+    for (int i = 2; i < argc; ++i) {
+        if (std::string(argv[i]) == "--testnet") {
+            testnet = true;
+        }
+        else {
+            positional_args.push_back(argv[i]);
+        }
+    }
+    int pargc = static_cast<int>(positional_args.size());
+
+    if (pargc < 4) {
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    int const k = std::atoi(positional_args[2]);
+    std::string plot_id_hex = positional_args[3];
     int strength = 2;
+    int plot_index = 0;
+    int meta_group = 0;
     bool verbose = false;
 
-    if (argc >= 5) {
-        // If argv[4] is "0" or "1" treat it as verbose; otherwise treat as strength
-        std::string a4 = argv[4];
+    if (pargc >= 5) {
+        std::string a4 = positional_args[4];
         if (a4 == "0" || a4 == "1") {
             verbose = (std::atoi(a4.c_str()) != 0);
         }
@@ -90,9 +116,14 @@ try {
             strength = std::atoi(a4.c_str());
         }
     }
-    if (argc == 6) {
-        // argv[5] is explicit verbose flag (0 or 1)
-        verbose = (std::atoi(argv[5]) != 0);
+    if (pargc >= 6) {
+        plot_index = std::atoi(positional_args[5]);
+    }
+    if (pargc >= 7) {
+        meta_group = std::atoi(positional_args[6]);
+    }
+    if (pargc >= 8) {
+        verbose = (std::atoi(positional_args[7]) != 0);
     }
 
     if ((k < 18) || (k > 32) || (k % 2 != 0)) {
@@ -110,16 +141,31 @@ try {
         return 1;
     }
 
+    if ((plot_index < 0) || (plot_index > 65535)) {
+        std::cerr << "Error: plot index must be between 0 and 65535.\n";
+        return 1;
+    }
+
+    if ((meta_group < 0) || (meta_group > 255)) {
+        std::cerr << "Error: meta group must be between 0 and 255.\n";
+        return 1;
+    }
+
     Plotter::Options opt;
     opt.validate = false;
     opt.verbose = verbose;
 
     ProofParams params(Utils::hexToBytes(plot_id_hex).data(),
         numeric_cast<uint8_t>(k),
-        numeric_cast<uint8_t>(strength));
+        numeric_cast<uint8_t>(strength),
+        numeric_cast<uint8_t>(testnet ? 1 : 0));
     Plotter plotter(params);
 
     PlotData plot;
+
+    if (testnet) {
+        std::cout << "TESTNET plot -- will NOT be valid on mainnet." << std::endl;
+    }
 
 #if HAVE_AES
     std::cout << "Using AES hardware acceleration." << std::endl;
@@ -174,7 +220,9 @@ try {
 
     bool writeToFile = true;
     if (writeToFile) {
-        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(strength);
+        std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(strength) + "_"
+            + std::to_string(plot_index) + "_" + std::to_string(meta_group)
+            + (testnet ? "_testnet" : "");
 #ifdef RETAIN_X_VALUES_TO_T3
         filename += "_xvalues";
 #endif
@@ -182,10 +230,15 @@ try {
         Timer writeTimer;
         writeTimer.start();
         std::cout << "Writing plot to " << filename << "...\n";
-        // TODO: for now we only plot with plot index and meta group 0. Later we will adjust
-        // filenaming and allow for groups/indexes.
-        size_t bytes_written = PlotFile::writeData(
-            filename, plot, plotter.getProofParams(), 0, 0, std::array<uint8_t, 32 + 48 + 32>({}));
+        // pass in plot index and meta group to writeData
+        // IMPORTANT: caller is responsible for passing in the correct plot index and meta group
+        // used for generating the plot id, not verified by the plotter.
+        size_t bytes_written = PlotFile::writeData(filename,
+            plot,
+            plotter.getProofParams(),
+            numeric_cast<uint16_t>(plot_index),
+            numeric_cast<uint8_t>(meta_group),
+            std::array<uint8_t, 32 + 48 + 32>({}));
         double write_time_ms = writeTimer.stop();
 
         double bits_per_entry = (static_cast<double>(bytes_written) * 8.0)

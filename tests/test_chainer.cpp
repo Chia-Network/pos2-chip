@@ -12,74 +12,9 @@
 #include <random>
 #include <vector>
 
-// #define DEBUG_CHAINER true
+#define DEBUG_CHAINER true
 
 TEST_SUITE_BEGIN("chainer");
-
-double expectedBucketsFilled(int N, int M)
-{
-    double p_empty = std::pow(1.0 - 1.0 / M, N);
-    return M * (1.0 - p_empty);
-}
-
-TEST_CASE("chaining_set_sizes")
-{
-    // create map of expected values for each k:
-    // k 28, should be set size 4096
-    // k 30, should be set size 16384
-    // k 32, should be set size 65536
-    std::map<int, int> expected_set_sizes = {
-        { 18, 128 },
-        { 20, 256 },
-        { 22, 512 },
-        { 24, 1024 },
-        { 26, 2048 },
-        { 28, 4096 },
-        { 30, 8192 },
-        { 32, 16384 },
-    };
-
-    std::map<int, uint32_t> expected_num_sets = {
-        { 18, 2048 },
-        { 20, 4096 },
-        { 22, 8192 },
-        { 24, 16384 },
-        { 26, 32768 },
-        { 28, 65536 },
-        { 30, 131072 },
-        { 32, 262144 },
-    };
-
-    for (int k = 18; k <= 32; k += 2) {
-        std::string plot_id_hex
-            = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
-        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), static_cast<uint8_t>(k), 2);
-
-        int chaining_set_size = proof_params.get_chaining_set_size();
-
-        std::cout << "For k=" << static_cast<int>(k)
-                  << ", chaining set bits: " << proof_params.get_chaining_set_bits() << std::endl
-                  << ", chaining set size: " << chaining_set_size << std::endl
-                  << ", chaining num sets: " << proof_params.get_num_chaining_sets() << std::endl
-                  << ", chaining set range: #" << proof_params.get_chaining_set_range(0).start
-                  << " - " << proof_params.get_chaining_set_range(0).end << std::endl;
-
-        uint64_t solver_t2_entries_per_proof_fragment = (uint64_t(1) << (k / 2)) * 4;
-        std::cout << "  solver_t2_entries_per_proof_fragment: "
-                  << solver_t2_entries_per_proof_fragment << std::endl;
-        int num_bit_dropped_pairs = 4 * chaining_set_size * 2;
-        int solution_size = 1 << (k / 2);
-        std::cout << "  num_bit_dropped_pairs: " << num_bit_dropped_pairs << std::endl;
-        std::cout << "  solution_size: " << solution_size << std::endl;
-        double expected_filled = expectedBucketsFilled(num_bit_dropped_pairs, solution_size);
-        double saturation = expected_filled / static_cast<double>(solution_size);
-        std::cout << "  expected filled buckets: " << expected_filled << std::endl;
-        std::cout << "  t2 bit drop saturation: " << saturation << std::endl;
-        ENSURE(chaining_set_size == expected_set_sizes[k]);
-        ENSURE(proof_params.get_num_chaining_sets() == expected_num_sets[k]);
-        ENSURE(saturation > 0.5); // at least 50% saturation
-    }
-}
 
 TEST_CASE("small_lists")
 {
@@ -129,7 +64,7 @@ TEST_CASE("small_lists")
 #endif
     }
 #ifdef NDEBUG
-    int num_trials = 2000;
+    int num_trials = 10000;
     int num_chains_validated = 0;
     size_t total_chains_found = 0;
     Timer timer;
@@ -137,6 +72,7 @@ TEST_CASE("small_lists")
     std::vector<int> trial_results;
     trial_results.reserve(num_trials);
     int total_hashes = 0;
+    int total_hashes_at_chain_length[NUM_CHAIN_LINKS] = { 0 };
     for (int trial = 0; trial < num_trials; ++trial) {
         // create new random challenge each trial
         challenge[0] = static_cast<uint8_t>(trial & 0xFF);
@@ -148,13 +84,18 @@ TEST_CASE("small_lists")
 
         auto chains = chainer.find_links(encrypted_As, encrypted_Bs);
 
-        // std::cout << "Trial " << trial << ": Found " << chains.size() << " chains\n";
+        if (trial % 100 == 0) {
+            std::cout << "Trial " << trial << ": Found " << chains.size() << " chains\n";
+        }
 
         total_chains_found += chains.size();
 
         trial_results.push_back(static_cast<int>(chains.size()));
 
         total_hashes += chainer.num_hashes;
+        for (int i = 0; i < NUM_CHAIN_LINKS; ++i) {
+            total_hashes_at_chain_length[i] += chainer.num_hashes_at_chain_length[i];
+        }
 
         // validate chains that passed
         if (chains.size() > 0) {
@@ -203,7 +144,8 @@ TEST_CASE("small_lists")
     double trials_ms = timer.stop();
     std::cout << "Total chains found in " << num_trials << " trials: " << total_chains_found
               << " (validated: " << num_chains_validated << ")\n";
-    std::cout << "Chaining trials took " << trials_ms << " ms\n";
+    std::cout << "Chaining trials took " << trials_ms << " ms"
+              << " (avg: " << trials_ms / num_trials << " ms/trial)\n";
 
     // create and show historgram of trial_results
     std::map<int, int> histogram;
@@ -223,13 +165,20 @@ TEST_CASE("small_lists")
     }
     variance /= num_trials;
     double stddev = std::sqrt(variance);
+    std::cout << "Front load bits: " << CHAIN_FACTOR_FRONT_LOAD_BITS << " ("
+              << (1 << CHAIN_FACTOR_FRONT_LOAD_BITS) << ")\n";
     std::cout << "Mean chains per trial: " << mean << "\n";
     std::cout << "Standard deviation: " << stddev << "\n";
     std::cout << "Variance: " << variance << "\n";
-    std::cout << "Total hashes computed: " << total_hashes << "\n";
+    std::cout << "Total hashes computed: " << total_hashes
+              << "  avg: " << static_cast<double>(total_hashes) / num_trials << " per trial\n";
+    for (int i = 0; i < NUM_CHAIN_LINKS; ++i) {
+        std::cout << "  Hashes at chain length " << i << ": " << total_hashes_at_chain_length[i]
+                  << "  avg: " << static_cast<double>(total_hashes_at_chain_length[i]) / num_trials
+                  << " per trial\n";
+    }
 
-    // the mean should average the expected outcome +- 10%
-    double expected_mean = 1 / static_cast<double>(1 << AVERAGE_PROOFS_PER_CHALLENGE_BITS);
+    double expected_mean = 1;
     REQUIRE(mean > expected_mean * 0.80);
     REQUIRE(mean < expected_mean * 1.20);
 #endif

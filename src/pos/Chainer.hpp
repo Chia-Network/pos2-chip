@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pos/ProofCore.hpp"
+#include "pos/aes/AesHash.hpp"
 #include <array>
 #include <cstdint>
 #include <iostream>
@@ -8,6 +9,9 @@
 
 #pragma once
 
+#define USE_AESENC_CHAINING 1
+
+#if !USE_AESENC_CHAINING
 // Original algorithm by Sebastiano Vigna.
 // See: http://xorshift.di.unimi.it/splitmix64.c
 uint64_t splitmix64(uint64_t x)
@@ -18,10 +22,12 @@ uint64_t splitmix64(uint64_t x)
     x ^= (x >> 31);
     return x;
 }
+#endif
 
 class Chainer {
 public:
     int num_hashes = 0;
+    int num_hashes_at_chain_length[NUM_CHAIN_LINKS] = { 0 };
     Chainer(ProofParams const& params, std::span<uint8_t const, 32> const challenge)
         : proof_core_(params)
         , challenge_(challenge)
@@ -45,10 +51,6 @@ public:
         };
 
         auto challenge_round_keys = proof_core_.hashing.chainingChallengeWithPlotIdHash(challenge_);
-
-#ifdef DEBUG_CHAINER
-        std::cout << "Chainer: Initial challenge: " << initial_challenge.toString() << "\n";
-#endif
 
         std::vector<Chain> results;
         std::vector<State> stack;
@@ -95,12 +97,18 @@ public:
             uint64_t const mixing_challenge
                 = st.fast_challenge ^ challenge_round_keys[st.iteration];
             for (ProofFragment fragment: current_list) {
+#if USE_AESENC_CHAINING
+                uint64_t const new_fast_challenge
+                    = proof_core_.hashing.chain_hash(fragment ^ mixing_challenge);
+#else
                 uint64_t const new_fast_challenge = splitmix64(fragment ^ mixing_challenge);
+#endif
                 num_hashes++;
+                num_hashes_at_chain_length[st.iteration]++;
 
 #ifdef DEBUG_CHAINER
                 std::cout << "Chainer:   Trying fragment 0x" << std::hex << fragment << std::dec
-                          << ", new challenge: " << new_challenge.toString() << "\n";
+                          << ", new challenge: " << new_fast_challenge << "\n";
 #endif
 
                 if (!passes_fast_filter(new_fast_challenge, st.iteration)) {
@@ -136,20 +144,20 @@ public:
         int passing_zeros_needed = proof_core_.getProofParams().get_chaining_set_bits();
         if (iteration == 0) {
             // First iteration uses a looser filter
-            passing_zeros_needed -= 2; // first chain has 4x chance of passing.
+            passing_zeros_needed
+                -= CHAIN_FACTOR_FRONT_LOAD_BITS; // first chain has higher chance of passing.
         }
         else if (iteration == NUM_CHAIN_LINKS - 1) {
             // last iteration has stricter filter
-            passing_zeros_needed += 2; // last chain has 1/4x chance of passing.
             passing_zeros_needed
-                += AVERAGE_PROOFS_PER_CHALLENGE_BITS; // only want 1/32 of the proofs.
+                += CHAIN_FACTOR_FRONT_LOAD_BITS; // last chain has lower chance of passing.
         }
 
         uint64_t const check_value = fast_challenge & ((1ULL << passing_zeros_needed) - 1);
 
 #ifdef DEBUG_CHAINER
-        std::cout << "Chainer:       Checking fast filter with " << passing_zeros_needed
-                  << " bits, check value: " << check_value << "\n";
+        std::cout << "Chainer iteration: " << iteration << ":       Checking fast filter with "
+                  << passing_zeros_needed << " bits, check value: " << check_value << "\n";
 #endif
         if (check_value != 0)
             return false;
@@ -194,7 +202,12 @@ public:
 
         uint64_t challenge = 0;
         for (int i = 0; i < NUM_CHAIN_LINKS; i++) {
+#if USE_AESENC_CHAINING
+            challenge = proof_core_.hashing.chain_hash(
+                challenge ^ chain.fragments[i] ^ challenge_round_keys[i]);
+#else
             challenge = splitmix64(challenge ^ chain.fragments[i] ^ challenge_round_keys[i]);
+#endif
             if (!passes_fast_filter(challenge, i)) {
                 return false;
             }
