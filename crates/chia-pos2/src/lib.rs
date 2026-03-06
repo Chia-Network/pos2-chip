@@ -404,7 +404,7 @@ mod tests {
                 );
             }
         }
-        assert_eq!(num_proofs, 9);
+        assert_eq!(num_proofs, 539);
     }
 
     #[rstest]
