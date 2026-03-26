@@ -349,6 +349,14 @@ impl Prover {
     pub fn get_memo(&self) -> &[u8] {
         &self.memo
     }
+
+    pub fn get_meta_group(&self) -> u8 {
+        self.meta_group
+    }
+
+    pub fn get_plot_index(&self) -> u16 {
+        self.index
+    }
 }
 
 #[cfg(test)]
