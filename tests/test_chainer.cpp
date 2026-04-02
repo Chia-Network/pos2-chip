@@ -22,7 +22,7 @@ TEST_CASE("small_lists")
     std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
     std::string challenge_hex = "5c00000000000000000000000000000000000000000000000000000000000000";
     std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
-    ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2);
+    ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2, 0);
     ProofCore proof_core(proof_params);
 
     ProofCore::SelectedChallengeSets selected_sets = proof_core.selectChallengeSets(challenge);

@@ -16,6 +16,7 @@ bool validate_proof(uint8_t const* plot_id,
     uint8_t const strength,
     uint8_t const* challenge,
     uint32_t const* proof,
+    uint8_t const testnet,
     QualityChain* quality)
 try {
     if ((k_size & 1) != 0 || k_size < 18 || k_size > 32)
@@ -24,7 +25,7 @@ try {
         return false;
     if (plot_id == nullptr || challenge == nullptr || proof == nullptr || quality == nullptr)
         return false;
-    ProofParams const params(plot_id, k_size, strength);
+    ProofParams const params(plot_id, k_size, strength, testnet);
     ProofValidator validator(params);
     std::optional<QualityChainLinks> quality_links = validator.validate_full_proof(
         std::span<uint32_t const, TOTAL_XS_IN_PROOF>(proof, proof + TOTAL_XS_IN_PROOF),
@@ -72,6 +73,7 @@ bool proof_to_quality_string(uint8_t const* plot_id,
     uint8_t const k,
     uint8_t const strength,
     uint32_t const* proof,
+    uint8_t const testnet,
     QualityChain* quality)
 try {
     if ((k & 1) != 0 || k < 18 || k > 32)
@@ -80,7 +82,7 @@ try {
         return false;
     if (plot_id == nullptr || proof == nullptr || quality == nullptr)
         return false;
-    ProofParams params(plot_id, k, strength);
+    ProofParams params(plot_id, k, strength, testnet);
     ProofFragmentCodec codec(params);
     quality->chain_links = codec.fullProofXValuesToQualityString(
         std::span<uint32_t const, TOTAL_XS_IN_PROOF>(proof, proof + TOTAL_XS_IN_PROOF));
@@ -96,6 +98,7 @@ bool solve_partial_proof(QualityChain const* quality,
     uint8_t const* plot_id,
     uint8_t const k,
     uint8_t const strength,
+    uint8_t const testnet,
     uint32_t* output)
 try {
     if ((k & 1) != 0 || k < 18 || k > 32)
@@ -104,7 +107,7 @@ try {
         return false;
     if (quality == nullptr || plot_id == nullptr || output == nullptr)
         return false;
-    ProofParams params(plot_id, k, strength);
+    ProofParams params(plot_id, k, strength, testnet);
     ProofFragmentCodec c(params);
 
     std::array<uint32_t, TOTAL_T1_PAIRS_IN_PROOF> x_bits;
@@ -143,7 +146,8 @@ bool create_plot(char const* filename,
     uint16_t const index,
     uint8_t const meta_group,
     uint8_t const* memo,
-    uint8_t const memo_length)
+    uint8_t const memo_length,
+    uint8_t const testnet)
 try {
     if ((k & 1) != 0 || k < 18 || k > 32)
         return false;
@@ -153,7 +157,7 @@ try {
         return false;
     if (memo_length == 0)
         return false;
-    ProofParams params(plot_id, int(k), int(strength));
+    ProofParams params(plot_id, int(k), int(strength), testnet);
     Plotter plotter(params);
     PlotData plot = plotter.run();
     PlotFile::writeData(filename,
