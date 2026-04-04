@@ -16,3 +16,4 @@ clap = "4.5.38"
 sha2 = "0.10.9"
 hex = "0.4.3"
 arbitrary = "1.4.2"
+criterion = { version = "0.5.1", default-features = false }
