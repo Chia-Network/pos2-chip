@@ -28,7 +28,7 @@ public:
     ProofParams(uint8_t const* const plot_id_bytes,
         uint8_t const k,
         uint8_t const strength,
-        uint8_t const testnet = 0)
+        uint8_t const testnet)
         : k_(k)
         , strength_(strength)
         , testnet_(testnet)

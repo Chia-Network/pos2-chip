@@ -19,6 +19,10 @@ struct Args {
     /// Disable solving and validating proofs
     #[arg(long, default_value_t = false)]
     disable_solving: bool,
+
+    /// Use testnet proof parameters (plot filename is suffixed to avoid clashing with mainnet)
+    #[arg(long, default_value_t = false)]
+    testnet: bool,
 }
 
 fn main() {
@@ -30,7 +34,11 @@ fn main() {
     let strength = 2;
     let index = 0;
     let meta_group = 0;
-    let plot_filename = format!("k-18-test-{}.plot2", hex::encode(plot_id));
+    let plot_filename = format!(
+        "k-18-test-{}{}.plot2",
+        hex::encode(plot_id),
+        if args.testnet { "_testnet" } else { "" }
+    );
     let plot_filename = Path::new(&plot_filename);
     if !exists(plot_filename).expect("exists failed") {
         println!("generating plot: {}", plot_filename.display());
@@ -42,6 +50,7 @@ fn main() {
             index,
             meta_group,
             &[32; 64 + 48],
+            args.testnet,
         )
         .expect("create_v2_plot");
     }
@@ -66,11 +75,12 @@ fn main() {
             // We pretend the qualities pass just to exercise more partial
             // proofs
             if !args.disable_solving {
-                let full_proof = solve_proof(&q, &plot_id, k, strength);
+                let full_proof = solve_proof(&q, &plot_id, k, strength, args.testnet);
                 // we expect the proof to be valid
                 assert!(!full_proof.is_empty());
                 assert!(
-                    validate_proof_v2(&plot_id, k, &challenge, strength, &full_proof).is_some()
+                    validate_proof_v2(&plot_id, k, &challenge, strength, &full_proof, args.testnet)
+                        .is_some()
                 );
             }
         }

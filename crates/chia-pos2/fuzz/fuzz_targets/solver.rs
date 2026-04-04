@@ -19,6 +19,6 @@ fuzz_target!(|data: &[u8]| -> Corpus {
     let Ok(quality) = QualityChain::arbitrary(&mut unstructured) else {
         return Corpus::Reject;
     };
-    let _ = solve_proof(&quality, &plot_id, k_size, strength);
+    let _ = solve_proof(&quality, &plot_id, k_size, strength, false);
     Corpus::Keep
 });

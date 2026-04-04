@@ -97,7 +97,7 @@ try {
         std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
         ProofParams params(
-            plot_id.data(), numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(plot_strength));
+            plot_id.data(), numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(plot_strength), 0);
         ProofValidator proof_validator(params);
 
         std::vector<uint32_t> proof = Utils::compressedHexToKValues(k, proof_hex);

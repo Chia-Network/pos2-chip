@@ -185,7 +185,7 @@ public:
             = "5c00000000000000000000000000000000000000000000000000000000000000";
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
         uint32_t sim_challenge_id = 0;
-        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2);
+        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2, 0);
         ProofCore proof_core(proof_params);
         Timer timer;
         double total_harvesting_compute_time_ms = 0.0;
