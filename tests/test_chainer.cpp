@@ -28,40 +28,44 @@ TEST_CASE("small_lists")
     ProofCore::SelectedChallengeSets selected_sets = proof_core.selectChallengeSets(challenge);
 
 #ifdef DEBUG_CHAINER
-    std::cout << "Selected fragment set A index: " << selected_sets.fragment_set_A_index << "\n";
-    std::cout << "Selected fragment set B index: " << selected_sets.fragment_set_B_index << "\n";
-    std::cout << "Fragment set A range: " << selected_sets.fragment_set_A_range.start << " - "
-              << selected_sets.fragment_set_A_range.end << "\n";
-    std::cout << "Fragment set B range: " << selected_sets.fragment_set_B_range.start << " - "
-              << selected_sets.fragment_set_B_range.end << "\n";
+    for (int i = 0; i < NUM_CHALLENGE_SETS; ++i) {
+        std::cout << "Selected fragment set " << i
+                  << " index: " << selected_sets.fragment_set_indexes[i] << "\n";
+        std::cout << "Fragment set " << i
+                  << " range: " << selected_sets.fragment_set_ranges[i].start << " - "
+                  << selected_sets.fragment_set_ranges[i].end << "\n";
+    }
 #endif
 
     std::mt19937 rng(1245); // fixed seed for reproducibility
     ProofFragment max_offset = static_cast<ProofFragment>(
-        selected_sets.fragment_set_A_range.end - selected_sets.fragment_set_A_range.start);
+        selected_sets.fragment_set_ranges[0].end - selected_sets.fragment_set_ranges[0].start);
     std::uniform_int_distribution<ProofFragment> dist(0, max_offset);
 
-    // now create two lists of size chaining_set_size each
+    // now create NUM_CHALLENGE_SETS lists of size chaining_set_size each
     int chaining_set_size = proof_params.get_chaining_set_size();
 #ifdef DEBUG_CHAINER
-    std::cout << "Creating two chaining lists of size " << chaining_set_size
-              << " each, A in index: " << selected_sets.fragment_set_A_index
-              << ", B in index: " << selected_sets.fragment_set_B_index << "\n";
+    std::cout << "Creating " << NUM_CHALLENGE_SETS << " chaining lists of size "
+              << chaining_set_size << " each, indexes:";
+    for (int i = 0; i < NUM_CHALLENGE_SETS; ++i) {
+        std::cout << " " << selected_sets.fragment_set_indexes[i];
+    }
+    std::cout << "\n";
 #endif
     // below can test attacker times by increasing list sizes to simulate bit dropping attacks on
     // t3. chaining_set_size += chaining_set_size / 2; // add 50% extra as an attack
     // chaining_set_size += 3 * chaining_set_size / 4; // add 75% extra as an attack
-    std::vector<ProofFragment> encrypted_As(chaining_set_size);
-    std::vector<ProofFragment> encrypted_Bs(chaining_set_size);
-    for (int i = 0; i < chaining_set_size; ++i) {
-        encrypted_As[i] = selected_sets.fragment_set_A_range.start + dist(rng);
-        encrypted_Bs[i] = selected_sets.fragment_set_B_range.start + dist(rng);
+    std::array<std::vector<ProofFragment>, NUM_CHALLENGE_SETS> encrypted_sets;
+    for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+        encrypted_sets[s].resize(chaining_set_size);
+        for (int i = 0; i < chaining_set_size; ++i) {
+            encrypted_sets[s][i] = selected_sets.fragment_set_ranges[s].start + dist(rng);
 #ifdef DEBUG_CHAINER
-        if ((i < 10) || (i >= chaining_set_size - 10)) {
-            std::cout << "  A[" << i << "] = " << encrypted_As[i] << ", B[" << i
-                      << "] = " << encrypted_Bs[i] << "\n";
-        }
+            if ((i < 10) || (i >= chaining_set_size - 10)) {
+                std::cout << "  set" << s << "[" << i << "] = " << encrypted_sets[s][i] << "\n";
+            }
 #endif
+        }
     }
 #ifdef NDEBUG
     int num_trials = 10000;
@@ -82,7 +86,11 @@ TEST_CASE("small_lists")
 
         Chainer chainer(proof_params, challenge);
 
-        auto chains = chainer.find_links(encrypted_As, encrypted_Bs);
+        std::array<std::span<ProofFragment const>, NUM_CHALLENGE_SETS> fragments_per_set;
+        for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+            fragments_per_set[s] = encrypted_sets[s];
+        }
+        auto chains = chainer.find_links(fragments_per_set);
 
         if (trial % 100 == 0) {
             std::cout << "Trial " << trial << ": Found " << chains.size() << " chains\n";
@@ -100,27 +108,26 @@ TEST_CASE("small_lists")
         // validate chains that passed
         if (chains.size() > 0) {
             for (auto const& chain: chains) {
-                bool valid = chainer.validate(
-                    chain, selected_sets.fragment_set_A_range, selected_sets.fragment_set_B_range);
+                bool valid = chainer.validate(chain, selected_sets.fragment_set_ranges);
                 // could do more validation here if desired
                 REQUIRE(valid);
                 if (valid) {
                     num_chains_validated++;
                 }
 
-                // switch two links from same set and validation should fail
+                // Mutate by swapping two links that belong to the same challenge set
+                // (separated by NUM_CHALLENGE_SETS positions); the chain hash should fail.
                 Chain mutated_chain = chain;
-                std::swap(mutated_chain.fragments[trial % mutated_chain.fragments.size()],
-                    mutated_chain.fragments[(trial + 2) % mutated_chain.fragments.size()]);
-                bool valid_mutated = chainer.validate(mutated_chain,
-                    selected_sets.fragment_set_A_range,
-                    selected_sets.fragment_set_B_range);
+                size_t swap_a = trial % mutated_chain.fragments.size();
+                size_t swap_b = (swap_a + NUM_CHALLENGE_SETS) % mutated_chain.fragments.size();
+                std::swap(mutated_chain.fragments[swap_a], mutated_chain.fragments[swap_b]);
+                bool valid_mutated
+                    = chainer.validate(mutated_chain, selected_sets.fragment_set_ranges);
                 if (valid_mutated) {
                     std::cout << "WARNING: Mutated chain unexpectedly validated.\n";
                     // it can happen that two elements swapped are the same, so we just invalidate
                     // this test if it is.
-                    if (mutated_chain.fragments[trial % mutated_chain.fragments.size()]
-                        == mutated_chain.fragments[(trial + 2) % mutated_chain.fragments.size()]) {
+                    if (mutated_chain.fragments[swap_a] == mutated_chain.fragments[swap_b]) {
                         std::cout
                             << "  (Swapped fragments are identical, so mutation ineffective.)\n";
                         valid_mutated = false;

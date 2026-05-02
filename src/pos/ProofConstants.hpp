@@ -11,4 +11,12 @@ constexpr int CHAIN_SET_BITS
     = 6; // number of bits to determine chaining set size (64 entries per set)
 constexpr int CHAIN_FACTOR_FRONT_LOAD_BITS = CHAIN_SET_BITS;
 
+// Number of distinct challenge fragment sets selected per challenge. Each set has
+// a chaining_set index that is exclusive modulo NUM_CHALLENGE_SETS, and the chain
+// cycles through the sets in order: 0, 1, ..., NUM_CHALLENGE_SETS - 1, 0, 1, ...
+// NUM_CHAIN_LINKS must be a multiple of NUM_CHALLENGE_SETS.
+constexpr int NUM_CHALLENGE_SETS = 4;
+static_assert(NUM_CHAIN_LINKS % NUM_CHALLENGE_SETS == 0,
+    "NUM_CHAIN_LINKS must be a multiple of NUM_CHALLENGE_SETS");
+
 constexpr uint32_t TESTNET_G_XOR_CONST = 0xA3B1C4D7;

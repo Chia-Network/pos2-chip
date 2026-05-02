@@ -137,14 +137,13 @@ public:
 #endif
         }
 
-        // determine the fragment ranges for A and B
+        // determine the fragment ranges for all challenge sets
         ProofCore::SelectedChallengeSets selected_sets
             = proof_core_.selectChallengeSets(challenge_array);
 
         // validate the chain of proof fragments.
         Chainer chainer(params_, challenge_array);
-        bool valid = chainer.validate(
-            chain, selected_sets.fragment_set_A_range, selected_sets.fragment_set_B_range);
+        bool valid = chainer.validate(chain, selected_sets.fragment_set_ranges);
         if (!valid) {
 #ifdef DEBUG_PROOF_VALIDATOR
             std::cerr << "Full proof chain validation failed." << std::endl;

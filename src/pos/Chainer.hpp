@@ -34,13 +34,17 @@ public:
     {
     }
 
-    std::vector<Chain> find_links(std::span<ProofFragment const> const fragments_A,
-        std::span<ProofFragment const> const fragments_B)
+    std::vector<Chain> find_links(
+        std::array<std::span<ProofFragment const>, NUM_CHALLENGE_SETS> const& fragments_per_set)
     {
 
 #ifdef DEBUG_CHAINER
-        std::cout << "Chainer: Starting link finding with " << fragments_A.size()
-                  << " fragments in A and " << fragments_B.size() << " fragments in B.\n";
+        std::cout << "Chainer: Starting link finding with " << NUM_CHALLENGE_SETS
+                  << " challenge sets, sizes:";
+        for (auto const& s: fragments_per_set) {
+            std::cout << " " << s.size();
+        }
+        std::cout << "\n";
 #endif
 
         // State for the explicit stack.
@@ -89,9 +93,9 @@ public:
                 continue;
             }
 
-            // On first iteration use As, then Bs, alternating.
+            // Iterate through the challenge sets in sequence: 0, 1, ..., N-1, 0, 1, ...
             std::span<ProofFragment const> const& current_list
-                = (st.iteration % 2 == 0) ? fragments_A : fragments_B;
+                = fragments_per_set[st.iteration % NUM_CHALLENGE_SETS];
 
             // Try extending the chain with each value from the current list.
             uint64_t const mixing_challenge
@@ -174,27 +178,21 @@ public:
         return (numeric_cast<uint64_t>(w0) << 32) | w1;
     }
 
-    bool validate(Chain const& chain, Range fragment_A, Range fragments_B) const
+    bool validate(
+        Chain const& chain, std::array<Range, NUM_CHALLENGE_SETS> const& fragment_set_ranges) const
     {
         // First check sizes
         if (chain.fragments.size() != NUM_CHAIN_LINKS) {
             return false;
         }
 
-        // check that each fragment is from the correct set (A or B)
+        // Each fragment must come from the matching challenge set: link i is drawn
+        // from set (i % NUM_CHALLENGE_SETS).
         for (size_t i = 0; i < chain.fragments.size(); i++) {
             ProofFragment fragment = chain.fragments[i];
-            if (i % 2 == 0) {
-                // from set A
-                if (!fragment_A.isInRange(fragment)) {
-                    return false;
-                }
-            }
-            else {
-                // from set B
-                if (!fragments_B.isInRange(fragment)) {
-                    return false;
-                }
+            Range const& expected_range = fragment_set_ranges[i % NUM_CHALLENGE_SETS];
+            if (!expected_range.isInRange(fragment)) {
+                return false;
             }
         }
 
