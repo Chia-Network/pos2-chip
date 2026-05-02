@@ -185,7 +185,27 @@ TEST_CASE("small_lists")
                   << " per trial\n";
     }
 
+    // The synthetic test uses fixed-size sets (exactly chaining_set_size each), so
+    // the Jensen bonus E[|S|^(L/N)]^N / lambda^L is exactly 1.0 — no variance.
+    // When the last-link recalibration is enabled, it tightens the filter by
+    // 1/jensen_bonus assuming Poisson(lambda), so the synthetic mean drops by
+    // that same factor (~1/1.44).
     double expected_mean = 1;
+#if POS2_RECALIBRATE_LAST_LINK_FILTER
+    {
+        constexpr double lambda = static_cast<double>(1ULL << CHAIN_SET_BITS);
+        constexpr int reuse = NUM_CHAIN_LINKS / NUM_CHALLENGE_SETS;
+        static_assert(reuse == 4, "Update Stirling coefficients if reuse changes");
+        // E[X^4] / lambda^4 for X ~ Poisson(lambda):
+        double const ratio
+            = 1.0 + 6.0 / lambda + 7.0 / (lambda * lambda) + 1.0 / (lambda * lambda * lambda);
+        double bonus = 1.0;
+        for (int i = 0; i < NUM_CHALLENGE_SETS; ++i)
+            bonus *= ratio;
+        expected_mean = 1.0 / bonus;
+    }
+#endif
+    std::cout << "Expected mean (model): " << expected_mean << "\n";
     REQUIRE(mean > expected_mean * 0.80);
     REQUIRE(mean < expected_mean * 1.20);
 #endif

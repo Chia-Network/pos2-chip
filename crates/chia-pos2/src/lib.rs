@@ -463,14 +463,14 @@ mod tests {
     /// Tallies over **100** sequential challenges (`challenge_idx` 0..100).
     fn expected_proof_count(testnet: bool, index: u16, meta_group: u8) -> u32 {
         match (testnet, index, meta_group) {
-            (false, 0, 0) => 160,
-            (false, 0, 7) => 168,
-            (false, 3, 0) => 187,
-            (false, 3, 7) => 221,
-            (true, 0, 0) => 143,
-            (true, 0, 7) => 187,
-            (true, 3, 0) => 164,
-            (true, 3, 7) => 190,
+            (false, 0, 0) => 90,
+            (false, 0, 7) => 77,
+            (false, 3, 0) => 99,
+            (false, 3, 7) => 117,
+            (true, 0, 0) => 74,
+            (true, 0, 7) => 113,
+            (true, 3, 0) => 72,
+            (true, 3, 7) => 62,
             _ => unreachable!("test matrix is fixed to 8 cases"),
         }
     }

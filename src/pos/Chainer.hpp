@@ -3,6 +3,7 @@
 #include "pos/ProofCore.hpp"
 #include "pos/aes/AesHash.hpp"
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -10,6 +11,21 @@
 #pragma once
 
 #define USE_AESENC_CHAINING 1
+
+// Recalibrate the final chain-link filter so the average chain count per
+// challenge is ~1.0 (the original design target).
+//
+// With NUM_CHALLENGE_SETS = N sets each used L/N times in a chain of length L,
+// and |set| ~ Poisson(2^chain_set_bits), the expected chain count is:
+//     E[chains] = E[|S|^(L/N)]^N * 2^-total_filter_bits
+// For the default constants (L=16, N=4, chain_set_bits=6, lambda=64), the
+// Jensen bonus ratio = E[|S|^4]^4 / lambda^16 ~= 1.4401, so the average without
+// compensation is ~1.4401 chains/challenge instead of the design target of 1.
+//
+// When this is set to 1 we apply a fractional-bit threshold to ONLY the last
+// link's upper bits (which are independent of the lower zero-bit check) to
+// cancel the bonus. Set to 0 to revert to the original behavior.
+#define POS2_RECALIBRATE_LAST_LINK_FILTER 1
 
 #if !USE_AESENC_CHAINING
 // Original algorithm by Sebastiano Vigna.
@@ -165,6 +181,20 @@ public:
 #endif
         if (check_value != 0)
             return false;
+
+#if POS2_RECALIBRATE_LAST_LINK_FILTER
+        // Final-link fractional-bit recalibration. The lower passing_zeros_needed bits
+        // of fast_challenge are already known to be zero; the upper bits are still
+        // uniformly distributed (AES output) and independent of the lower bits, so
+        // we use them to apply an extra fractional pass-probability of 1/jensen_bonus.
+        if (iteration == NUM_CHAIN_LINKS - 1) {
+            static uint64_t const extra_threshold = compute_last_link_extra_threshold();
+            uint64_t const upper_bits = fast_challenge >> passing_zeros_needed;
+            if (upper_bits >= extra_threshold)
+                return false;
+        }
+#endif
+
         return true;
     }
 
@@ -215,6 +245,54 @@ public:
     }
 
 private:
+    // Computes the upper-bits threshold used at the last chain link to cancel the
+    // E[|S|^(L/N)]^N Jensen bonus from Poisson-distributed set sizes, so that
+    // E[chains/challenge] -> 1.0 instead of ~jensen_bonus.
+    //
+    // Formula:
+    //   lambda          = 2^chain_set_bits (mean size of one chaining set)
+    //   reuse           = NUM_CHAIN_LINKS / NUM_CHALLENGE_SETS  (hits per set)
+    //   E[X^reuse]      = sum_{j=0..reuse} S(reuse, j) * lambda^j  for X ~ Poisson(lambda),
+    //                     where S is Stirling numbers of the 2nd kind
+    //   bonus           = (E[X^reuse] / lambda^reuse)^N
+    //   upper_bits_count= 64 - (chain_set_bits + CHAIN_FACTOR_FRONT_LOAD_BITS)
+    //   threshold       = floor(2^upper_bits_count / bonus)
+    static uint64_t compute_last_link_extra_threshold()
+    {
+        // Hardcoded Stirling numbers of the 2nd kind for reuse = 4: S(4, j) for j=0..4.
+        // If the chain length / challenge-set count ratio changes, regenerate these.
+        static_assert(NUM_CHAIN_LINKS / NUM_CHALLENGE_SETS == 4,
+            "Update Stirling-number coefficients in "
+            "compute_last_link_extra_threshold for new reuse-per-set value");
+        constexpr int reuse = 4;
+        double const stirling[reuse + 1] = { 0.0, 1.0, 7.0, 6.0, 1.0 };
+
+        double const lambda = static_cast<double>(1ULL << CHAIN_SET_BITS);
+
+        // E[X^reuse] for X ~ Poisson(lambda)
+        double e_x_reuse = 0.0;
+        double lpow = 1.0;
+        for (int j = 0; j <= reuse; ++j) {
+            e_x_reuse += stirling[j] * lpow;
+            lpow *= lambda;
+        }
+
+        double lambda_pow_reuse = 1.0;
+        for (int j = 0; j < reuse; ++j)
+            lambda_pow_reuse *= lambda;
+
+        double const ratio = e_x_reuse / lambda_pow_reuse;
+        double bonus = 1.0;
+        for (int i = 0; i < NUM_CHALLENGE_SETS; ++i)
+            bonus *= ratio;
+
+        constexpr int upper_bits_count = 64 - CHAIN_SET_BITS - CHAIN_FACTOR_FRONT_LOAD_BITS;
+        static_assert(upper_bits_count > 0 && upper_bits_count <= 53,
+            "upper_bits_count must be positive and fit safely in double mantissa");
+        double const max_upper = std::ldexp(1.0, upper_bits_count);
+        return static_cast<uint64_t>(max_upper / bonus);
+    }
+
     ProofCore proof_core_;
     std::span<uint8_t const, 32> challenge_;
 };
