@@ -64,9 +64,12 @@ public:
 #endif
 
         // State for the explicit stack.
+        // start_set is the index (0..NUM_CHALLENGE_SETS-1) of the set this chain
+        // started in; the set used at chain position i is (start_set + i) mod N.
         struct State {
             uint64_t fast_challenge;
             int iteration;
+            int start_set;
             std::vector<ProofFragment> fragments; // chosen fragments so far
         };
 
@@ -76,16 +79,44 @@ public:
         std::vector<State> stack;
         stack.reserve(1024);
 
-        // Start at iteration 0, no picks yet.
-        stack.push_back(State { .fast_challenge = 0, .iteration = 0, .fragments = {} });
+        // Seed the search with starter fragments. Every fragment across every set
+        // is a candidate starter; the iter-0 fast filter (with
+        // CHAIN_STARTER_FILTER_BITS zero bits) keeps ~1/NUM_CHALLENGE_SETS of
+        // them, so on average we get ~chaining_set_size surviving starters.
+        uint64_t const starter_mixing_challenge = challenge_round_keys[0];
+        for (int start_set = 0; start_set < NUM_CHALLENGE_SETS; ++start_set) {
+            std::span<ProofFragment const> const& starter_list = fragments_per_set[start_set];
+            for (ProofFragment fragment: starter_list) {
+#if USE_AESENC_CHAINING
+                uint64_t const new_fast_challenge
+                    = proof_core_.hashing.chain_hash(fragment ^ starter_mixing_challenge);
+#else
+                uint64_t const new_fast_challenge = splitmix64(fragment ^ starter_mixing_challenge);
+#endif
+                num_hashes++;
+                num_hashes_at_chain_length[0]++;
+
+                if (!passes_fast_filter(new_fast_challenge, 0)) {
+                    continue;
+                }
+
+                State next;
+                next.fast_challenge = new_fast_challenge;
+                next.iteration = 1;
+                next.start_set = start_set;
+                next.fragments.reserve(NUM_CHAIN_LINKS);
+                next.fragments.push_back(fragment);
+                stack.push_back(std::move(next));
+            }
+        }
 
         while (!stack.empty()) {
             State st = std::move(stack.back());
             stack.pop_back();
 
 #ifdef DEBUG_CHAINER
-            std::cout << "Chainer: At iteration " << st.iteration
-                      << ", current challenge: " << st.challenge.toString() << "\n";
+            std::cout << "Chainer: At iteration " << st.iteration << ", start_set: " << st.start_set
+                      << "\n";
 #endif
 
             // If we've reached the desired length, record the chain.
@@ -109,9 +140,10 @@ public:
                 continue;
             }
 
-            // Iterate through the challenge sets in sequence: 0, 1, ..., N-1, 0, 1, ...
-            std::span<ProofFragment const> const& current_list
-                = fragments_per_set[st.iteration % NUM_CHALLENGE_SETS];
+            // The set used at this iteration is determined by the chain's start
+            // set: link i is drawn from set (start_set + i) mod N.
+            int const current_set_idx = (st.start_set + st.iteration) % NUM_CHALLENGE_SETS;
+            std::span<ProofFragment const> const& current_list = fragments_per_set[current_set_idx];
 
             // Try extending the chain with each value from the current list.
             uint64_t const mixing_challenge
@@ -140,8 +172,8 @@ public:
 
                 State next;
                 next.fast_challenge = new_fast_challenge;
-
                 next.iteration = st.iteration + 1;
+                next.start_set = st.start_set;
                 next.fragments = st.fragments;
 
                 next.fragments.push_back(fragment);
@@ -160,12 +192,14 @@ public:
 
     bool passes_fast_filter(uint64_t const fast_challenge, int iteration) const
     {
-        // For now accept all links
         int passing_zeros_needed = proof_core_.getProofParams().get_chaining_set_bits();
         if (iteration == 0) {
-            // First iteration uses a looser filter
-            passing_zeros_needed
-                -= CHAIN_FACTOR_FRONT_LOAD_BITS; // first chain has higher chance of passing.
+            // Starter filter: every fragment in every selected set is a chain
+            // candidate, so we apply a probabilistic 1/NUM_CHALLENGE_SETS pass
+            // rate (CHAIN_STARTER_FILTER_BITS zero bits) to keep the expected
+            // surviving starter count at ~chaining_set_size, matching the
+            // original "set 0 only" behavior.
+            passing_zeros_needed = CHAIN_STARTER_FILTER_BITS;
         }
         else if (iteration == NUM_CHAIN_LINKS - 1) {
             // last iteration has stricter filter
@@ -216,11 +250,25 @@ public:
             return false;
         }
 
-        // Each fragment must come from the matching challenge set: link i is drawn
-        // from set (i % NUM_CHALLENGE_SETS).
+        // Determine which selected set the chain starts in. The four selected
+        // sets have non-overlapping ranges, so chain.fragments[0] belongs to at
+        // most one of them.
+        int start_set = -1;
+        for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+            if (fragment_set_ranges[s].isInRange(chain.fragments[0])) {
+                start_set = s;
+                break;
+            }
+        }
+        if (start_set < 0) {
+            return false;
+        }
+
+        // Each fragment at link i must be drawn from set (start_set + i) mod N.
         for (size_t i = 0; i < chain.fragments.size(); i++) {
             ProofFragment fragment = chain.fragments[i];
-            Range const& expected_range = fragment_set_ranges[i % NUM_CHALLENGE_SETS];
+            int const expected_set = (start_set + static_cast<int>(i)) % NUM_CHALLENGE_SETS;
+            Range const& expected_range = fragment_set_ranges[expected_set];
             if (!expected_range.isInRange(fragment)) {
                 return false;
             }
@@ -236,6 +284,9 @@ public:
 #else
             challenge = splitmix64(challenge ^ chain.fragments[i] ^ challenge_round_keys[i]);
 #endif
+            // passes_fast_filter applies the iter-0 starter filter at i==0, so
+            // a chain whose starter fragment failed the 25% gate here is
+            // rejected even if it happens to produce a valid full chain hash.
             if (!passes_fast_filter(challenge, i)) {
                 return false;
             }
