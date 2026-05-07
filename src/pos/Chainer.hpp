@@ -8,10 +8,6 @@
 #include <iostream>
 #include <vector>
 
-#pragma once
-
-#define USE_AESENC_CHAINING 1
-
 // Recalibrate the final chain-link filter so the average chain count per
 // challenge is ~1.0 (the original design target).
 //
@@ -26,19 +22,6 @@
 // link's upper bits (which are independent of the lower zero-bit check) to
 // cancel the bonus. Set to 0 to revert to the original behavior.
 #define POS2_RECALIBRATE_LAST_LINK_FILTER 1
-
-#if !USE_AESENC_CHAINING
-// Original algorithm by Sebastiano Vigna.
-// See: http://xorshift.di.unimi.it/splitmix64.c
-uint64_t splitmix64(uint64_t x)
-{
-    x += 0x9e3779b97f4a7c15ull;
-    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
-    x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
-    x ^= (x >> 31);
-    return x;
-}
-#endif
 
 class Chainer {
 public:
@@ -87,12 +70,8 @@ public:
         for (int start_set = 0; start_set < NUM_CHALLENGE_SETS; ++start_set) {
             std::span<ProofFragment const> const& starter_list = fragments_per_set[start_set];
             for (ProofFragment fragment: starter_list) {
-#if USE_AESENC_CHAINING
                 uint64_t const new_fast_challenge
                     = proof_core_.hashing.chain_hash(fragment ^ starter_mixing_challenge);
-#else
-                uint64_t const new_fast_challenge = splitmix64(fragment ^ starter_mixing_challenge);
-#endif
                 num_hashes++;
                 num_hashes_at_chain_length[0]++;
 
@@ -149,12 +128,8 @@ public:
             uint64_t const mixing_challenge
                 = st.fast_challenge ^ challenge_round_keys[st.iteration];
             for (ProofFragment fragment: current_list) {
-#if USE_AESENC_CHAINING
                 uint64_t const new_fast_challenge
                     = proof_core_.hashing.chain_hash(fragment ^ mixing_challenge);
-#else
-                uint64_t const new_fast_challenge = splitmix64(fragment ^ mixing_challenge);
-#endif
                 num_hashes++;
                 num_hashes_at_chain_length[st.iteration]++;
 
@@ -278,12 +253,8 @@ public:
 
         uint64_t challenge = 0;
         for (int i = 0; i < NUM_CHAIN_LINKS; i++) {
-#if USE_AESENC_CHAINING
             challenge = proof_core_.hashing.chain_hash(
                 challenge ^ chain.fragments[i] ^ challenge_round_keys[i]);
-#else
-            challenge = splitmix64(challenge ^ chain.fragments[i] ^ challenge_round_keys[i]);
-#endif
             // passes_fast_filter applies the iter-0 starter filter at i==0, so
             // a chain whose starter fragment failed the 25% gate here is
             // rejected even if it happens to produce a valid full chain hash.
