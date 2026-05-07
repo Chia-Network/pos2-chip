@@ -77,6 +77,12 @@ TEST_CASE("small_lists")
     trial_results.reserve(num_trials);
     int total_hashes = 0;
     int total_hashes_at_chain_length[NUM_CHAIN_LINKS] = { 0 };
+    // Counts of chains observed for each chain.fragments[0] starter set. With the
+    // multi-set starter algorithm we expect every set to contribute roughly equal
+    // numbers of chains; if find_links regresses to "set 0 only", three of these
+    // four buckets will end up empty and the assertion below will fail.
+    int start_set_chain_counts[NUM_CHALLENGE_SETS] = { 0 };
+    int num_cross_set_mutations = 0;
     for (int trial = 0; trial < num_trials; ++trial) {
         // create new random challenge each trial
         challenge[0] = static_cast<uint8_t>(trial & 0xFF);
@@ -115,6 +121,19 @@ TEST_CASE("small_lists")
                     num_chains_validated++;
                 }
 
+                // Determine which selected set this chain started in, the same way
+                // validate() does, and account for it. With the multi-set starter
+                // algorithm chains should originate from any of the four sets.
+                int chain_start_set = -1;
+                for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+                    if (selected_sets.fragment_set_ranges[s].isInRange(chain.fragments[0])) {
+                        chain_start_set = s;
+                        break;
+                    }
+                }
+                REQUIRE(chain_start_set >= 0);
+                start_set_chain_counts[chain_start_set]++;
+
                 // Mutate by swapping two links that belong to the same challenge set
                 // (separated by NUM_CHALLENGE_SETS positions); the chain hash should fail.
                 Chain mutated_chain = chain;
@@ -145,6 +164,22 @@ TEST_CASE("small_lists")
                     std::cout << std::dec << "\n";
                 }
                 REQUIRE(!valid_mutated);
+
+                // Cross-set mutation: swap chain[0] (in start_set s) with chain[1]
+                // (in set (s+1) % N). After the swap, chain[0] is in set (s+1)%N so
+                // validate detects start_set'=(s+1)%N and then expects chain[1] in
+                // (s+2)%N — but the swapped chain[1] is in set s. The rotated range
+                // check must reject this. (If start_set rotation in validate was
+                // wrong this would slip through whenever the chain hash happened to
+                // collide.)
+                Chain xset_mutated_chain = chain;
+                std::swap(xset_mutated_chain.fragments[0], xset_mutated_chain.fragments[1]);
+                bool valid_xset_mutated
+                    = chainer.validate(xset_mutated_chain, selected_sets.fragment_set_ranges);
+                if (xset_mutated_chain.fragments[0] != xset_mutated_chain.fragments[1]) {
+                    REQUIRE(!valid_xset_mutated);
+                    num_cross_set_mutations++;
+                }
             }
         }
     }
@@ -183,6 +218,62 @@ TEST_CASE("small_lists")
         std::cout << "  Hashes at chain length " << i << ": " << total_hashes_at_chain_length[i]
                   << "  avg: " << static_cast<double>(total_hashes_at_chain_length[i]) / num_trials
                   << " per trial\n";
+    }
+
+    // Print the per-starter-set chain count distribution. With the new
+    // multi-set starter algorithm we expect roughly equal contribution from
+    // every set (uniform over NUM_CHALLENGE_SETS), since the starter filter is
+    // hash-driven and the synthetic sets are identically sized.
+    std::cout << "Chain starter-set distribution (chain.fragments[0] -> set):\n";
+    for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+        std::cout << "  set " << s << ": " << start_set_chain_counts[s] << " chains\n";
+    }
+    std::cout << "Cross-set mutations rejected by validate: " << num_cross_set_mutations << "\n";
+
+    // Each starter set should account for at least 1/(2N) of the total — a
+    // generous bound that easily passes for uniform starter selection but fires
+    // loudly if find_links accidentally regresses to "set 0 only" (in which
+    // case three of the four buckets would be exactly zero).
+    if (total_chains_found > 0) {
+        size_t const min_per_set = total_chains_found / (2 * NUM_CHALLENGE_SETS);
+        for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+            REQUIRE_MESSAGE(start_set_chain_counts[s] > static_cast<int>(min_per_set),
+                "Starter set " << s << " produced only " << start_set_chain_counts[s]
+                               << " chains (min expected " << min_per_set
+                               << "); does find_links iterate every challenge set?");
+        }
+    }
+
+    // Negative case: a chain whose first fragment is outside every selected
+    // set's range must be rejected by validate (start_set detection fails).
+    {
+        // Pull a known-good chain from one trial and tamper its first fragment
+        // by replacing it with a value far outside any selected range. Any
+        // value beyond the largest set range end works; using max - 1 keeps it
+        // unambiguously out of bounds.
+        std::array<uint8_t, 32> probe_challenge = challenge;
+        probe_challenge[0] = 0;
+        probe_challenge[1] = 0;
+        probe_challenge[2] = 0;
+        probe_challenge[3] = 0;
+        Chainer probe_chainer(proof_params, probe_challenge);
+        std::array<std::span<ProofFragment const>, NUM_CHALLENGE_SETS> probe_fragments_per_set;
+        for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+            probe_fragments_per_set[s] = encrypted_sets[s];
+        }
+        auto probe_chains = probe_chainer.find_links(probe_fragments_per_set);
+        if (!probe_chains.empty()) {
+            Chain bad = probe_chains.front();
+            // Set fragment[0] to a value greater than every selected range's end.
+            ProofFragment max_end = 0;
+            for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+                if (selected_sets.fragment_set_ranges[s].end > max_end) {
+                    max_end = static_cast<ProofFragment>(selected_sets.fragment_set_ranges[s].end);
+                }
+            }
+            bad.fragments[0] = max_end + 1;
+            REQUIRE(!probe_chainer.validate(bad, selected_sets.fragment_set_ranges));
+        }
     }
 
     // The synthetic test uses fixed-size sets (exactly chaining_set_size each), so
