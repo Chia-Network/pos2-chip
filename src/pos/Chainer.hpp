@@ -31,7 +31,7 @@ public:
     }
 
     std::vector<Chain> find_links(
-        std::array<std::span<ProofFragment const>, NUM_CHALLENGE_SETS> const& fragments_per_set)
+        std::span<std::span<ProofFragment const> const, NUM_CHALLENGE_SETS> const fragments_per_set)
     {
 
 #ifdef DEBUG_CHAINER
