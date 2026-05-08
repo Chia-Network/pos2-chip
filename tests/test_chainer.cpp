@@ -81,7 +81,7 @@ TEST_CASE("small_lists")
     // multi-set starter algorithm we expect every set to contribute roughly equal
     // numbers of chains; if find_links regresses to "set 0 only", three of these
     // four buckets will end up empty and the assertion below will fail.
-    int start_set_chain_counts[NUM_CHALLENGE_SETS] = { 0 };
+    std::array<int, NUM_CHALLENGE_SETS> start_set_chain_counts;
     int num_cross_set_mutations = 0;
     for (int trial = 0; trial < num_trials; ++trial) {
         // create new random challenge each trial
