@@ -69,9 +69,8 @@ double jensen_expected_chains(
 //
 // With NUM_CHALLENGE_SETS = 4 (each set used L/N = 4 times in a chain), the
 // convexity of E[X^4] under Poisson would push the raw mean to ~1.44.
-// `POS2_RECALIBRATE_LAST_LINK_FILTER` (defined in Chainer.hpp) tightens the
-// last-link filter by exactly that factor so the empirical mean lands at
-// ~1.0. If that macro is set to 0, the assertions below will fail.
+// Chainer's last-link fractional-bit recalibration tightens that filter by
+// exactly that factor so the empirical mean lands at ~1.0.
 TEST_CASE("chain-average-real-plot")
 {
 #ifdef NDEBUG
@@ -181,9 +180,8 @@ TEST_CASE("chain-average-real-plot")
     std::cout << std::defaultfloat;
 
     // Assert the empirical mean is close to the design target of 1.0.
-    // The last-link recalibration (POS2_RECALIBRATE_LAST_LINK_FILTER in
-    // Chainer.hpp) divides by the Jensen bonus so this lands near 1. Toggle
-    // that macro to 0 and these assertions will fail with mean ~1.44.
+    // The last-link fractional-bit recalibration in Chainer divides by the
+    // Jensen bonus so this lands near 1; without it the mean would be ~1.44.
     constexpr double TARGET = 1.0;
     constexpr double TOL = 0.10; // tolerate +/- 10%
     CHECK_MESSAGE(mean >= TARGET * (1.0 - TOL),

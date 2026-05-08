@@ -8,20 +8,17 @@
 #include <iostream>
 #include <vector>
 
-// Recalibrate the final chain-link filter so the average chain count per
-// challenge is ~1.0 (the original design target).
+// The last chain link applies a fractional-bit recalibration to its upper
+// bits (see passes_fast_filter and compute_last_link_extra_threshold) so that
+// the average chain count per challenge is ~1.0 (the original design target).
 //
 // With NUM_CHALLENGE_SETS = N sets each used L/N times in a chain of length L,
-// and |set| ~ Poisson(2^chain_set_bits), the expected chain count is:
+// and |set| ~ Poisson(2^chain_set_bits), the raw expected chain count is:
 //     E[chains] = E[|S|^(L/N)]^N * 2^-total_filter_bits
 // For the default constants (L=16, N=4, chain_set_bits=6, lambda=64), the
-// Jensen bonus ratio = E[|S|^4]^4 / lambda^16 ~= 1.4401, so the average without
-// compensation is ~1.4401 chains/challenge instead of the design target of 1.
-//
-// When this is set to 1 we apply a fractional-bit threshold to ONLY the last
-// link's upper bits (which are independent of the lower zero-bit check) to
-// cancel the bonus. Set to 0 to revert to the original behavior.
-#define POS2_RECALIBRATE_LAST_LINK_FILTER 1
+// Jensen bonus ratio = E[|S|^4]^4 / lambda^16 ~= 1.4401, so without
+// compensation the average would land around 1.4401 chains/challenge instead
+// of 1.
 
 class Chainer {
 public:
@@ -191,7 +188,6 @@ public:
         if (check_value != 0)
             return false;
 
-#if POS2_RECALIBRATE_LAST_LINK_FILTER
         // Final-link fractional-bit recalibration. The lower passing_zeros_needed bits
         // of fast_challenge are already known to be zero; the upper bits are still
         // uniformly distributed (AES output) and independent of the lower bits, so
@@ -202,7 +198,6 @@ public:
             if (upper_bits >= extra_threshold)
                 return false;
         }
-#endif
 
         return true;
     }
