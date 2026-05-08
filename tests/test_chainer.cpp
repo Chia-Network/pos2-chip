@@ -281,19 +281,16 @@ TEST_CASE("small_lists")
     // variance. The last-link recalibration tightens the filter by
     // 1/jensen_bonus assuming Poisson(lambda), so the synthetic mean drops by
     // that same factor (~1/1.44).
-    double expected_mean;
-    {
-        constexpr double lambda = static_cast<double>(1ULL << CHAIN_SET_BITS);
-        constexpr int reuse = NUM_CHAIN_LINKS / NUM_CHALLENGE_SETS;
-        static_assert(reuse == 4, "Update Stirling coefficients if reuse changes");
-        // E[X^4] / lambda^4 for X ~ Poisson(lambda):
-        double const ratio
-            = 1.0 + 6.0 / lambda + 7.0 / (lambda * lambda) + 1.0 / (lambda * lambda * lambda);
-        double bonus = 1.0;
-        for (int i = 0; i < NUM_CHALLENGE_SETS; ++i)
-            bonus *= ratio;
-        expected_mean = 1.0 / bonus;
-    }
+    constexpr double lambda = static_cast<double>(1ULL << CHAIN_SET_BITS);
+    constexpr int reuse = NUM_CHAIN_LINKS / NUM_CHALLENGE_SETS;
+    static_assert(reuse == 4, "Update Stirling coefficients if reuse changes");
+    // E[X^4] / lambda^4 for X ~ Poisson(lambda):
+    double const ratio
+        = 1.0 + 6.0 / lambda + 7.0 / (lambda * lambda) + 1.0 / (lambda * lambda * lambda);
+    double bonus = 1.0;
+    for (int i = 0; i < NUM_CHALLENGE_SETS; ++i)
+        bonus *= ratio;
+    double const expected_mean = 1.0 / bonus;
     std::cout << "Expected mean (model): " << expected_mean << "\n";
     REQUIRE(mean > expected_mean * 0.80);
     REQUIRE(mean < expected_mean * 1.20);
