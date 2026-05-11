@@ -163,13 +163,21 @@ public:
         std::mt19937 rng(1245); // fixed seed for reproducibility
         std::uniform_int_distribution<uint32_t> plot_filter_dist(
             0, (1U << plot_id_filter_bits) - 1);
-        Range fragment_set_A_range = proof_params_.get_chaining_set_range(0);
-        std::uniform_int_distribution<ProofFragment> fragment_dist(0, fragment_set_A_range.end + 1);
-        std::vector<ProofFragment> fragments_As(chaining_set_size);
-        std::vector<ProofFragment> fragments_Bs(chaining_set_size);
-        for (int i = 0; i < static_cast<int>(chaining_set_size); ++i) {
-            fragments_As[i] = fragment_set_A_range.start + fragment_dist(rng);
-            fragments_Bs[i] = fragment_set_A_range.end + 1 + fragment_dist(rng);
+        // Allocate one synthetic fragment list per challenge set, each placed in a
+        // different chaining set so the validate logic in Chainer would accept them.
+        std::array<Range, NUM_CHALLENGE_SETS> set_ranges;
+        for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+            set_ranges[s] = proof_params_.get_chaining_set_range(s);
+        }
+        ProofFragment range_span
+            = static_cast<ProofFragment>(set_ranges[0].end - set_ranges[0].start);
+        std::uniform_int_distribution<ProofFragment> fragment_dist(0, range_span);
+        std::array<std::vector<ProofFragment>, NUM_CHALLENGE_SETS> fragments_per_set;
+        for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+            fragments_per_set[s].resize(chaining_set_size);
+            for (int i = 0; i < static_cast<int>(chaining_set_size); ++i) {
+                fragments_per_set[s][i] = set_ranges[s].start + fragment_dist(rng);
+            }
         }
 
         size_t num_challenges = 1000; // 9216; // simulate 9216 challenges (about one every 9.375
@@ -232,7 +240,8 @@ public:
                     continue; // does not pass filter
                 }
 
-                // if it passes filter, requires 2 disk seeks and 2*chaining_set_bytes read
+                // if it passes filter, requires NUM_CHALLENGE_SETS disk seeks and
+                // NUM_CHALLENGE_SETS*chaining_set_bytes read
                 challenge_plots_passed_filter++;
 
                 if (challenge_plots_passed_filter > max_plots_passing_filter_per_challenge) {
@@ -254,7 +263,12 @@ public:
                     sim_challenge_id++;
                     timer.start();
                     Chainer chainer(proof_params, challenge);
-                    auto chains = chainer.find_links(fragments_As, fragments_Bs);
+                    std::array<std::span<ProofFragment const>, NUM_CHALLENGE_SETS>
+                        fragments_per_set_spans;
+                    for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
+                        fragments_per_set_spans[s] = fragments_per_set[s];
+                    }
+                    auto chains = chainer.find_links(fragments_per_set_spans);
                     double elapsed_ms = timer.stop();
                     total_harvesting_compute_time_ms += elapsed_ms;
                     proofs_found += chains.size();
@@ -276,10 +290,11 @@ public:
         std::cout << "]" << std::endl << std::endl;
 
         // now we can compute our disk stats
-        // each plot passing filter requires 2 seeks + reading chaining set
-        size_t total_seeks = total_plots_passed_filter * 2;
-        size_t total_data_read_bytes
-            = total_plots_passed_filter * num_plots_in_group * chaining_set_bytes * 2;
+        // each plot passing filter requires NUM_CHALLENGE_SETS seeks + reading the
+        // corresponding NUM_CHALLENGE_SETS chaining sets
+        size_t total_seeks = total_plots_passed_filter * NUM_CHALLENGE_SETS;
+        size_t total_data_read_bytes = total_plots_passed_filter * num_plots_in_group
+            * chaining_set_bytes * NUM_CHALLENGE_SETS;
         double diskSeekTimeMs = total_seeks * diskSeekMs;
         double diskReadTimeMs
             = (static_cast<double>(total_data_read_bytes) / (diskReadMBs * 1000.0));
@@ -305,9 +320,10 @@ public:
         // max_plots_passing_filter_per_challenge << std::endl;
         // and load calc for max
         double max_disk_load_percentage = 100.0
-            * ((static_cast<double>(max_plots_passing_filter_per_challenge) * 2 * diskSeekMs
+            * ((static_cast<double>(max_plots_passing_filter_per_challenge) * NUM_CHALLENGE_SETS
+                       * diskSeekMs
                    + (static_cast<double>(max_plots_passing_filter_per_challenge
-                          * num_plots_in_group * chaining_set_bytes * 2)
+                          * num_plots_in_group * chaining_set_bytes * NUM_CHALLENGE_SETS)
                        / (diskReadMBs * 1000.0)))
                 / 9375.0);
         // std::cout << "Estimated max HDD load for a single challenge: " <<

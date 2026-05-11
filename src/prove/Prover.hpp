@@ -66,37 +66,40 @@ public:
         ProofCore::SelectedChallengeSets selected_sets = proof_core.selectChallengeSets(challenge);
 
 #ifdef DEBUG_PROVER
-        std::cout << "  Set A: index=" << selected_sets.fragment_set_A_index << ", range=["
-                  << selected_sets.fragment_set_A_range.start << ", "
-                  << selected_sets.fragment_set_A_range.end << "]\n";
-        std::cout << "  Set B: index=" << selected_sets.fragment_set_B_index << ", range=["
-                  << selected_sets.fragment_set_B_range.start << ", "
-                  << selected_sets.fragment_set_B_range.end << "]\n";
+        for (int i = 0; i < NUM_CHALLENGE_SETS; ++i) {
+            std::cout << "  Set " << i << ": index=" << selected_sets.fragment_set_indexes[i]
+                      << ", range=[" << selected_sets.fragment_set_ranges[i].start << ", "
+                      << selected_sets.fragment_set_ranges[i].end << "]\n";
+        }
 #endif
 
-        std::vector<ProofFragment> proof_fragments_set_A
-            = plot_file_.getProofFragmentsInRange(selected_sets.fragment_set_A_range);
-        std::vector<ProofFragment> proof_fragments_set_B
-            = plot_file_.getProofFragmentsInRange(selected_sets.fragment_set_B_range);
+        // Read all NUM_CHALLENGE_SETS fragment lists from the plot.
+        std::array<std::vector<ProofFragment>, NUM_CHALLENGE_SETS> proof_fragments_per_set;
+        for (int i = 0; i < NUM_CHALLENGE_SETS; ++i) {
+            proof_fragments_per_set[i]
+                = plot_file_.getProofFragmentsInRange(selected_sets.fragment_set_ranges[i]);
+        }
 
 // check count of proof fragments
 #ifdef DEBUG_PROVER
-        std::cout << "Challenge selected fragment set A index: "
-                  << selected_sets.fragment_set_A_index << ", range: ["
-                  << selected_sets.fragment_set_A_range.start << ", "
-                  << selected_sets.fragment_set_A_range.end << "]"
-                  << ", count: " << proof_fragments_set_A.size() << std::endl;
-        std::cout << "Challenge selected fragment set B index: "
-                  << selected_sets.fragment_set_B_index << ", range: ["
-                  << selected_sets.fragment_set_B_range.start << ", "
-                  << selected_sets.fragment_set_B_range.end << "]"
-                  << ", count: " << proof_fragments_set_B.size() << std::endl;
+        for (int i = 0; i < NUM_CHALLENGE_SETS; ++i) {
+            std::cout << "Challenge selected fragment set " << i
+                      << " index: " << selected_sets.fragment_set_indexes[i] << ", range: ["
+                      << selected_sets.fragment_set_ranges[i].start << ", "
+                      << selected_sets.fragment_set_ranges[i].end << "]"
+                      << ", count: " << proof_fragments_per_set[i].size() << std::endl;
+        }
 #endif
+
+        // Build span array for the Chainer.
+        std::array<std::span<ProofFragment const>, NUM_CHALLENGE_SETS> fragments_per_set;
+        for (int i = 0; i < NUM_CHALLENGE_SETS; ++i) {
+            fragments_per_set[i] = proof_fragments_per_set[i];
+        }
 
         // now Chainer to find quality chains from these proof fragments
         Chainer chainer(plot_proof_params, challenge);
-        std::vector<Chain> chains
-            = chainer.find_links(proof_fragments_set_A, proof_fragments_set_B);
+        std::vector<Chain> chains = chainer.find_links(fragments_per_set);
         std::vector<QualityChain> quality_chains;
         for (Chain const& chain: chains) {
             QualityChain qc;
