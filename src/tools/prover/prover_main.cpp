@@ -156,7 +156,8 @@ try {
             QualityChainLinks proof_fragments = chains[nChain].chain_links;
 
             ProofParams params = prover.getProofParams();
-            ProofFragmentCodec fragment_codec(params);
+            ProofFragmentCodec fragment_codec(
+                params.get_plot_id_bytes(), static_cast<uint8_t>(params.get_k()));
             // convert proof fragments to xbits hex
             std::string xbits_hex;
             std::vector<uint32_t> xbits_list;

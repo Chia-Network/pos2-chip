@@ -73,7 +73,6 @@ bool proof_to_quality_string(uint8_t const* plot_id,
     uint8_t const k,
     uint8_t const strength,
     uint32_t const* proof,
-    uint8_t const testnet,
     QualityChain* quality)
 try {
     if ((k & 1) != 0 || k < 18 || k > 32)
@@ -82,8 +81,7 @@ try {
         return false;
     if (plot_id == nullptr || proof == nullptr || quality == nullptr)
         return false;
-    ProofParams params(plot_id, k, strength, testnet);
-    ProofFragmentCodec codec(params);
+    ProofFragmentCodec codec(plot_id, k);
     quality->chain_links = codec.fullProofXValuesToQualityString(
         std::span<uint32_t const, TOTAL_XS_IN_PROOF>(proof, proof + TOTAL_XS_IN_PROOF));
     return true;

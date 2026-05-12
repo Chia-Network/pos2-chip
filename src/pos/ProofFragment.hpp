@@ -14,11 +14,12 @@ using ProofFragment = uint64_t;
 class ProofFragmentCodec {
 public:
     // Constructor: uses the provided ProofParams.
-    ProofFragmentCodec(ProofParams const& proof_params)
-        : params_(proof_params)
-        , cipher_(proof_params.get_plot_id_bytes(), proof_params.get_k())
+    ProofFragmentCodec(ProofParams const& params)
+        : ProofFragmentCodec(params.get_plot_id_bytes(), static_cast<uint8_t>(params.get_k()))
     {
     }
+
+    ProofFragmentCodec(uint8_t const* plot_id, uint8_t const k) : cipher_(plot_id, k) {}
 
     // Does not validate the proof, just converts it to a QualityString, which is the chain of
     // ProofFragments
@@ -48,15 +49,15 @@ public:
     ProofFragment encode(uint32_t const x_values[8]) const
     {
         // Combine the upper halves of x1, x3, x5, and x7 into a single 2*k bit value.
-        uint32_t x1 = x_values[0] >> (params_.get_k() / 2);
-        uint32_t x3 = x_values[2] >> (params_.get_k() / 2);
-        uint32_t x5 = x_values[4] >> (params_.get_k() / 2);
-        uint32_t x7 = x_values[6] >> (params_.get_k() / 2);
+        uint32_t x1 = x_values[0] >> (cipher_.k_ / 2);
+        uint32_t x3 = x_values[2] >> (cipher_.k_ / 2);
+        uint32_t x5 = x_values[4] >> (cipher_.k_ / 2);
+        uint32_t x7 = x_values[6] >> (cipher_.k_ / 2);
         uint64_t all_x_bits = 0;
-        all_x_bits |= (static_cast<uint64_t>(x1) << (params_.get_k() * 3 / 2));
-        all_x_bits |= (static_cast<uint64_t>(x3) << (params_.get_k() * 2 / 2));
-        all_x_bits |= (static_cast<uint64_t>(x5) << (params_.get_k() * 1 / 2));
-        all_x_bits |= (static_cast<uint64_t>(x7) << (params_.get_k() * 0 / 2));
+        all_x_bits |= (static_cast<uint64_t>(x1) << (cipher_.k_ * 3 / 2));
+        all_x_bits |= (static_cast<uint64_t>(x3) << (cipher_.k_ * 2 / 2));
+        all_x_bits |= (static_cast<uint64_t>(x5) << (cipher_.k_ * 1 / 2));
+        all_x_bits |= (static_cast<uint64_t>(x7) << (cipher_.k_ * 0 / 2));
         return cipher_.encrypt(all_x_bits);
     }
 
@@ -69,8 +70,7 @@ public:
     // recovered from the decrypted ciphertext.
     bool validate_proof_fragment(ProofFragment proof_fragment, uint32_t const x_values[8]) const
     {
-        size_t half_k
-            = params_.get_k() / 2; // Each x-value is k bits, so its high half is k/2 bits.
+        size_t half_k = cipher_.k_ / 2; // Each x-value is k bits, so its high half is k/2 bits.
         uint32_t x1 = x_values[0] >> half_k;
         uint32_t x3 = x_values[2] >> half_k;
         uint32_t x5 = x_values[4] >> half_k;
@@ -95,7 +95,7 @@ public:
     std::array<uint32_t, 4> get_x_bits_from_proof_fragment(ProofFragment proof_fragment) const
     {
         uint64_t decrypted_xs = cipher_.decrypt(proof_fragment);
-        size_t half_k = params_.get_k() / 2;
+        size_t half_k = cipher_.k_ / 2;
         uint32_t x1
             = static_cast<uint32_t>((decrypted_xs >> (half_k * 3)) & ((uint64_t(1) << half_k) - 1));
         uint32_t x3
@@ -107,6 +107,5 @@ public:
     }
 
 private:
-    ProofParams params_;
     FeistelCipher cipher_;
 };
