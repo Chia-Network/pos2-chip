@@ -117,7 +117,7 @@ checksum = "2fd1289c04a9ea8cb22300a459a72a385d7c73d3259e2ed7dcb2af674838cfa9"
 
 [[package]]
 name = "chia-pos2"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "arbitrary",
  "cc",
@@ -129,7 +129,7 @@ dependencies = [
 
 [[package]]
 name = "chia-pos2-fuzz"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "arbitrary",
  "chia-pos2",
@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "chia-pos2-tools"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "chia-pos2",
  "clap",
