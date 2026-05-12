@@ -142,7 +142,6 @@ fn pos2_benchmarks(c: &mut Criterion) {
                 f.k,
                 f.strength,
                 black_box(f.proof.as_slice()),
-                f.testnet,
             ))
         })
     });

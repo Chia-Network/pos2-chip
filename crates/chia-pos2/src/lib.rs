@@ -59,7 +59,6 @@ unsafe extern "C" {
         k: u8,
         strength: u8,
         proof: *const u32,
-        testnet: u8,
         quality: *mut QualityChain,
     ) -> bool;
 
@@ -150,7 +149,6 @@ pub fn quality_string_from_proof(
     k: u8,
     strength: u8,
     proof: &[u8],
-    testnet: bool,
 ) -> Option<QualityChain> {
     let x_values = bits::expand_bits(proof, k)?;
 
@@ -167,7 +165,6 @@ pub fn quality_string_from_proof(
             k,
             strength,
             x_values.as_ptr(),
-            u8::from(testnet),
             &mut quality,
         )
     };
@@ -444,7 +441,7 @@ mod tests {
                         .is_none(),
                     "proof must not validate under opposite network flag (challenge {challenge_idx}, testnet={testnet})",
                 );
-                let recovered = quality_string_from_proof(&plot_id, k, strength, &proof, testnet);
+                let recovered = quality_string_from_proof(&plot_id, k, strength, &proof);
                 let recovered = recovered.expect("quality_string_from_proof");
                 assert_eq!(
                     quality.chain_links, recovered.chain_links,
