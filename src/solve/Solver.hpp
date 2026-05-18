@@ -2,7 +2,6 @@
 
 #include "common/Timer.hpp"
 #include "pos/ProofCore.hpp"
-#include "pos/aes/AesHash.hpp"
 
 #include "ParallelRadixSort.hpp"
 #include "ProofSolverTimings.hpp"
@@ -1230,8 +1229,8 @@ public:
 
         {
             timer.start("AES multi-threaded bitmask test");
-            AesHash aes_hash(params_.get_plot_id_bytes(), params_.get_k());
             parallel_for_range(thread_ids.begin(), thread_ids.end(), [&](int t) {
+                ProofCore proof_core(params_);
                 int thread_matches = 0;
                 uint64_t start = uint64_t(t) * chunk_size;
                 uint64_t end = (t + 1 == (int)num_threads) ? NUM_XS : start + chunk_size;
@@ -1239,11 +1238,7 @@ public:
                 if (!use_prefetching_) {
                     for (uint64_t x = start; x < end; x++) {
 
-#if (HAVE_AES)
-                        uint32_t g_hash = aes_hash.g_x<false>(uint32_t(x));
-#else
-                        uint32_t g_hash = aes_hash.g_x<true>(uint32_t(x));
-#endif
+                        uint32_t const g_hash = proof_core.hashing.g(uint32_t(x));
 
                         uint32_t bitmask_hash = g_hash >> this->bitmask_shift_;
                         int slot = bitmask_hash >> 5;
@@ -1280,11 +1275,7 @@ public:
                     uint64_t x_pref = start;
                     for (int i = 0; i < PREFETCH_DIST; ++i, ++x_pref) {
 
-#if (HAVE_AES)
-                        uint32_t h = aes_hash.g_x<false>(uint32_t(x_pref));
-#else
-                        uint32_t h = aes_hash.g_x<true>(uint32_t(x_pref));
-#endif
+                        uint32_t const h = proof_core.hashing.g(uint32_t(x_pref));
 
                         hash_buf[i] = h;
                         uint32_t bitmask_hash = h >> this->bitmask_shift_;
@@ -1334,11 +1325,7 @@ public:
                         // PREFETCH_DIST.
                         uint64_t x_future = x + PREFETCH_DIST;
 
-#if (HAVE_AES)
-                        uint32_t h = aes_hash.g_x<false>(uint32_t(x_future));
-#else
-                        uint32_t h = aes_hash.g_x<true>(uint32_t(x_future));
-#endif
+                        uint32_t const h = proof_core.hashing.g(uint32_t(x_future));
 
                         hash_buf[buf_ix] = h;
                         uint32_t future_bitmask_hash = h >> this->bitmask_shift_;
@@ -1432,7 +1419,6 @@ public:
         parallel_for_range(0, NUM_X1S, [&](int x1_index) {
             // each thread in the pool runs this lambda
             ProofCore proof_core(params_);
-            AesHash aes_hash(params_.get_plot_id_bytes(), params_.get_k());
 
             uint32_t x1_bit_dropped = x_bits_list[static_cast<std::size_t>(x1_index)];
             uint32_t x1_range_start = x1_bit_dropped << (num_k_bits - x1_bits);
@@ -1443,12 +1429,8 @@ public:
             // Move match_key loop inside: compute chacha once per x and then emit entries for all
             // match keys.
             for (uint32_t x = x1_range_start; x < x1_range_start + x1_range_size; ++x) {
-                uint32_t g_hash;
-#if (HAVE_AES)
-                g_hash = aes_hash.g_x<false>(uint32_t(x));
-#else
-                        g_hash = aes_hash.g_x<true>(uint32_t(x));
-#endif
+                // Must use ProofHashing::g (not raw AES) so testnet XOR matches plot / validation.
+                uint32_t const g_hash = proof_core.hashing.g(uint32_t(x));
 
                 // offset within this x1 range for writing per-match_key blocks
                 std::size_t offset = static_cast<std::size_t>(x - x1_range_start);

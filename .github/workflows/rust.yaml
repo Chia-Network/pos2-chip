@@ -54,11 +54,11 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-features --all-targets -- -D warnings
 
+      - name: Test (release)
+        run: cargo test --all --release --all-features -- --include-ignored
+
       - name: Test (debug)
         run: cargo test --all --all-features
-
-      - name: Test (release)
-        run: cargo test --all --release --all-features
 
 
   fuzz_tests:

@@ -22,7 +22,7 @@ int benchmark(uint8_t k, uint8_t plot_strength)
 
     std::cout << "Running benchmark for:" << std::endl;
 
-    ProofParams params(plot_id.data(), k, plot_strength);
+    ProofParams params(plot_id.data(), k, plot_strength, 0);
     params.show();
 
     Solver solver(params);
@@ -53,7 +53,7 @@ int xbits(std::string const& plot_id_hex,
 {
     // convert plot_id_hex to bytes
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
-    ProofParams params(plot_id.data(), k, strength);
+    ProofParams params(plot_id.data(), k, strength, 0);
 
     params.show();
 

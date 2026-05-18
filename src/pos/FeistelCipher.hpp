@@ -7,7 +7,7 @@
 class FeistelCipher {
 public:
     // The key is stored as a fixed-size array of 32 bytes.
-    uint8_t plot_id_[32];
+    std::array<uint8_t, 32> plot_id_;
     size_t k_; // Half the block size (block is 2*k bits)
     size_t rounds_; // Number of Feistel rounds
     size_t bit_length_; // Total block size in bits (2*k)

@@ -27,6 +27,7 @@ unsafe extern "C" {
         strength: u8,
         challenge: *const u8,
         proof: *const u32,
+        testnet: u8,
         quality: *mut QualityChain,
     ) -> bool;
 
@@ -45,7 +46,20 @@ unsafe extern "C" {
         plot_id: *const u8,
         k: u8,
         strength: u8,
+        testnet: u8,
         output: *mut u32,
+    ) -> bool;
+
+    // Converts full proof to quality string (does not validate).
+    // plot_id must point to 32 bytes
+    // proof to TOTAL_XS_IN_PROOF (128) uint32_t
+    // quality is output
+    fn proof_to_quality_string(
+        plot_id: *const u8,
+        k: u8,
+        strength: u8,
+        proof: *const u32,
+        quality: *mut QualityChain,
     ) -> bool;
 
     fn create_plot(
@@ -57,20 +71,23 @@ unsafe extern "C" {
         meta_group: u8,
         memo: *const u8,
         memo_length: u8,
+        testnet: u8,
     ) -> bool;
 }
 
 pub type Bytes32 = [u8; 32];
 
+/// `testnet` must match the network used to create the plot and to validate proofs.
 pub fn solve_proof(
     quality_proof: &QualityChain,
     plot_id: &Bytes32,
     k: u8,
     strength: u8,
+    testnet: bool,
 ) -> Vec<u8> {
-    let mut proof = [0_u32; 512];
+    let mut proof = [0_u32; 128];
     // SAFETY: Calling into pos2 C++ library. See src/api.cpp for requirements
-    // proof must point to exactly 64 proof fragments (each a uint64_t)
+    // proof must point to exactly 128 x-values (each a uint32_t)
     // plot ID must point to exactly 32 bytes
     // output must point to exactly 512 32-bit integers
     if !unsafe {
@@ -79,6 +96,7 @@ pub fn solve_proof(
             plot_id.as_ptr(),
             k,
             strength,
+            u8::from(testnet),
             proof.as_mut_ptr(),
         )
     } {
@@ -88,17 +106,19 @@ pub fn solve_proof(
     bits::compact_bits(&proof, k)
 }
 
+/// `testnet`: use `true` for testnet plot parameters, `false` for mainnet.
 pub fn validate_proof_v2(
     plot_id: &Bytes32,
     size: u8,
     challenge: &Bytes32,
     strength: u8,
     proof: &[u8],
+    testnet: bool,
 ) -> Option<QualityChain> {
     let x_values = bits::expand_bits(proof, size)?;
 
-    if x_values.len() != NUM_CHAIN_LINKS * 32 {
-        // a full proof has exactly 512 x-values. This is invalid or incomplete
+    if x_values.len() != NUM_CHAIN_LINKS * 8 {
+        // a full proof has exactly 128 x-values. This is invalid or incomplete
         return None;
     }
 
@@ -114,12 +134,45 @@ pub fn validate_proof_v2(
             strength,
             challenge.as_ptr(),
             x_values.as_ptr(),
+            u8::from(testnet),
             &mut quality,
         )
     };
     if valid { Some(quality) } else { None }
 }
 
+/// Converts full proof bytes to quality string (does not validate the proof).
+/// Returns `Some(quality)` on success, `None` if proof format is invalid or conversion fails.
+/// `testnet` must match the network used when the proof was produced.
+pub fn quality_string_from_proof(
+    plot_id: &Bytes32,
+    k: u8,
+    strength: u8,
+    proof: &[u8],
+) -> Option<QualityChain> {
+    let x_values = bits::expand_bits(proof, k)?;
+
+    if x_values.len() != NUM_CHAIN_LINKS * 8 {
+        return None;
+    }
+
+    let mut quality = QualityChain::default();
+    // SAFETY: plot_id 32 bytes, proof 128 u32s, quality is output. See src/api.cpp.
+    let ok = unsafe {
+        // Call the C API (extern declared above); avoid name shadowing via alias.
+        proof_to_quality_string(
+            plot_id.as_ptr(),
+            k,
+            strength,
+            x_values.as_ptr(),
+            &mut quality,
+        )
+    };
+    if ok { Some(quality) } else { None }
+}
+
+/// `testnet`: use `true` to create a plot with testnet parameters (not valid on mainnet).
+#[allow(clippy::too_many_arguments)]
 pub fn create_v2_plot(
     filename: &Path,
     k: u8,
@@ -128,6 +181,7 @@ pub fn create_v2_plot(
     index: u16,
     meta_group: u8,
     memo: &[u8],
+    testnet: bool,
 ) -> Result<()> {
     let Some(filename) = filename.to_str() else {
         return Err(Error::other("invalid path"));
@@ -156,6 +210,7 @@ pub fn create_v2_plot(
             meta_group,
             memo.as_ptr(),
             memo.len() as u8,
+            u8::from(testnet),
         )
     };
     if success {
@@ -308,12 +363,114 @@ impl Prover {
     pub fn get_memo(&self) -> &[u8] {
         &self.memo
     }
+
+    pub fn get_meta_group(&self) -> u8 {
+        self.meta_group
+    }
+
+    pub fn get_plot_index(&self) -> u16 {
+        self.index
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use rstest::rstest;
+
+    /// Creates a v2 plot if missing, runs 100 challenges, solves proofs, validates,
+    /// and round-trips proof -> quality_string and checks it matches the original quality.
+    /// Matrix: 2×2×2 (testnet × plot index × meta group) = 8 cases.
+    /// Expected proof totals are defined in `expected_proof_count` below; update them if the
+    /// challenge loop range or plot parameters change.
+    #[rstest]
+    /// This test is expensive to run in un-optimized mode. To run this test:
+    /// cargo test --release -- --include-ignored
+    #[ignore]
+    fn test_plot_roundtrip(
+        #[values(false, true)] testnet: bool,
+        #[values(0u16, 3u16)] index: u16,
+        #[values(0u8, 7u8)] meta_group: u8,
+    ) {
+        let k = 20u8;
+        let strength = 2u8;
+        let mut plot_id = [0xabu8; 32];
+        plot_id[0..2].copy_from_slice(&index.to_le_bytes());
+        plot_id[2] = meta_group;
+
+        let memo = [0u8; 112];
+        let plot_name = format!(
+            "pos2_chia_test_k20_i{index}_g{meta_group}{}.plot",
+            if testnet { "_testnet" } else { "" }
+        );
+        let plot_path = std::env::temp_dir().join(plot_name);
+
+        if !plot_path.exists() {
+            create_v2_plot(
+                &plot_path, k, strength, &plot_id, index, meta_group, &memo, testnet,
+            )
+            .expect("create_v2_plot");
+        }
+
+        let prover = Prover::new(&plot_path).expect("open prover");
+        assert_eq!(prover.size(), k);
+        assert_eq!(prover.get_strength(), strength);
+        assert_eq!(prover.get_plot_index(), index);
+        assert_eq!(prover.get_meta_group(), meta_group);
+        let plot_id = *prover.plot_id();
+
+        let mut num_proofs = 0;
+        let mut challenge = [0u8; 32];
+        for challenge_idx in 0..100u32 {
+            challenge[0..4].copy_from_slice(&challenge_idx.to_le_bytes());
+
+            let qualities = prover
+                .get_qualities_for_challenge(&challenge)
+                .expect("get_qualities_for_challenge");
+
+            for quality in qualities {
+                let proof = solve_proof(&quality, &plot_id, k, strength, testnet);
+                assert!(!proof.is_empty(), "failed to solve proof");
+                num_proofs += 1;
+                assert!(
+                    validate_proof_v2(&plot_id, k, &challenge, strength, &proof, testnet).is_some(),
+                    "proof should validate for challenge {challenge_idx} (testnet={testnet} index={index} meta_group={meta_group})",
+                );
+                assert!(
+                    validate_proof_v2(&plot_id, k, &challenge, strength, &proof, !testnet)
+                        .is_none(),
+                    "proof must not validate under opposite network flag (challenge {challenge_idx}, testnet={testnet})",
+                );
+                let recovered = quality_string_from_proof(&plot_id, k, strength, &proof);
+                let recovered = recovered.expect("quality_string_from_proof");
+                assert_eq!(
+                    quality.chain_links, recovered.chain_links,
+                    "challenge {challenge_idx}: quality roundtrip must match",
+                );
+            }
+        }
+        let expected = expected_proof_count(testnet, index, meta_group);
+        assert_eq!(
+            num_proofs, expected,
+            "testnet={testnet} index={index} meta_group={meta_group}",
+        );
+    }
+
+    /// Expected number of qualities (proofs) found over 100 challenges for each test matrix case.
+    /// Tallies over **100** sequential challenges (`challenge_idx` 0..100).
+    fn expected_proof_count(testnet: bool, index: u16, meta_group: u8) -> u32 {
+        match (testnet, index, meta_group) {
+            (false, 0, 0) => 94,
+            (false, 0, 7) => 82,
+            (false, 3, 0) => 109,
+            (false, 3, 7) => 88,
+            (true, 0, 0) => 90,
+            (true, 0, 7) => 111,
+            (true, 3, 0) => 78,
+            (true, 3, 7) => 96,
+            _ => unreachable!("test matrix is fixed to 8 cases"),
+        }
+    }
 
     #[rstest]
     fn test_serialize_quality(

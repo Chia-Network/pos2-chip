@@ -29,6 +29,7 @@ fn create_test_plots() {
                 index,
                 meta_group,
                 &memo,
+                false,
             )
             .expect("create_v2_plot()");
         }
@@ -48,8 +49,8 @@ fuzz_target!(init: { create_test_plots(); }, |challenge: Bytes32| {
         let k = plot.size();
         for quality in qualities {
             let _ = serialize_quality(&quality.chain_links, strength);
-            let proof = solve_proof(&quality, plot_id, k, strength);
-            assert!(validate_proof_v2(plot_id, k, &challenge, strength, &proof).is_some());
+            let proof = solve_proof(&quality, plot_id, k, strength, false);
+            assert!(validate_proof_v2(plot_id, k, &challenge, strength, &proof, false).is_some());
         }
     }
 });

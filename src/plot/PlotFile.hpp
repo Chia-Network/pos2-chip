@@ -193,7 +193,7 @@ public:
         uint8_t meta_group;
         in.read(reinterpret_cast<char*>(&meta_group), sizeof(meta_group));
 
-        ProofParams params(plot_id_bytes, k, strength);
+        ProofParams params(plot_id_bytes, k, strength, 0);
 
         uint8_t memo_length = 0;
         in.read(reinterpret_cast<char*>(&memo_length), sizeof(memo_length));

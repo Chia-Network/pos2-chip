@@ -172,7 +172,8 @@ try {
             Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF")
                 .data(),
             28,
-            2);
+            2,
+            0);
         DiskBench diskbench(proof_params);
         diskbench.simulateChallengeDiskReads(
             plotIdFilter, plotsInGroup, diskTB, diskSeekMs, diskReadMBs);

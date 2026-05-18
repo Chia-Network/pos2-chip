@@ -1,6 +1,6 @@
 [package]
 name = "chia-pos2"
-version = "0.2.0"
+version = "0.6.0"
 edition = "2024"
 license = "Apache-2.0"
 description = "A library for creating plots, validating proofs of space, farming partial proofs and solving proofs. Using Chia proof of space v2"
@@ -27,4 +27,9 @@ arbitrary = { workspace = true, features = ["derive"], optional = true }
 cc = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 rstest = { workspace = true }
+
+[[bench]]
+name = "pos2_bench"
+harness = false

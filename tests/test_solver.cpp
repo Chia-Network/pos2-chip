@@ -165,7 +165,7 @@ TEST_CASE("solve-partial")
     std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
 
     ProofParams params(
-        plot_id.data(), numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(plot_strength));
+        plot_id.data(), numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(plot_strength), 0);
     ProofCore proof_core(params);
     ProofFragmentCodec fragment_codec(params);
 

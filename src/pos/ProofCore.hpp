@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -227,60 +228,39 @@ public:
         section2 = inverse_matching_section(section);
     }
 
-    // Static match filters:
-    static bool match_filter_16(uint32_t x, uint32_t y)
-    {
-        uint32_t v = (x + y) & 0xFFFFU;
-        v = v * v;
-        uint32_t r = 0;
-        r ^= v >> 24;
-        r ^= v >> 17;
-        r ^= v >> 11;
-        r ^= v >> 4;
-        return (r & 15U) == 1;
-    }
-
-    static bool match_filter_4(uint32_t x, uint32_t y)
-    {
-        uint32_t v = (x + y) & 0xFFFFU;
-        v = v * v;
-        uint32_t r = 0;
-        r ^= v >> 25;
-        r ^= v >> 16;
-        r ^= v >> 10;
-        r ^= v >> 2;
-        return (((r >> 2) + r) & 3U) == 2;
-    }
-
     struct SelectedChallengeSets {
-        uint32_t fragment_set_A_index;
-        uint32_t fragment_set_B_index;
-        Range fragment_set_A_range;
-        Range fragment_set_B_range;
+        // The chaining-set index used for each of the NUM_CHALLENGE_SETS sets.
+        // By construction, fragment_set_indexes[i] % NUM_CHALLENGE_SETS == i, so
+        // the indexes are mutually exclusive modulo NUM_CHALLENGE_SETS.
+        std::array<uint32_t, NUM_CHALLENGE_SETS> fragment_set_indexes;
+        std::array<Range, NUM_CHALLENGE_SETS> fragment_set_ranges;
     };
     SelectedChallengeSets selectChallengeSets(std::span<uint8_t const, 32> const challenge)
     {
         // challenge sets will be the same withing a grouped plot id
-        BlakeHash::Result256 grouped_challenge_hash
-            = hashing.challengeWithGroupedPlotIdHash(challenge);
+        BlakeHash::Result256 grouped_challenge_hash = hashing.challengeWithPlotIdHash(challenge);
 
-        // use bits from challenge to select two distinct chaining sets
+        // use bits from challenge to select NUM_CHALLENGE_SETS distinct chaining sets
         uint32_t num_chaining_sets_bits = params_.get_num_chaining_sets_bits();
+        // Ensure we have enough sets to host one per modular class.
+        assert(num_chaining_sets_bits >= 2);
+        uint32_t const sets_mask = (1U << num_chaining_sets_bits) - 1U;
+        // Mask off the low bits used to encode the modular class (NUM_CHALLENGE_SETS == 4 => 2
+        // bits)
+        static_assert(NUM_CHALLENGE_SETS == 4,
+            "selectChallengeSets currently assumes NUM_CHALLENGE_SETS == 4");
+        uint32_t const high_bits_mask = sets_mask & ~uint32_t(NUM_CHALLENGE_SETS - 1);
 
-        // fragments are guaranteed to be different by forcing one even and one odd index
-        // get first set index from lower bits, but always even (0 on lsb)
-        uint32_t fragment_set_A_index
-            = (grouped_challenge_hash.r[0] & ((1U << num_chaining_sets_bits) - 1)) & ~1U;
-        // get second set index from lower of next 32 bits, and always odd (1 on lsb)
-        uint32_t fragment_set_B_index
-            = (grouped_challenge_hash.r[1] & ((1U << num_chaining_sets_bits) - 1)) | 1U;
-
-        Range fragment_set_A_range = params_.get_chaining_set_range(fragment_set_A_index);
-        Range fragment_set_B_range = params_.get_chaining_set_range(fragment_set_B_index);
-
-        return {
-            fragment_set_A_index, fragment_set_B_index, fragment_set_A_range, fragment_set_B_range
-        };
+        // BlakeHash::Result256 contains 8 x 32-bit words; pick a different word for each
+        // set so each index is independent in its high bits but forced to a unique
+        // residue (0..NUM_CHALLENGE_SETS-1) via its low bits.
+        SelectedChallengeSets out {};
+        for (uint32_t i = 0; i < NUM_CHALLENGE_SETS; ++i) {
+            uint32_t const set_index = (grouped_challenge_hash.r[i] & high_bits_mask) | i;
+            out.fragment_set_indexes[i] = set_index;
+            out.fragment_set_ranges[i] = params_.get_chaining_set_range(set_index);
+        }
+        return out;
     }
 
     ProofParams getProofParams() const { return params_; }

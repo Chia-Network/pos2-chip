@@ -22,7 +22,10 @@ fuzz_target!(|data: &[u8]| -> Corpus {
     let Ok(proof) = Vec::<u8>::arbitrary(&mut unstructured) else {
         return Corpus::Reject;
     };
+    let Ok(testnet) = bool::arbitrary(&mut unstructured) else {
+        return Corpus::Reject;
+    };
 
-    let _ = validate_proof_v2(&plot_id, k_size, &challenge, strength, &proof);
+    let _ = validate_proof_v2(&plot_id, k_size, &challenge, strength, &proof, testnet);
     Corpus::Keep
 });

@@ -16,11 +16,16 @@ bool validate_proof(uint8_t const* plot_id,
     uint8_t const strength,
     uint8_t const* challenge,
     uint32_t const* proof,
+    uint8_t const testnet,
     QualityChain* quality)
 try {
-    if ((k_size & 1) == 1)
-        throw std::invalid_argument("k must be even");
-    ProofParams const params(plot_id, k_size, strength);
+    if ((k_size & 1) != 0 || k_size < 18 || k_size > 32)
+        return false;
+    if (strength < 2)
+        return false;
+    if (plot_id == nullptr || challenge == nullptr || proof == nullptr || quality == nullptr)
+        return false;
+    ProofParams const params(plot_id, k_size, strength, testnet);
     ProofValidator validator(params);
     std::optional<QualityChainLinks> quality_links = validator.validate_full_proof(
         std::span<uint32_t const, TOTAL_XS_IN_PROOF>(proof, proof + TOTAL_XS_IN_PROOF),
@@ -31,8 +36,7 @@ try {
     quality->chain_links = quality_links.value();
     return true;
 }
-catch (std::exception const& e) {
-    std::cerr << e.what() << std::endl;
+catch (std::exception const&) {
     return false;
 }
 
@@ -45,6 +49,10 @@ uint32_t qualities_for_challenge(char const* plot_file,
     QualityChain* output,
     uint32_t const num_outputs)
 try {
+    if (plot_file == nullptr || challenge == nullptr || output == nullptr)
+        return 0;
+    if (num_outputs == 0)
+        return 0;
     Prover p(plot_file);
 
     std::span<uint8_t const, 32> const challenge_arr(challenge, challenge + 32);
@@ -53,23 +61,51 @@ try {
     std::copy(ret.begin(), ret.begin() + num_results, output);
     return num_results;
 }
-catch (std::exception const& e) {
-    std::cerr << e.what() << std::endl;
+catch (std::exception const&) {
     return 0;
 }
 
-// proof must point to exactly TOTAL_PROOF_FRAGMENTS_IN_PROOF (16) proof fragments (each a uint64_t)
+// Converts full proof bytes to quality string (does not validate the proof).
+// plot_id must point to 32 bytes
+// proof must point to 128 uint32_t values
+// quality must point to a 16 ProofFragments
+bool proof_to_quality_string(uint8_t const* plot_id,
+    uint8_t const k,
+    uint8_t const strength,
+    uint32_t const* proof,
+    QualityChain* quality)
+try {
+    if ((k & 1) != 0 || k < 18 || k > 32)
+        return false;
+    if (strength < 2)
+        return false;
+    if (plot_id == nullptr || proof == nullptr || quality == nullptr)
+        return false;
+    ProofFragmentCodec codec(plot_id, k);
+    quality->chain_links = codec.fullProofXValuesToQualityString(
+        std::span<uint32_t const, TOTAL_XS_IN_PROOF>(proof, proof + TOTAL_XS_IN_PROOF));
+    return true;
+}
+catch (std::exception const&) {
+    return false;
+}
+
 // plot ID must point to exactly 32 bytes
 // output must point to exactly TOTAL_XS_IN_PROOF (128) 32-bit integers
 bool solve_partial_proof(QualityChain const* quality,
     uint8_t const* plot_id,
     uint8_t const k,
     uint8_t const strength,
+    uint8_t const testnet,
     uint32_t* output)
 try {
-    if ((k & 1) == 1)
-        throw std::invalid_argument("k must be even");
-    ProofParams params(plot_id, k, strength);
+    if ((k & 1) != 0 || k < 18 || k > 32)
+        return false;
+    if (strength < 2)
+        return false;
+    if (quality == nullptr || plot_id == nullptr || output == nullptr)
+        return false;
+    ProofParams params(plot_id, k, strength, testnet);
     ProofFragmentCodec c(params);
 
     std::array<uint32_t, TOTAL_T1_PAIRS_IN_PROOF> x_bits;
@@ -90,8 +126,7 @@ try {
     std::copy(full_proofs[0].begin(), full_proofs[0].end(), output);
     return true;
 }
-catch (std::exception const& e) {
-    std::cerr << e.what() << std::endl;
+catch (std::exception const&) {
     return false;
 }
 
@@ -109,12 +144,18 @@ bool create_plot(char const* filename,
     uint16_t const index,
     uint8_t const meta_group,
     uint8_t const* memo,
-    uint8_t const memo_length)
+    uint8_t const memo_length,
+    uint8_t const testnet)
 try {
-
-    if ((k & 1) == 1)
-        throw std::invalid_argument("k must be even");
-    ProofParams params(plot_id, int(k), int(strength));
+    if ((k & 1) != 0 || k < 18 || k > 32)
+        return false;
+    if (filename == nullptr || plot_id == nullptr || memo == nullptr)
+        return false;
+    if (strength < 2)
+        return false;
+    if (memo_length == 0)
+        return false;
+    ProofParams params(plot_id, int(k), int(strength), testnet);
     Plotter plotter(params);
     PlotData plot = plotter.run();
     PlotFile::writeData(filename,
@@ -125,8 +166,7 @@ try {
         std::span<uint8_t const>(memo, memo + memo_length));
     return true;
 }
-catch (std::exception const& e) {
-    std::cerr << e.what() << std::endl;
+catch (std::exception const&) {
     return false;
 }
 }

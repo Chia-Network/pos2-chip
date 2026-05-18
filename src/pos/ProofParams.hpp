@@ -25,9 +25,13 @@ public:
     //   plot_id_bytes: pointer to a 32-byte plot ID.
     //   k: number of bits per x, must be even
     //   match_key_bits: the number of match key bits for table 3
-    ProofParams(uint8_t const* const plot_id_bytes, uint8_t const k, uint8_t const strength)
+    ProofParams(uint8_t const* const plot_id_bytes,
+        uint8_t const k,
+        uint8_t const strength,
+        uint8_t const testnet)
         : k_(k)
         , strength_(strength)
+        , testnet_(testnet)
     {
         // strength must be >= 2
         if (strength_ < 2) {
@@ -135,25 +139,23 @@ public:
     //__host__ __device__
     uint8_t const* get_plot_id_bytes() const { return plot_id_bytes_; }
 
-    std::array<uint8_t, 32> get_grouped_plot_id() const
+    std::array<uint8_t, 32> get_plot_id() const
     {
-        // grouped plot id is the normal plot id with the two bytes zeroed out
-        // this allows up to 65536 grouped plots (or 60TB)
-        // may want to bump this up another level and leave the farmer to handle grouping
-
-        std::array<uint8_t, 32> grouped_plot_id_bytes;
-        std::memcpy(grouped_plot_id_bytes.data(), plot_id_bytes_, 32);
-        grouped_plot_id_bytes[30] = 0;
-        grouped_plot_id_bytes[31] = 0;
-        return grouped_plot_id_bytes;
+        // plot id is the unique identifier for a plot
+        // generated from a hash of the group plot id, plot index, and meta group
+        // The caller is responsible for generating the plot id from the group plot id, plot index,
+        // and meta group
+        std::array<uint8_t, 32> plot_id_array;
+        std::memcpy(plot_id_array.data(), plot_id_bytes_, 32);
+        return plot_id_array;
     }
 
     int get_k() const { return numeric_cast<int>(k_); }
 
     int get_chaining_set_bits() const
     {
-        // this achieves bit saturation on T2 pairs.
-        return (get_k() >> 1) - 2;
+        // 9 bits (512) tuned as security/hdd usage sweet spot
+        return CHAIN_SET_BITS;
     }
 
     uint32_t get_chaining_set_size() const { return 1 << get_chaining_set_bits(); }
@@ -174,6 +176,8 @@ public:
 
     // Returns the number of match key bits for table 3
     uint8_t get_match_key_bits() const { return strength_; }
+
+    bool is_testnet() const { return testnet_ != 0; }
 
     void debugPrint() const
     {
@@ -197,4 +201,5 @@ private:
     uint8_t plot_id_bytes_[32]; // Fixed-size storage for the 32-byte plot ID.
     uint8_t k_; // Half of the block size (i.e., 2*k bits total).
     uint8_t strength_; // strength of the plot
+    uint8_t testnet_; // 0 = mainnet, 1 = testnet
 };
