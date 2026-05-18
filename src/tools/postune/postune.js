@@ -2,6 +2,27 @@ var k = 28;
 var num_entries_per_table = 1 << k;
 var honest_bits_per_entry = 29.45;
 var honest_plot_size_bytes = num_entries_per_table * honest_bits_per_entry / 8;
+var strength_cap = 2+4;
+
+// Number of distinct challenge fragment sets selected per challenge. Must mirror
+// NUM_CHALLENGE_SETS in src/pos/ProofConstants.hpp. The attacker must scan
+// proof fragments from each of these sets per challenge, so per-challenge work
+// scales linearly with this value.
+var NUM_CHALLENGE_SETS = 4;
+
+var benchmarks = {
+    "nvidia_rtx_5090": {
+        rounds32: {
+            g_x: 4303851,
+            matching_target: 4289555,
+            pairing: 4243035
+        },
+        sortXs: 18057265,
+        sortT1: 12619378,
+        sortT2: 8045923,
+        sortT3: 10178859
+    }
+}
 
 //var base_plot_id_filter = 4096;
 var default_scan_filter_bits = 11;
@@ -9,13 +30,17 @@ var default_scan_filter_bits = 11;
 // 2 sets strength to strength bits, 0 sets strength starting at 0.
 var pairing_strength_start = 2;
 var t1_match_bits_base = 2;
-var hash_speedup = 2;
+var hash_speedup = 1;
 
 
 var device_params_5090 = {
     g_hashes_per_ms: 9925926*hash_speedup,       // the g(x) function
     pair_hashes_per_ms: 9925926*hash_speedup,     // once we have a match, the hash to pair them to get next meta
     target_hashes_per_ms: 9925926*hash_speedup,      // given a left side pairing, time to hash (meta + mi) target bits
+    sortXs: 18057265,
+    sortT1: 12619378,
+    sortT2: 8045923,
+    sortT3: 10178859,
     sloths_per_ms: 0 // 9925926         // time to do sloth encoding
 };
 
@@ -23,6 +48,10 @@ var device_params_pi5 = {
     g_hashes_per_ms: 74362*hash_speedup,       // the g(x) function
     pair_hashes_per_ms: 74362*hash_speedup,     // once we have a match, the hash to pair them to get next meta
     target_hashes_per_ms: 74362*hash_speedup,      // given a left side pairing, time to hash (meta + mi) target bits
+    sortXs: 0,
+    sortT1: 0,
+    sortT2: 0,
+    sortT3: 0,
     sloths_per_ms: 0 // 9925926         // time to do sloth encoding
 }
 var default_plot_params = {
@@ -200,6 +229,30 @@ function get_t3_pairing_time(plot_params, device_params, num_hashes) {
 function get_t3_target_time(plot_params, device_params, num_hashes) {
     return num_hashes / device_params.target_hashes_per_ms;
 }
+function get_xs_sort_time(plot_params, device_params, num_entries) {
+    if (device_params.sortXs == 0) {
+        return 0;
+    }
+    return (num_entries / device_params.sortXs);
+}
+function get_t1_sort_time(plot_params, device_params, num_entries) {
+    if (device_params.sortT1 == 0) {
+        return 0;
+    }
+    return (num_entries / device_params.sortT1);
+}
+function get_t2_sort_time(plot_params, device_params, num_entries) {
+    if (device_params.sortT2 == 0) {
+        return 0;
+    }
+    return (num_entries / device_params.sortT2);
+}
+function get_t3_sort_time(plot_params, device_params, num_entries) {
+    if (device_params.sortT3 == 0) {
+        return 0;
+    }
+    return (num_entries / device_params.sortT3);
+}
 
 function calc_validation_time(plot_params, device_params) {
     // validation is on 128 x's, which is 64 pairs.
@@ -240,37 +293,58 @@ function calc_validation_time(plot_params, device_params) {
 }
 
 function calc_plotting_time(plot_params, device_params) {
+    var num_xs_sort_entries = num_entries_per_table;
+    var num_table_sort_entries = num_entries_per_table * 4;
     var g_hashes = num_entries_per_table;
     var t1_target_hashes = num_entries_per_table * (1 << plot_params.t1_match_bits);
-    var t1_pairing_hashes = num_entries_per_table; // t1 has special fast match function
+    //var t1_pairing_hashes = num_entries_per_table; // set if t1 uses special fast match function
+    var t1_pairing_hashes = t1_target_hashes;
     var t2_target_hashes = num_entries_per_table * (1 << plot_params.t2_match_bits);
     var t2_pairing_hashes = t2_target_hashes;
     var t3_target_hashes = num_entries_per_table * (1 << plot_params.t3_match_bits);
-    var t3_pairing_hashes = num_entries_per_table;
+    var t3_pairing_hashes = t3_target_hashes;
     var g_hashes_time = get_g_time(device_params, g_hashes);
+    var xs_sort_time = get_xs_sort_time(plot_params, device_params, num_xs_sort_entries);
     var t1_target_hashes_time = get_t1_target_time(plot_params, device_params, t1_target_hashes);
     var t1_pairing_hashes_time = get_t1_pairing_time(plot_params, device_params, t1_pairing_hashes);
-    var t1_time = t1_target_hashes_time + t1_pairing_hashes_time;
+    var t1_sort_time = get_t1_sort_time(plot_params, device_params, num_table_sort_entries);
+    var t1_time = t1_target_hashes_time + t1_pairing_hashes_time + t1_sort_time;
     var t2_target_hashes_time = get_t2_target_time(plot_params, device_params, t2_target_hashes);
     var t2_pairing_hashes_time = get_t2_pairing_time(plot_params, device_params, t2_pairing_hashes);
-    var t2_time = t2_target_hashes_time + t2_pairing_hashes_time;
+    var t2_sort_time = get_t2_sort_time(plot_params, device_params, num_table_sort_entries);
+    var t2_time = t2_target_hashes_time + t2_pairing_hashes_time + t2_sort_time;
     var t3_target_hashes_time = get_t3_target_time(plot_params, device_params, t3_target_hashes);
     var t3_pairing_hashes_time = get_t3_pairing_time(plot_params, device_params, t3_pairing_hashes);
-    var t3_time = t3_target_hashes_time + t3_pairing_hashes_time;
+    var t3_sort_time = get_t3_sort_time(plot_params, device_params, num_table_sort_entries);
+    var t3_time = t3_target_hashes_time + t3_pairing_hashes_time + t3_sort_time;
 
-    var total_time = g_hashes_time + t1_time + t2_time + t3_time;
+    var total_time = g_hashes_time + xs_sort_time + t1_time + t2_time + t3_time;
     var results = {
         "T1 match bits": plot_params.t1_match_bits,
         "T2 match bits": plot_params.t2_match_bits,
         "T3 match bits": plot_params.t3_match_bits,
         "G hashes": Math.round(g_hashes),
+        "XS sort entries": Math.round(num_xs_sort_entries),
         "T1 target hashes": Math.round(t1_target_hashes),
         "T1 pairing hashes": Math.round(t1_pairing_hashes),
+        "T1 sort entries": Math.round(num_table_sort_entries),
         "T2 target hashes": Math.round(t2_target_hashes),
         "T2 pairing hashes": Math.round(t2_pairing_hashes),
+        "T2 sort entries": Math.round(num_table_sort_entries),
         "T3 target hashes": Math.round(t3_target_hashes),
         "T3 pairing hashes": Math.round(t3_pairing_hashes),
+        "T3 sort entries": Math.round(num_table_sort_entries),
         "G time (ms)": g_hashes_time,
+        "XS sort time (ms)": xs_sort_time,
+        "T1 target time (ms)": t1_target_hashes_time,
+        "T1 pairing time (ms)": t1_pairing_hashes_time,
+        "T1 sort time (ms)": t1_sort_time,
+        "T2 target time (ms)": t2_target_hashes_time,
+        "T2 pairing time (ms)": t2_pairing_hashes_time,
+        "T2 sort time (ms)": t2_sort_time,
+        "T3 target time (ms)": t3_target_hashes_time,
+        "T3 pairing time (ms)": t3_pairing_hashes_time,
+        "T3 sort time (ms)": t3_sort_time,
         "T1 time (ms)": t1_time,
         "T2 time (ms)": t2_time,
         "T3 time (ms)": t3_time,
@@ -383,7 +457,7 @@ function calc_attack_collected_xs(challenge_sets_covered, plot_params, device_pa
     var t3_pairing_hashes_time = get_t3_pairing_time(plot_params, device_params, t3_pairing_hashes);
     var t3_time = t3_target_hashes_time + t3_pairing_hashes_time;
 
-    var challenge_solve_time = 2 * (t1_time + t2_time + t3_time); // 2 scan sets
+    var challenge_solve_time = NUM_CHALLENGE_SETS * (t1_time + t2_time + t3_time); // NUM_CHALLENGE_SETS scan sets
     var results = {
         "Challenge sets covered": challenge_sets_covered,
         "T1 matches": Math.round(t1_matches),
@@ -403,7 +477,7 @@ function calc_attack_collected_xs(challenge_sets_covered, plot_params, device_pa
         "T1 time (ms)": t1_time,
         "T2 time (ms)": t2_time,
         "T3 time (ms)": t3_time,
-        "Challenge solve time (2 scan sets) (ms)": challenge_solve_time
+        [`Challenge solve time (${NUM_CHALLENGE_SETS} scan sets) (ms)`]: challenge_solve_time
     }
     console.table(results);
 
@@ -455,7 +529,7 @@ function calc_attack_collected_lxs(challenge_sets_covered, plot_params, device_p
     var t3_pairing_hashes_time = get_t3_pairing_time(plot_params, device_params, t3_pairing_hashes);
     var t3_time = t3_target_hashes_time + t3_pairing_hashes_time;
 
-    var challenge_solve_time = g_hashes_time + 2 * (t1_time + t2_time + t3_time); // 2 scan sets
+    var challenge_solve_time = g_hashes_time + NUM_CHALLENGE_SETS * (t1_time + t2_time + t3_time); // NUM_CHALLENGE_SETS scan sets
 
     var results = {
         "Challenge sets covered": challenge_sets_covered,
@@ -477,7 +551,7 @@ function calc_attack_collected_lxs(challenge_sets_covered, plot_params, device_p
         "T1 time (ms)": t1_time,
         "T2 time (ms)": t2_time,
         "T3 time (ms)": t3_time,
-        "Challenge solve time (2 scan sets) (ms)": challenge_solve_time
+        [`Challenge solve time (${NUM_CHALLENGE_SETS} scan sets) (ms)`]: challenge_solve_time
     };
 
     console.table(results);
@@ -543,7 +617,7 @@ function calc_attack_challenge_components_bit_dropping(plot_params, device_param
     var t3_pairing_hashes_time = get_t3_pairing_time(plot_params, device_params, t3_pairing_hashes);
     var t3_time = t3_target_hashes_time + t3_pairing_hashes_time;
 
-    var challenge_solve_time = g_hashes_time + 2 * (t1_time + t2_time + t3_time); // 2 scan sets
+    var challenge_solve_time = g_hashes_time + NUM_CHALLENGE_SETS * (t1_time + t2_time + t3_time); // NUM_CHALLENGE_SETS scan sets
     // NOTE that T3 entries must be then Feistel'd and filtered to within the scan PFs, though we see this as "free" work.
 
     const results = {
@@ -570,8 +644,11 @@ function calc_attack_challenge_components_bit_dropping(plot_params, device_param
         "T1 time (ms)": t1_time.toFixed(2),
         "T2 time (ms)": t2_time.toFixed(2),
         "T3 time (ms)": t3_time.toFixed(2),
-        "Challenge solve time (2 scan sets) (ms)": challenge_solve_time.toFixed(2)
+        [`Challenge solve time (${NUM_CHALLENGE_SETS} scan sets) (ms)`]: challenge_solve_time.toFixed(2)
     };
+
+    console.log(`Result challenge components with pf: ${proof_fragments_to_scan} bit dropping: ${drop_bits} bits for plot strength bits: ${plot_params.strength_bits} : time to solve challenge: ${challenge_solve_time.toFixed(2)} ms, bits per entry (Lxs sorted for # proof fragments): ${bits_per_entry_lxs.toFixed(4)}`);
+
 
     console.table(results);
 
@@ -585,10 +662,11 @@ function calc_attack_proof_fragments_drop_bits(plot_params, device_params, bits_
     var strength_multiplier = 1 << (plot_params.strength_bits);
     console.log(`Calculating attack with proof fragments drop bits: ${bits_dropped}, strength multiplier: ${strength_multiplier}`);
     var total_proof_fragments_in_scan = 1 << plot_params.scan_filter_bits;
-    var total_proof_fragments_in_challenge = total_proof_fragments_in_scan * 2; // 2 scan sets
+    var total_proof_fragments_in_challenge = total_proof_fragments_in_scan * NUM_CHALLENGE_SETS; // NUM_CHALLENGE_SETS scan sets
     console.log('Total proof fragments in challenge: ' + total_proof_fragments_in_challenge);
-    var proof_fragments_in_chain = 60;
-    proof_fragments_in_chain = get_n_in_m_buckets(proof_fragments_in_chain, total_proof_fragments_in_challenge);
+    //var proof_fragments_in_chain = 60;
+    //proof_fragments_in_chain = get_n_in_m_buckets(proof_fragments_in_chain, total_proof_fragments_in_challenge);
+    var proof_fragments_in_chain = total_proof_fragments_in_challenge;
     console.log(`Proof fragments in chaining after filtering: ${proof_fragments_in_chain.toFixed(2)}`);
     const e = Math.E;
     var c = 2 - 1/e;
@@ -630,7 +708,7 @@ function calc_attack_proof_fragments_drop_bits(plot_params, device_params, bits_
     var t3_pairing_hashes_time = get_t3_pairing_time(plot_params, device_params, t3_pairing_hashes);
     var t3_time = t3_target_hashes_time + t3_pairing_hashes_time;
 
-    var challenge_solve_time = g_time + 2 * (t1_time + t2_time); // 2 scan sets
+    var challenge_solve_time = g_time + NUM_CHALLENGE_SETS * (t1_time + t2_time); // NUM_CHALLENGE_SETS scan sets
 
     var bits_per_entry_proof_fragments = k - bits_dropped + 1.45;
 
@@ -728,7 +806,9 @@ function get_highest_effectiveness_challenge_components_attack(plot_params, devi
     var best_strength_bits = 2;
     var best_effectiveness = 0.0;
     for (var drop_bits = -8; drop_bits < 8; drop_bits++) {
-        for (var strength_bits = 2; strength_bits < 13; strength_bits++) {
+    for (var strength_bits = 2; strength_bits <= strength_cap; strength_bits++) {
+    //for (var drop_bits = 1; drop_bits < 2; drop_bits++) {
+    //    for (var strength_bits = 2; strength_bits < 3; strength_bits++) {
             var test_plot_params = get_plot_params(plot_params.base_plot_id_filter, strength_bits);
             test_plot_params.scan_filter_bits = scan_filter_bits;
             var result = calc_attack_challenge_components_bit_dropping(test_plot_params, device_params, drop_bits);
@@ -757,7 +837,7 @@ function get_highest_effective_collected_xs_attack(plot_params, device_params) {
     var best_strength = 2;
     var max_challenge_sets_bits_covered = 13;
     for (var challenge_set_bits_covered = 1; challenge_set_bits_covered <= max_challenge_sets_bits_covered; challenge_set_bits_covered++) {
-        for (var strength = 2; strength < 14; strength++) {
+        for (var strength = 2; strength <= strength_cap; strength++) {
             var test_plot_params = get_plot_params(plot_params.base_plot_id_filter, strength);
             test_plot_params.scan_filter_bits = plot_params.scan_filter_bits;
             var result = calc_attack_collected_xs(1 << challenge_set_bits_covered, test_plot_params, device_params);
@@ -787,7 +867,7 @@ function get_highest_effective_collected_lxs_attack(plot_params, device_params) 
     var best_strength = 2;
     var max_challenge_sets_bits_covered = 13;
     for (var challenge_set_bits_covered = 1; challenge_set_bits_covered <= max_challenge_sets_bits_covered; challenge_set_bits_covered++) {
-        for (var strength = 2; strength < 14; strength++) {
+        for (var strength = 2; strength <= strength_cap; strength++) {
             var test_plot_params = get_plot_params(plot_params.base_plot_id_filter, strength);
             test_plot_params.scan_filter_bits = plot_params.scan_filter_bits;
             var result = calc_attack_collected_lxs(1 << challenge_set_bits_covered, test_plot_params, device_params);
@@ -815,7 +895,7 @@ function get_highest_effective_proof_fragments_drop_bits_attack(plot_params, dev
     var best_bits_dropped = -6;
     var best_effectiveness = 0.0;
     for (var bits_dropped = -8; bits_dropped < 8; bits_dropped++) {
-        for (var strength = 2; strength < 13; strength++) {
+        for (var strength = 2; strength <= strength_cap; strength++) {
             var test_plot_params = get_plot_params(plot_params.base_plot_id_filter, strength);
             test_plot_params.scan_filter_bits = plot_params.scan_filter_bits;
             var result = calc_attack_proof_fragments_drop_bits(test_plot_params, device_params, bits_dropped);
@@ -841,7 +921,7 @@ function get_highest_effective_strength_match_bits_attack(plot_params, device_pa
     console.table(plot_params);
     var best_strength = 2;
     var best_effectiveness = 0.0;
-    for (var strength = 2; strength < 14; strength++) {
+    for (var strength = 2; strength <= strength_cap; strength++) {
         var test_plot_params = get_plot_params(plot_params.base_plot_id_filter, strength);
         test_plot_params.scan_filter_bits = plot_params.scan_filter_bits;
         var result = calc_attack_strength_match_bits(test_plot_params, device_params);

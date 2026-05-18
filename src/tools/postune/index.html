@@ -213,7 +213,7 @@
             <!-- Added: proof fragment scan filter range bits -->
             <label>
                 Proof fragment scan filter range bits:
-                <input id="scan-range-bits" type="range" min="6" max="13" value="10" step="1" />
+                <input id="scan-range-bits" type="range" min="5" max="13" value="10" step="1" />
                 <span id="scan-range-bits-value">10</span>
                 <span id="scan-range-base-value" style="margin-left:0.5rem">Range: 1024</span>
             </label>
@@ -512,18 +512,19 @@
                         //    data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, -2)
                         //});
 
-                        var pfParams = get_plot_params(s.baseFilter, 10);
+                        var pfParams = get_plot_params(s.baseFilter, strength_cap);
                         pfParams.scan_filter_bits = s.scanRangeBits;
                         attackResults.push({
                             label: 'Proof Fragments Attack ('+ pfParams.strength_bits + ' strength, 1 bits dropped)',
                             data: calc_attack_proof_fragments_drop_bits(pfParams, deviceParams, 1)
                         });
-                        pfParams = get_plot_params(s.baseFilter, 2);
-                        pfParams.scan_filter_bits = s.scanRangeBits;
-                        attackResults.push({
-                            label: 'Proof Fragments Attack ('+ pfParams.strength_bits + ' strength, 1 bits dropped)',
-                            data: calc_attack_proof_fragments_drop_bits(pfParams, deviceParams, 1)
-                        });
+
+                        //pfParams = get_plot_params(s.baseFilter, 2);
+                        //pfParams.scan_filter_bits = s.scanRangeBits;
+                        //attackResults.push({
+                        //    label: 'Proof Fragments Attack ('+ pfParams.strength_bits + ' strength, 1 bits dropped)',
+                        //    data: calc_attack_proof_fragments_drop_bits(pfParams, deviceParams, 1)
+                        //});
 
                         /*
                         // technically this is our solver time:
@@ -564,7 +565,6 @@
                             label: 'Challenge Components Bit Dropping Attack (' + (1 << plotParams.scan_filter_bits) + ' - bitadd 2)',
                             data: calc_attack_challenge_components_bit_dropping(plotParams, deviceParams, -2)
                         });
-
 
                         attackResults.push({
                             label: 'Proof Fragments Attack (16 fragments, 0 bits dropped)',
@@ -618,13 +618,13 @@
                             data: calc_attack_collected_lxs(result.best_challenge_sets_covered, bestPlotParams, deviceParams)
                         });
 
-                        result = get_highest_effective_proof_fragments_drop_bits_attack(plotParams, deviceParams);
-                        bestPlotParams = get_plot_params(s.baseFilter, result.best_strength);
-                        bestPlotParams.scan_filter_bits = plotParams.scan_filter_bits;
-                        attackResults.push({
-                            label: 'Proof Fragments Attack (fragments:' + (1 << bestPlotParams.scan_filter_bits) + ' - strength: ' + bestPlotParams.strength_bits + ' - bits dropped: ' + result.best_bits_dropped + ')',
-                            data: calc_attack_proof_fragments_drop_bits(bestPlotParams, deviceParams, result.best_bits_dropped)
-                        });
+                        //result = get_highest_effective_proof_fragments_drop_bits_attack(plotParams, deviceParams);
+                        //bestPlotParams = get_plot_params(s.baseFilter, result.best_strength);
+                        //bestPlotParams.scan_filter_bits = plotParams.scan_filter_bits;
+                        //attackResults.push({
+                        //    label: 'Proof Fragments Attack (fragments:' + (1 << bestPlotParams.scan_filter_bits) + ' - strength: ' + bestPlotParams.strength_bits + ' - bits dropped: ' + result.best_bits_dropped + ')',
+                        //    data: calc_attack_proof_fragments_drop_bits(bestPlotParams, deviceParams, result.best_bits_dropped)
+                        //});
 
                         result = get_highest_effective_strength_match_bits_attack(plotParams, deviceParams);
                         bestPlotParams = get_plot_params(s.baseFilter, result.best_strength);
@@ -635,12 +635,13 @@
                         });
 
                         // Compute devices needed first
+                        var rentalAttackPlotParams = get_plot_params(s.baseFilter, 10);
                         var devices_needed_for_rental_attack =
-                            calc_pure_rental_attack(plotParams, device_params_5090, getSettings().netspaceEiB);
+                            calc_pure_rental_attack(rentalAttackPlotParams, device_params_5090, getSettings().netspaceEiB);
 
                         // Compute plotting and validation time for each strength (2..13)
                         const timesByStrength = [];
-                        for (var strength = 2; strength <= 13; strength++) {
+                        for (var strength = 2; strength <= 10; strength++) {
                             var sp = get_plot_params(plotParams.plot_id_base_filter, strength);
                             sp.scan_filter_bits = plotParams.scan_filter_bits;
                             var pt = calc_plotting_time(sp, device_params_5090);
