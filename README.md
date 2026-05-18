@@ -21,6 +21,9 @@ This repository provides a **public reference implementation** of the new Proof 
 - **Prover** tool that runs challenges against a plot file and verifies full proofs
 - **Analytics** tool for disk‑usage simulations and hash micro‑benchmarks
 
+> [!IMPORTANT]
+> **`k=28` is the only k size used on mainnet.** All other supported k values (even integers in `18`..`32`) are intended for testing, development, and benchmarking only — plots made with any `k != 28` are **not** valid on mainnet, even without the `--testnet` flag.
+
 ---
 
 ## Prerequisites
@@ -87,7 +90,7 @@ From the repository root:
 
 Arguments:
 
-- `<k>` — even integer between 18 and 32
+- `<k>` — even integer between 18 and 32. **Use `k=28` for mainnet plots; any other value is for testing only and will not produce mainnet‑valid plots.**
 - `<plot_id_hex>` — exactly 64 hex characters (a 32‑byte plot ID)
 - `[strength]` — optional, defaults to `2` (range `2`..`255`)
 - `[plot_index]` — optional, defaults to `0` (range `0`..`65535`)
@@ -145,14 +148,16 @@ Reconstructs proofs from a deterministic sequence of x‑bits and prints timing/
 ./build/solver benchmark <k> [strength]
 ```
 
-- `<k>` — even integer between 18 and 32
+- `<k>` — even integer between 18 and 32. Mainnet uses `k=28`; other values are for benchmarking/testing only.
 - `[strength]` — optional, defaults to `2`
 
-Example:
+Example (mainnet k):
 
 ```bash
 ./build/solver benchmark 28
 ```
+
+Example (test‑only k):
 
 ```bash
 ./build/solver benchmark 32 2
