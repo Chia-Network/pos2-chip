@@ -377,6 +377,7 @@ impl Prover {
 mod tests {
     use super::*;
     use rstest::rstest;
+    use std::collections::HashSet;
 
     /// Creates a v2 plot if missing, runs 100 challenges, solves proofs, validates,
     /// and round-trips proof -> quality_string and checks it matches the original quality.
@@ -427,6 +428,15 @@ mod tests {
             let qualities = prover
                 .get_qualities_for_challenge(&challenge)
                 .expect("get_qualities_for_challenge");
+
+            // `qualities_for_challenge()` must never return duplicate quality chains.
+            let mut uniq = HashSet::<[u64; NUM_CHAIN_LINKS]>::with_capacity(qualities.len());
+            for q in &qualities {
+                assert!(
+                    uniq.insert(q.chain_links),
+                    "duplicate qualities returned by get_qualities_for_challenge() (challenge={challenge_idx} testnet={testnet} index={index} meta_group={meta_group})"
+                );
+            }
 
             for quality in qualities {
                 let proof = solve_proof(&quality, &plot_id, k, strength, testnet);
