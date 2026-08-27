@@ -510,4 +510,60 @@ mod tests {
             idx += step_size;
         }
     }
+
+    /// Creates a deterministic k=18 plot (cached in temp) and checks a hard-coded
+    /// challenge known to make `get_qualities_for_challenge()` return duplicate
+    /// quality chains today.
+    ///
+    /// Found by scanning LE `challenge_idx` values against this plot; challenge
+    /// `5775` returns 2 qualities with only 1 unique chain.
+    ///
+    /// Asserts the intended invariant (no duplicates). Fails until the
+    /// prover/chainer deduplicates results.
+    #[test]
+    fn test_no_duplicate_qualities_for_known_challenge() {
+        let k = 18u8;
+        let strength = 2u8;
+        let index = 0u16;
+        let meta_group = 0u8;
+        let testnet = false;
+        let plot_id = [0x12u8; 32];
+        let memo = [0u8; 112];
+        let plot_path = std::env::temp_dir().join("pos2_dup_qualities_k18.plot");
+        if !plot_path.exists() {
+            create_v2_plot(
+                &plot_path, k, strength, &plot_id, index, meta_group, &memo, testnet,
+            )
+            .expect("create_v2_plot");
+        }
+
+        let prover = Prover::new(&plot_path).expect("open prover");
+        assert_eq!(prover.size(), k);
+        assert_eq!(prover.get_strength(), strength);
+
+        // Deterministic challenge that currently yields duplicate quality chains.
+        const CHALLENGE_IDX: u32 = 5775;
+        let mut challenge = [0u8; 32];
+        challenge[0..4].copy_from_slice(&CHALLENGE_IDX.to_le_bytes());
+
+        let qualities = prover
+            .get_qualities_for_challenge(&challenge)
+            .expect("get_qualities_for_challenge");
+
+        assert!(
+            !qualities.is_empty(),
+            "challenge_idx={CHALLENGE_IDX}: expected at least one quality",
+        );
+
+        let mut uniq = HashSet::<[u64; NUM_CHAIN_LINKS]>::with_capacity(qualities.len());
+        for q in &qualities {
+            assert!(
+                uniq.insert(q.chain_links),
+                "duplicate qualities returned by get_qualities_for_challenge() \
+                 (challenge_idx={CHALLENGE_IDX} count={} unique_so_far={})",
+                qualities.len(),
+                uniq.len(),
+            );
+        }
+    }
 }
