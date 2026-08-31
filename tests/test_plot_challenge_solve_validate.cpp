@@ -4,23 +4,27 @@
 #include "pos/Chainer.hpp"
 #include "prove/Prover.hpp"
 #include "solve/Solver.hpp"
+#include "pos/sha/sha256.hpp"
 #include "test_util.h"
 
 TEST_SUITE_BEGIN("plot-challenge-solve-verify");
 
 TEST_CASE("plot-k18-strength2-4-5")
 {
-#ifdef NDEBUG
-    const size_t N_TRIALS = 3; // strength 2, 4, 5 -- then strength 2 testnet
-    size_t const MAX_CHAINS_PER_CHALLENGE_TO_TEST = 1; // 3; // check up to 3 chains from challenge
-#else
-    const size_t N_TRIALS = 1; // strength 2 only
-    size_t const MAX_CHAINS_PER_CHALLENGE_TO_TEST = 1; // only check one chain from challenge
-#endif
-    // for this test plot was generated with a prover scan to fine a challenge returning one or more
-    // quality chains
+    #ifdef NDEBUG
+        const size_t N_TRIALS = 4; // strength 2, 4, 5 -- then strength 2
+        size_t const MAX_CHAINS_PER_CHALLENGE_TO_TEST = 1; // 3; // check up to 3 chains from challenge
+    #else
+        const size_t N_TRIALS = 1; // strength 2 only
+        size_t const MAX_CHAINS_PER_CHALLENGE_TO_TEST = 1; // only check one chain from challenge
+    #endif
+
+    constexpr uint8_t k = 18;
+    std::string plot_group_id_hex = "da9a6a4efcadaf1e3115e79a2b7b2d17890185359f19bfaa02a2f2505a8160b5";
+
+    // for this test plot was generated with a prover scan to find
+    // a challenge returning one or more quality chains
     for (size_t trial = 0; trial < N_TRIALS; trial++) {
-        uint8_t testnet = 0;
         uint8_t plot_strength;
         std::string challenge_hex;
         // challenges for trials are found by running "prover check" on a plot of the given strength
@@ -28,20 +32,19 @@ TEST_CASE("plot-k18-strength2-4-5")
         switch (trial) {
         case 0:
             plot_strength = 2;
-            challenge_hex = "0100000000000000000000000000000000000000000000000000000000000000";
+            challenge_hex = "368d14ca70224ac4acc37f591b28ff43d05a2533d34b3a9e8baf4837aebcc783";
             break;
         case 1:
             plot_strength = 4;
-            challenge_hex = "0000000000000000000000000000000000000000000000000000000000000000";
+            challenge_hex = "26d4fa7f3b0bd2d3cc6dc0cf569a97d649cdb543abf4be03f2bc54f15f67784c";
             break;
         case 2:
             plot_strength = 5;
-            challenge_hex = "0200000000000000000000000000000000000000000000000000000000000000";
+            challenge_hex = "be66452a2cc16867f0598fce61781e805776dd4913f3727d01ba939383b491f0";
             break;
         case 3:
             plot_strength = 2;
-            challenge_hex = "0100000000000000000000000000000000000000000000000000000000000000";
-            testnet = 1;
+            challenge_hex = "7ea596522b9c9b226f5c2bf8d3b09736f0f286b123076a5e78dc295ccf2a891c";
             break;
         default:
             // return error
@@ -50,30 +53,27 @@ TEST_CASE("plot-k18-strength2-4-5")
             return;
         }
         // run the actual test
-        constexpr uint8_t k = 18;
-        std::string plot_id_hex
-            = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
 
-        printfln("Creating a k%d strength:%d plot: %s", k, (int)plot_strength, plot_id_hex.c_str());
+        printfln("Creating a k%d strength:%d plot: %s index: 0", k, (int)plot_strength, plot_group_id_hex.c_str());
 
         Timer timer {};
         timer.debugOut = true;
         timer.start("Plot Creation");
 
-        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, plot_strength, testnet);
-        Plotter plotter(proof_params);
+        PlotGroupParams group_params(PlotGroupId(plot_group_id_hex), k, plot_strength, 0);
+        PlotProofParams plot_proof_params = group_params.get_plot_params_for_index(0);
+
+        Plotter plotter(plot_proof_params);
         PlotData plot = plotter.run();
         timer.stop();
 
         std::string plot_file_name = (std::string("plot_") + "k") + std::to_string(k) + "_"
-            + std::to_string(plot_strength) + "_" + (testnet ? "testnet_" : "") + plot_id_hex
-            + ".bin";
+            + std::to_string(plot_strength) + "_" + plot_group_id_hex + "_0_.bin";
 
         timer.start("Writing plot file: " + plot_file_name);
         PlotFile::writeData(plot_file_name,
             plot,
-            plotter.getProofParams(),
-            0,
+            group_params,
             0,
             std::array<uint8_t, 32 + 48 + 32>({}));
         timer.stop();
@@ -89,20 +89,22 @@ TEST_CASE("plot-k18-strength2-4-5")
             std::cerr << "Error: no quality chains found." << std::endl;
             return;
         }
-        size_t numTestChains = std::min(MAX_CHAINS_PER_CHALLENGE_TO_TEST,
-            quality_chains.size()); // only check limited set of chains.
+
+        // only check limited set of chains.
+        size_t numTestChains = std::min(MAX_CHAINS_PER_CHALLENGE_TO_TEST, quality_chains.size());
+
         for (size_t nChain = 0; nChain < numTestChains; nChain++) {
 
             std::vector<uint32_t> check_proof_xs;
 
-            // at this point should have at least one quality chain, so get the proof fragments for
-            // the first one
+            // at this point should have at least one quality chain,
+            // so get the proof fragments for the first one
             QualityChainLinks proof_fragments = quality_chains[nChain].chain_links;
             std::cout << "Proof fragments: " << proof_fragments.size() << std::endl;
 
             // get x bits list from proof fragments
             std::vector<uint32_t> x_bits_list;
-            ProofFragmentCodec fragment_codec(prover.getProofParams());
+            ProofFragmentCodec fragment_codec(plot_proof_params);
             for (auto const& fragment: proof_fragments) {
                 std::array<uint32_t, 4> x_bits
                     = fragment_codec.get_x_bits_from_proof_fragment(fragment);
@@ -111,32 +113,31 @@ TEST_CASE("plot-k18-strength2-4-5")
                 }
             }
 
-#ifdef RETAIN_X_VALUES_TO_T3
-            // find all indexes of proof fragments
-            std::cout << "check proof x values: "; // << std::hex;
-            for (int i = 0; i < proof_fragments.size(); i++) {
-                // scan plot file contents for matching proof fragment
-                auto it = std::find(plot.t3_proof_fragments.begin(),
-                    plot.t3_proof_fragments.end(),
-                    proof_fragments[i]);
-                ENSURE(it != plot.t3_proof_fragments.end());
-                size_t index = std::distance(plot.t3_proof_fragments.begin(), it);
-                // printfln("Proof fragment %d found at index %d", i, (int)index);
+            #ifdef RETAIN_X_VALUES_TO_T3
+                // find all indexes of proof fragments
+                std::cout << "check proof x values: "; // << std::hex;
+                for (int i = 0; i < proof_fragments.size(); i++) {
+                    // scan plot file contents for matching proof fragment
+                    auto it = std::find(plot.t3_proof_fragments.begin(),
+                        plot.t3_proof_fragments.end(),
+                        proof_fragments[i]);
+                    ENSURE(it != plot.t3_proof_fragments.end());
+                    size_t index = std::distance(plot.t3_proof_fragments.begin(), it);
+                    // printfln("Proof fragment %d found at index %d", i, (int)index);
 
-                std::array<uint32_t, 8> x_values = plot.xs_correlating_to_proof_fragments[index];
+                    std::array<uint32_t, 8> x_values = plot.xs_correlating_to_proof_fragments[index];
 
-                for (int xi = 0; xi < 8; xi++) {
-                    std::cout << x_values[xi] << ",";
-                    check_proof_xs.push_back(x_values[xi]);
+                    for (int xi = 0; xi < 8; xi++) {
+                        std::cout << x_values[xi] << ",";
+                        check_proof_xs.push_back(x_values[xi]);
+                    }
+                    std::cout << std::dec << std::endl;
                 }
-                std::cout << std::dec << std::endl;
-            }
-#endif
+            #endif
 
             // now solve using the x bits list
-            Solver solver(prover.getProofParams());
-            std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> all_proofs
-                = solver.solve(std::span<uint32_t const, TOTAL_XS_IN_PROOF / 2>(x_bits_list));
+            Solver solver(plot_proof_params);
+            Solver::SolveResult all_proofs = solver.solve(Solver::XBitsList(x_bits_list));
 
             solver.timings().printSummary();
 
@@ -163,18 +164,20 @@ TEST_CASE("plot-k18-strength2-4-5")
                 std::array<uint32_t, TOTAL_XS_IN_PROOF> const& proof = all_proofs[i];
                 std::cout << "Proof size: " << proof.size() << std::endl;
 
-                ENSURE(
-                    proof.size() == NUM_CHAIN_LINKS * 8); // should always have 8 x values per link
-#ifdef RETAIN_X_VALUES_TO_T3
-                ENSURE(proof.size() == check_proof_xs.size());
-                for (size_t i = 0; i < proof.size(); i++) {
-                    ENSURE(proof[i] == check_proof_xs[i]);
-                }
-#endif
+                ENSURE(proof.size() == NUM_CHAIN_LINKS * 8); // should always have 8 x values per link
+
+                #ifdef RETAIN_X_VALUES_TO_T3
+                    ENSURE(proof.size() == check_proof_xs.size());
+                    for (size_t i = 0; i < proof.size(); i++) {
+                        ENSURE(proof[i] == check_proof_xs[i]);
+                    }
+                #endif
+
                 // now verify the proof
-                ProofValidator proof_validator(prover.getProofParams());
-                std::optional<QualityChainLinks> res
-                    = proof_validator.validate_full_proof(proof, challenge);
+                ProofValidator proof_validator(group_params, 0);
+
+                std::optional<QualityChainLinks> res =
+                    proof_validator.validate_full_proof(proof, challenge);
                 ENSURE(res.has_value());
 
                 QualityChainLinks const& quality_links = res.value();

@@ -4,72 +4,89 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #endif
 
+#if defined(_MSC_VER)
+    // Silence warning C5285: cannot declare a specialization for 'std::tuple':
+    //  Specializing this standard library template is forbidden by N5014
+    // @ doctest.h(539,7)
+    #pragma warning( push )
+    #pragma warning( disable : 5285 )
+#endif
+
 #include "doctest.h"
+
+#if defined(_MSC_VER)
+    #pragma warning( pop ) 
+#endif
 
 #include <assert.h>
 #include <stdarg.h>
+
 #ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN 1
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX 1
-#endif
-#include <Windows.h>
+    #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN 1
+    #endif
+    #ifndef NOMINMAX
+    #define NOMINMAX 1
+    #endif
+    #include <Windows.h>
 #elif defined(__linux__)
-#include <signal.h>
-#include <sys/ptrace.h>
-#include <sys/types.h>
+    #include <signal.h>
+    #include <sys/ptrace.h>
+    #include <sys/types.h>
 #elif defined(__APPLE__)
-#include <mach/mach_init.h>
-#include <mach/task.h>
-#include <signal.h>
-#include <stdbool.h>
+    #include <mach/mach_init.h>
+    #include <mach/task.h>
+    #include <signal.h>
+    #include <stdbool.h>
 #endif
 
 #ifdef _WIN32
-#define DEBUG_BREAK() __debugbreak()
+    #define DEBUG_BREAK() __debugbreak()
 #elif defined(__APPLE__)
-#define DEBUG_BREAK() __builtin_trap()
+    #define DEBUG_BREAK() __builtin_trap()
 #elif defined(__linux__)
-#define DEBUG_BREAK() raise( SIGTRAP )
+    #define DEBUG_BREAK() raise( SIGTRAP )
 #else
-#error Unsupported platform
+    #error Unsupported platform
 #endif
 
 // CREDIT: https://forum.juce.com/t/detecting-if-a-process-is-being-run-under-a-debugger/2098
 //         https://stackoverflow.com/a/23043802/2850659
 inline bool is_debugger_present()
 {
-#ifdef _WIN32
-    return IsDebuggerPresent() == TRUE;
-#elif defined(__linux__)
-    if (ptrace(PTRACE_TRACEME, 0, 1, 0) < 0)
-        return true;
+    #ifdef _WIN32
+        return IsDebuggerPresent() == TRUE;
+    #elif defined(__linux__)
+        if (ptrace(PTRACE_TRACEME, 0, 1, 0) < 0)
+            return true;
 
-    ptrace(PTRACE_DETACH, 0, 1, 0);
-    return false;
-#elif defined(__APPLE__)
-    mach_msg_type_number_t count = 0;
-    exception_mask_t masks[EXC_TYPES_COUNT];
-    mach_port_t ports[EXC_TYPES_COUNT];
-    exception_behavior_t behaviors[EXC_TYPES_COUNT];
-    thread_state_flavor_t flavors[EXC_TYPES_COUNT];
+        ptrace(PTRACE_DETACH, 0, 1, 0);
+        return false;
+    #elif defined(__APPLE__)
+        mach_msg_type_number_t count = 0;
+        exception_mask_t       masks[EXC_TYPES_COUNT];
+        mach_port_t            ports[EXC_TYPES_COUNT];
+        exception_behavior_t   behaviors[EXC_TYPES_COUNT];
+        thread_state_flavor_t  flavors[EXC_TYPES_COUNT];
 
-    exception_mask_t mask = EXC_MASK_ALL & ~(EXC_MASK_RESOURCE | EXC_MASK_GUARD);
-    kern_return_t result = task_get_exception_ports(
-        mach_task_self(), mask, masks, &count, ports, behaviors, flavors);
-    if (result == KERN_SUCCESS) {
-        for (mach_msg_type_number_t portIndex = 0; portIndex < count; portIndex++) {
-            if (MACH_PORT_VALID(ports[portIndex])) {
-                return true;
+        exception_mask_t mask = EXC_MASK_ALL & ~(EXC_MASK_RESOURCE | EXC_MASK_GUARD);
+        kern_return_t result = task_get_exception_ports(
+            mach_task_self(),
+            mask, masks,
+            &count, ports,
+            behaviors, flavors);
+
+        if (result == KERN_SUCCESS) {
+            for (mach_msg_type_number_t portIndex = 0; portIndex < count; portIndex++) {
+                if (MACH_PORT_VALID(ports[portIndex])) {
+                    return true;
+                }
             }
         }
-    }
-    return false;
-#else
-    return false;
-#endif
+        return false;
+    #else
+        return false;
+    #endif
 }
 
 // Helper to break on the assertion failure when debugging a test.

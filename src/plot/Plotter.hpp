@@ -31,10 +31,12 @@ public:
     };
 
     // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
-    Plotter(ProofParams const& proof_params)
+    Plotter(PlotProofParams const& proof_params)
         : proof_params_(proof_params)
         , fragment_codec_(proof_params)
+    #if RETAIN_X_VALUES
         , validator_(proof_params)
+    #endif
     {
     }
 
@@ -239,12 +241,12 @@ public:
         return plot_data;
     }
 
-    ProofParams getProofParams() const { return proof_params_; }
+    PlotProofParams getProofParams() const { return proof_params_; }
 
     void setValidate(bool validate) { validate_ = validate; }
 
 private:
-    ProofParams proof_params_;
+    PlotProofParams proof_params_;
     ProofFragmentCodec fragment_codec_;
 
     // Timing utility
@@ -252,7 +254,9 @@ private:
 
     // Debugging: validate as we go
     bool validate_ = true;
+#if RETAIN_X_VALUES
     ProofValidator validator_;
+#endif
 };
 
 // Helper: convert hex string to 32-byte array

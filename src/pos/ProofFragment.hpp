@@ -14,15 +14,15 @@ using ProofFragment = uint64_t;
 class ProofFragmentCodec {
 public:
     // Constructor: uses the provided ProofParams.
-    ProofFragmentCodec(ProofParams const& params)
-        : ProofFragmentCodec(params.get_plot_id_bytes(), static_cast<uint8_t>(params.get_k()))
+    ProofFragmentCodec(PlotProofParams const& params)
+        : ProofFragmentCodec(params.get_plot_id().data(), static_cast<uint8_t>(params.get_k()))
     {
     }
 
-    ProofFragmentCodec(uint8_t const* plot_id, uint8_t const k) : cipher_(plot_id, k) {}
+    ProofFragmentCodec(PlotId const& plot_id, uint8_t const k) : cipher_(plot_id.bytes(), k) {}
 
-    // Does not validate the proof, just converts it to a QualityString, which is the chain of
-    // ProofFragments
+    // Does not validate the proof, just converts it to a QualityString,
+    // which is the chain of ProofFragments
     std::array<ProofFragment, NUM_CHAIN_LINKS> fullProofXValuesToQualityString(
         std::span<uint32_t const, TOTAL_XS_IN_PROOF> const full_proof) const
     {

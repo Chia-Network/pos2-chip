@@ -14,7 +14,7 @@ function get_thread_count {
 
 # Configure with tests enabled
 cmake -B build \
-      -DCP_ENABLE_TESTS=ON \
+      -DCP_BUILD_TESTS=ON \
       -DCMAKE_BUILD_TYPE=Release \
       .
 

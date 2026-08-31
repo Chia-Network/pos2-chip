@@ -24,7 +24,7 @@ class Chainer {
 public:
     int num_hashes = 0;
     int num_hashes_at_chain_length[NUM_CHAIN_LINKS] = { 0 };
-    Chainer(ProofParams const& params, std::span<uint8_t const, 32> const challenge)
+    Chainer(PlotProofParams const& params, std::span<uint8_t const, 32> const challenge)
         : proof_core_(params)
         , challenge_(challenge)
     {
@@ -261,7 +261,6 @@ public:
         return true;
     }
 
-private:
     // Computes the upper-bits threshold used at the last chain link to cancel the
     // E[|S|^(L/N)]^N Jensen bonus from Poisson-distributed set sizes, so that
     // E[chains/challenge] -> 1.0 instead of ~jensen_bonus.
@@ -274,7 +273,12 @@ private:
     //   bonus           = (E[X^reuse] / lambda^reuse)^N
     //   upper_bits_count= 64 - (chain_set_bits + CHAIN_FACTOR_FRONT_LOAD_BITS)
     //   threshold       = floor(2^upper_bits_count / bonus)
-    static uint64_t compute_last_link_extra_threshold()
+    static constexpr uint64_t compute_last_link_extra_threshold()
+    {
+        return 3127297797138110ull;
+    }
+
+    static uint64_t recompute_last_link_extra_threshold()
     {
         // Hardcoded Stirling numbers of the 2nd kind for reuse = 4: S(4, j) for j=0..4.
         // If the chain length / challenge-set count ratio changes, regenerate these.
@@ -310,6 +314,7 @@ private:
         return static_cast<uint64_t>(max_upper / bonus);
     }
 
+private:
     ProofCore proof_core_;
     std::span<uint8_t const, 32> challenge_;
 };

@@ -17,7 +17,8 @@ use std::process;
 use criterion::{Criterion, criterion_group, criterion_main};
 
 use chia_pos2::{
-    Bytes32, Prover, QualityChain, quality_string_from_proof, solve_proof, validate_proof_v2,
+    Bytes32, PlotQualityChain, Prover, QualityChain, plot_id_for_index, quality_string_from_proof,
+    solve_proof, validate_proof_v2,
 };
 
 fn default_plot_path() -> std::path::PathBuf {
@@ -39,10 +40,11 @@ fn exit_missing_plot(path: &Path) -> ! {
 
 struct Fixture {
     prover: Prover,
-    plot_id: Bytes32,
+    plot_group_id: Bytes32,
+    plot_index: u16,
     k: u8,
     strength: u8,
-    testnet: bool,
+    meta_group: u8,
     challenge: Bytes32,
     quality: QualityChain,
     proof: Vec<u8>,
@@ -57,13 +59,13 @@ fn load_fixture() -> Fixture {
         eprintln!("Failed to open plot {}: {e}", path.display());
         process::exit(1);
     });
-    let plot_id = *prover.plot_id();
+    let plot_group_id = *prover.plot_group_id();
     let k = prover.size();
     let strength = prover.get_strength();
-    let testnet = false;
+    let meta_group = prover.get_meta_group();
 
     let mut challenge = [0u8; 32];
-    let mut found: Option<(Bytes32, QualityChain)> = None;
+    let mut found: Option<(Bytes32, PlotQualityChain)> = None;
     for challenge_idx in 0u32..4096 {
         challenge[0..4].copy_from_slice(&challenge_idx.to_le_bytes());
         let qualities = prover
@@ -79,7 +81,7 @@ fn load_fixture() -> Fixture {
          with test_plot_roundtrip.",
     );
 
-    let proof = solve_proof(&quality, &plot_id, k, strength, testnet);
+    let proof = solve_proof(&quality.chain, &plot_group_id, k, strength);
     assert!(
         !proof.is_empty(),
         "solve_proof returned an empty proof for the fixture challenge — plot may be corrupt"
@@ -87,12 +89,13 @@ fn load_fixture() -> Fixture {
 
     Fixture {
         prover,
-        plot_id,
+        plot_group_id,
+        plot_index: 0,
         k,
         strength,
-        testnet,
+        meta_group,
         challenge,
-        quality,
+        quality: quality.chain,
         proof,
     }
 }
@@ -114,10 +117,11 @@ fn pos2_benchmarks(c: &mut Criterion) {
         b.iter(|| {
             black_box(solve_proof(
                 black_box(&f.quality),
-                black_box(&f.plot_id),
+                black_box(
+                    &plot_id_for_index(&f.plot_group_id, f.plot_index, f.meta_group).unwrap(),
+                ),
                 f.k,
                 f.strength,
-                f.testnet,
             ))
         })
     });
@@ -125,12 +129,15 @@ fn pos2_benchmarks(c: &mut Criterion) {
     c.bench_function("validate_proof_v2", |b| {
         b.iter(|| {
             black_box(validate_proof_v2(
-                black_box(&f.plot_id),
+                black_box(
+                    &plot_id_for_index(&f.plot_group_id, f.plot_index, f.meta_group).unwrap(),
+                ),
+                f.plot_index,
                 f.k,
-                black_box(&f.challenge),
                 f.strength,
+                f.meta_group,
+                black_box(&f.challenge),
                 black_box(f.proof.as_slice()),
-                f.testnet,
             ))
         })
     });
@@ -138,7 +145,9 @@ fn pos2_benchmarks(c: &mut Criterion) {
     c.bench_function("quality_string_from_proof", |b| {
         b.iter(|| {
             black_box(quality_string_from_proof(
-                black_box(&f.plot_id),
+                black_box(
+                    &plot_id_for_index(&f.plot_group_id, f.plot_index, f.meta_group).unwrap(),
+                ),
                 f.k,
                 f.strength,
                 black_box(f.proof.as_slice()),

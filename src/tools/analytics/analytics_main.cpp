@@ -7,6 +7,7 @@
 #include "pos/ProofValidator.hpp"
 #include "pos/aes/AesHash.hpp"
 #include "prove/Prover.hpp"
+#include "pos/sha/sha256.hpp"
 
 void printUsage()
 {
@@ -28,7 +29,7 @@ int hashBench(int N, int rounds, int num_threads)
     std::vector<uint32_t> out;
     out.resize(count);
 
-    AesHash hasher(plot_id.data(), 28);
+    AesHash hasher(plot_id, 28);
     ChachaHash chacha_hasher(plot_id.data());
 
     uint64_t chacha_count = count / 16; // chacha does groups of 16.
@@ -172,8 +173,7 @@ try {
             Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF")
                 .data(),
             28,
-            2,
-            0);
+            2);
         DiskBench diskbench(proof_params);
         diskbench.simulateChallengeDiskReads(
             plotIdFilter, plotsInGroup, diskTB, diskSeekMs, diskReadMBs);
@@ -199,7 +199,7 @@ try {
         std::cout << "Analyzing plot file: " << plotFile << " for groupings of " << numPlotsInGroup
                   << " plots over " << num_trials << " trials.\n";
         PlotFile plot_file(plotFile);
-        ProofParams params = plot_file.getProofParams();
+        PlotGroupParams params = plot_file.getGroupParams();
         // get number of challenge ranges in plot
         uint32_t num_challenge_ranges = params.get_num_chaining_sets();
 

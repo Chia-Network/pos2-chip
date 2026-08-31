@@ -9,6 +9,10 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <concepts>
+#include <functional>
+#include <utility>
+
 
 // This function acts like static_cast but asserts that the value is unchanged
 // it only affects debug builds
@@ -123,4 +127,128 @@ public:
         }
         return proof;
     }
+};
+
+
+class BitWriter {
+public:
+    BitWriter() = default;
+    ~BitWriter() = default;
+
+    void clear() {
+        fields_.clear();
+        bit_count_ = 0;
+    }
+
+    void append(uint64_t value, uint32_t const bit_count) {
+        assert(bit_count <= 64);
+
+        uint64_t const field_index     = bit_count_ >> 6; // Divide by 64
+        uint32_t const field_bit_index = uint32_t(bit_count_ - (field_index << 6));
+
+        uint32_t const field_bits_available = 64 - field_bit_index;
+
+        if (fields_.size() <= field_index) {
+            fields_.push_back(0);
+        }
+        uint64_t const field = fields_[field_index]; 
+
+        fields_[field_index] = field | (value << field_bit_index);
+
+        if (bit_count > field_bits_available) {
+            fields_.push_back(value >> field_bits_available);
+        }
+
+        bit_count_ += bit_count;
+    }
+
+    inline std::span<uint8_t const> asBytes() const {
+        if (bit_count_ == 0) {
+            return {};
+        }
+
+        size_t const byte_count = static_cast<size_t>((bit_count_ + 7) / 8);
+        auto* data = reinterpret_cast<uint8_t const*>(fields_.data());
+
+        return std::span<uint8_t const>(data, byte_count);
+    }
+
+    inline uint64_t bitCount() const {
+        return bit_count_;
+    }
+
+private:
+    std::vector<uint64_t> fields_;
+    uint64_t bit_count_;
+};
+
+// template<typename T, typename F>
+// class Guard {
+// public:
+//     inline Guard(T* target, F callback)
+//         : target_(target)
+//         , callback_(callback)
+//     {}
+
+//     inline Guard(T* target, F callback)
+//         : target_(target)
+//         , callback_(callback)
+//     {}
+
+//     inline ~Guard() {
+//         callback_(target_);
+//     }
+
+// private:
+//     T* target_;
+//     std::function<T*> callback_;
+// };
+
+
+template<typename F, typename T>
+concept ObjectGuardCallback =
+    requires(F& callback, T* target) {
+        { std::invoke(callback, target) } -> std::same_as<void>;
+    };
+
+template<typename F>
+concept GuardCallback =
+    requires(F& callback) {
+        { std::invoke(callback) } -> std::same_as<void>;
+    };
+
+
+template<typename T, typename F>
+requires ObjectGuardCallback<F, T>
+class ObjectGuard {
+public:
+    ObjectGuard(T* target, F callback)
+        : target_(target)
+        , callback_(std::move(callback))
+    {}
+
+    ~ObjectGuard() {
+        std::invoke(callback_, target_);
+    }
+
+private:
+    T* target_;
+    F callback_;
+};
+
+
+template<typename F>
+requires GuardCallback<F>
+class Guard {
+public:
+    explicit Guard(F callback)
+        : callback_(std::move(callback))
+    {}
+
+    ~Guard() {
+        std::invoke(callback_);
+    }
+
+private:
+    F callback_;
 };

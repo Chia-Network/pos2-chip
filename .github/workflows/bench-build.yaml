@@ -1,7 +1,6 @@
 name: Benchmark build
 
 # Compile `chia-pos2` Criterion benchmarks only (`--no-run`). Does not execute them.
-
 on:
   push:
     branches:
@@ -32,10 +31,21 @@ jobs:
           - windows-2022
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
+
+      - name: Cache Rust Dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+
+          key: bench-cargo-v3-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', '.github/actions/setup-rust/action.yml') }}
+          restore-keys: bench-cargo-v3-${{ matrix.os }}-${{ runner.arch }}-
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.85.0
+        uses: ./.github/actions/setup-rust
 
       - name: Build benchmark targets (no run)
         run: cargo bench -p chia-pos2 --no-run

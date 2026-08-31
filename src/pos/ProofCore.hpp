@@ -14,6 +14,7 @@
 #include "ProofHashing.hpp"
 #include "ProofParams.hpp"
 
+
 //------------------------------------------------------------------------------
 // Structs for pairing results
 //------------------------------------------------------------------------------
@@ -81,7 +82,7 @@ public:
     ProofFragmentCodec fragment_codec;
 
     // Constructor: Initializes internal ProofHashing and ProofFragmentCodec objects.
-    ProofCore(ProofParams const& proof_params)
+    ProofCore(PlotProofParams const& proof_params)
         : hashing(proof_params)
         , fragment_codec(proof_params)
         , params_(proof_params)
@@ -228,27 +229,44 @@ public:
         section2 = inverse_matching_section(section);
     }
 
-    struct SelectedChallengeSets {
-        // The chaining-set index used for each of the NUM_CHALLENGE_SETS sets.
-        // By construction, fragment_set_indexes[i] % NUM_CHALLENGE_SETS == i, so
-        // the indexes are mutually exclusive modulo NUM_CHALLENGE_SETS.
-        std::array<uint32_t, NUM_CHALLENGE_SETS> fragment_set_indexes;
-        std::array<Range, NUM_CHALLENGE_SETS> fragment_set_ranges;
-    };
-    SelectedChallengeSets selectChallengeSets(std::span<uint8_t const, 32> const challenge)
-    {
-        // challenge sets will be the same withing a grouped plot id
-        BlakeHash::Result256 grouped_challenge_hash = hashing.challengeWithPlotIdHash(challenge);
+    PlotProofParams getProofParams() const { return params_; }
+
+    uint32_t quality_chain_pass_threshold_ = 0;
+
+private:
+    PlotProofParams params_;
+};
+
+
+//------------------------------------------------------------------------------
+// This helper gives you the ProofFragment ranges for a given challenge
+//------------------------------------------------------------------------------
+struct SelectedChallengeSets {
+    // The chaining-set index used for each of the NUM_CHALLENGE_SETS sets.
+    // By construction, fragment_set_indexes[i] % NUM_CHALLENGE_SETS == i, so
+    // the indexes are mutually exclusive modulo NUM_CHALLENGE_SETS.
+    std::array<uint32_t, NUM_CHALLENGE_SETS> fragment_set_indexes;
+    std::array<Range, NUM_CHALLENGE_SETS> fragment_set_ranges;
+};
+
+class ChallengeSetSelector {
+public:
+    static SelectedChallengeSets selectChallengeSets(
+        PlotGroupParams const& params,
+        std::span<uint8_t const, 32> const challenge
+    ) {
+        // challenge sets will be the same within a grouped plot id
+        BlakeHash::Result256 grouped_challenge_hash = challengeWithPlotGroupIdHash(params, challenge);
 
         // use bits from challenge to select NUM_CHALLENGE_SETS distinct chaining sets
-        uint32_t num_chaining_sets_bits = params_.get_num_chaining_sets_bits();
+        uint32_t num_chaining_sets_bits = params.get_num_chaining_sets_bits();
+
         // Ensure we have enough sets to host one per modular class.
         assert(num_chaining_sets_bits >= 2);
         uint32_t const sets_mask = (1U << num_chaining_sets_bits) - 1U;
-        // Mask off the low bits used to encode the modular class (NUM_CHALLENGE_SETS == 4 => 2
-        // bits)
-        static_assert(NUM_CHALLENGE_SETS == 4,
-            "selectChallengeSets currently assumes NUM_CHALLENGE_SETS == 4");
+
+        // Mask off the low bits used to encode the modular class (NUM_CHALLENGE_SETS == 4 => 2bits)
+        static_assert(NUM_CHALLENGE_SETS == 4, "selectChallengeSets currently assumes NUM_CHALLENGE_SETS == 4");
         uint32_t const high_bits_mask = sets_mask & ~uint32_t(NUM_CHALLENGE_SETS - 1);
 
         // BlakeHash::Result256 contains 8 x 32-bit words; pick a different word for each
@@ -258,15 +276,40 @@ public:
         for (uint32_t i = 0; i < NUM_CHALLENGE_SETS; ++i) {
             uint32_t const set_index = (grouped_challenge_hash.r[i] & high_bits_mask) | i;
             out.fragment_set_indexes[i] = set_index;
-            out.fragment_set_ranges[i] = params_.get_chaining_set_range(set_index);
+            out.fragment_set_ranges[i] = params.get_chaining_set_range(set_index);
         }
+
         return out;
     }
 
-    ProofParams getProofParams() const { return params_; }
+private:
+    static BlakeHash::Result256 challengeWithPlotGroupIdHash(
+        PlotGroupParams const& params,
+        std::span<uint8_t const, 32> const challenge
+    ) {
+        uint32_t block_words[16];
+        PlotGroupId const& plot_group_id = params.get_plot_group_id();
 
-    uint32_t quality_chain_pass_threshold_ = 0;
+        // Fill the first 8 words with the plot ID.
+        // set data from plot id
+        for (int i = 0; i < 8; i++) {
+            block_words[i] = (static_cast<uint32_t>(plot_group_id[i * 4 + 0]))
+                | (static_cast<uint32_t>(plot_group_id[i * 4 + 1]) << 8)
+                | (static_cast<uint32_t>(plot_group_id[i * 4 + 2]) << 16)
+                | (static_cast<uint32_t>(plot_group_id[i * 4 + 3]) << 24);
+        }
+        // set data from challenge
+        for (int i = 0; i < 8; i++) {
+            block_words[i + 8] = (static_cast<uint32_t>(challenge[i * 4 + 0]))
+                | (static_cast<uint32_t>(challenge[i * 4 + 1]) << 8)
+                | (static_cast<uint32_t>(challenge[i * 4 + 2]) << 16)
+                | (static_cast<uint32_t>(challenge[i * 4 + 3]) << 24);
+        }
+
+        return BlakeHash::hash_block_256(block_words);
+    }
+
 
 private:
-    ProofParams params_;
+    PlotGroupParams params_;
 };

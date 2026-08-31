@@ -19,13 +19,10 @@ struct PairingResult {
 
 class ProofHashing {
 public:
-    // Constructor.
-    // proof_params: a ProofParams instance.
-    ProofHashing(ProofParams const& proof_params)
+    ProofHashing(PlotProofParams const& proof_params)
         : params_(proof_params)
-        , aes_(proof_params.get_plot_id_bytes(), static_cast<int>(proof_params.get_k()))
-    {
-    }
+        , aes_(proof_params.get_plot_id().span(), static_cast<int>(proof_params.get_k()))
+    {}
 
     // Returns a single hash value computed from x.
     uint32_t g(uint32_t x);
@@ -33,28 +30,30 @@ public:
     // Computes and returns the matching target using the Blake hash.
     // table_id: used as salt, match_key, meta: additional parameters.
     // num_target_bits: the number of bits to return from the hash.
-    uint32_t matching_target(
-        uint32_t table_id, uint32_t match_key, uint64_t meta, int num_target_bits);
+    uint32_t matching_target(uint32_t table_id, uint32_t match_key, uint64_t meta, int num_target_bits);
 
     PairingResult pairing_t1(uint64_t meta_l,
         uint64_t meta_r,
         int num_match_info_bits,
         int out_num_meta_bits,
         int num_test_bits);
+
     PairingResult pairing_t2(uint64_t meta_l,
         uint64_t meta_r,
         int num_match_info_bits,
         int out_num_meta_bits,
         int num_test_bits);
+
     PairingResult pairing_t3(uint64_t meta_l, uint64_t meta_r, int num_test_bits);
 
+    // TODO @Harold: If this is supposed to use plot_group_id, we should move it out to ChallengeSetSelector
     std::array<uint64_t, NUM_CHAIN_LINKS> chainingChallengeWithPlotIdHash(
         std::span<uint8_t const, 32> const challenge) const
     {
         std::array<uint64_t, NUM_CHAIN_LINKS> result;
 
         uint32_t block_words[16];
-        uint8_t const* plot_id_bytes = params_.get_plot_id_bytes();
+        uint8_t const* plot_id_bytes = params_.get_plot_id().bytes();
         // Fill the first 8 words with the plot ID.
 
         // set data from plot id
@@ -95,30 +94,6 @@ public:
         return result;
     }
 
-    BlakeHash::Result256 challengeWithPlotIdHash(std::span<uint8_t const, 32> const challenge) const
-    {
-        uint32_t block_words[16];
-        std::array<uint8_t, 32> plot_id = params_.get_plot_id();
-        // Fill the first 8 words with the plot ID.
-
-        // set data from plot id
-        for (int i = 0; i < 8; i++) {
-            block_words[i] = (static_cast<uint32_t>(plot_id[i * 4 + 0]))
-                | (static_cast<uint32_t>(plot_id[i * 4 + 1]) << 8)
-                | (static_cast<uint32_t>(plot_id[i * 4 + 2]) << 16)
-                | (static_cast<uint32_t>(plot_id[i * 4 + 3]) << 24);
-        }
-        // set data from challenge
-        for (int i = 0; i < 8; i++) {
-            block_words[i + 8] = (static_cast<uint32_t>(challenge[i * 4 + 0]))
-                | (static_cast<uint32_t>(challenge[i * 4 + 1]) << 8)
-                | (static_cast<uint32_t>(challenge[i * 4 + 2]) << 16)
-                | (static_cast<uint32_t>(challenge[i * 4 + 3]) << 24);
-        }
-
-        return BlakeHash::hash_block_256(block_words);
-    }
-
     uint64_t chain_hash(uint64_t input) const
     {
 #if HAVE_AES
@@ -129,7 +104,7 @@ public:
     }
 
 private:
-    ProofParams params_;
+    PlotProofParams params_;
     AesHash aes_;
 };
 
@@ -143,9 +118,6 @@ inline uint32_t mask32(int const bits) { return numeric_cast<uint32_t>((uint64_t
 
 inline uint32_t ProofHashing::g(uint32_t x)
 {
-    if (params_.is_testnet()) {
-        x ^= TESTNET_G_XOR_CONST;
-    }
 #if HAVE_AES
     return aes_.g_x<false>(x);
 #else

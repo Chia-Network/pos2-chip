@@ -7,7 +7,14 @@
 *.a
 *.so
 *.dll
+*.bin
+*.plot
+*.plot2
+*.gplot
 *.dSYM/
 build/
 cmake-build*/
+build-*/
 target/
+.codex/
+.test_plots/
