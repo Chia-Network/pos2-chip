@@ -178,8 +178,8 @@ public:
     }
 
 private:
-    std::vector<uint64_t> fields_;
-    uint64_t bit_count_;
+    std::vector<uint64_t> fields_ = {};
+    uint64_t bit_count_ = 0;
 };
 
 // template<typename T, typename F>

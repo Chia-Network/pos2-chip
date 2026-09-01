@@ -81,7 +81,7 @@ fn load_fixture() -> Fixture {
          with test_plot_roundtrip.",
     );
 
-    let proof = solve_proof(&quality.chain, &plot_group_id, k, strength);
+    let proof = solve_proof(&quality.chain, &prover.plot_id_for_index(0), k, strength);
     assert!(
         !proof.is_empty(),
         "solve_proof returned an empty proof for the fixture challenge — plot may be corrupt"
