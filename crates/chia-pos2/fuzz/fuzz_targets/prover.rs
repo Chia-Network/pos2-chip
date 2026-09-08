@@ -3,7 +3,8 @@
 use chia_pos2::validate_proof_v2;
 
 use chia_pos2::{
-    Bytes32, NUM_CHAIN_LINKS, Prover, create_v2_single_plot_group, plot_id_for_index, serialize_quality, solve_proof,
+    Bytes32, NUM_CHAIN_LINKS, Prover, create_v2_single_plot_group, plot_id_for_index,
+    serialize_quality, solve_proof,
 };
 
 use libfuzzer_sys::fuzz_target;
@@ -52,7 +53,7 @@ fuzz_target!(init: { create_test_plots(); }, |challenge: Bytes32| {
         let mut uniq = HashSet::<[u64; NUM_CHAIN_LINKS]>::with_capacity(qualities.len());
         for q in &qualities {
             assert!(
-                uniq.insert(q.chain_links),
+                uniq.insert(q.chain.chain_links),
                 "duplicate qualities returned by get_qualities_for_challenge()"
             );
         }

@@ -461,7 +461,6 @@ impl Prover {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
 
     use super::*;
     use rstest::rstest;
@@ -522,8 +521,8 @@ mod tests {
             let mut uniq = HashSet::<[u64; NUM_CHAIN_LINKS]>::with_capacity(qualities.len());
             for q in &qualities {
                 assert!(
-                    uniq.insert(q.chain_links),
-                    "duplicate qualities returned by get_qualities_for_challenge() (challenge={challenge_idx} testnet={testnet} index={index} meta_group={meta_group})"
+                    uniq.insert(q.chain.chain_links),
+                    "duplicate qualities returned by get_qualities_for_challenge() (challenge={challenge_idx} index={index} meta_group={meta_group})"
                 );
             }
 
