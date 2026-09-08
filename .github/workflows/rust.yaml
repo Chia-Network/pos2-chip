@@ -81,7 +81,7 @@ jobs:
         package:
           - name: chia-pos2
         toolchain:
-          - nightly
+          - nightly-2026-08-01
         max_total_time:
           - 40
     env:

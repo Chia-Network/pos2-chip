@@ -1,10 +1,13 @@
 #![no_main]
 
 use chia_pos2::validate_proof_v2;
+
 use chia_pos2::{
-    Bytes32, Prover, create_v2_single_plot_group, plot_id_for_index, serialize_quality, solve_proof,
+    Bytes32, NUM_CHAIN_LINKS, Prover, create_v2_single_plot_group, plot_id_for_index, serialize_quality, solve_proof,
 };
+
 use libfuzzer_sys::fuzz_target;
+use std::collections::HashSet;
 use std::fs::exists;
 use std::path::Path;
 use std::sync::OnceLock;
@@ -44,6 +47,15 @@ fuzz_target!(init: { create_test_plots(); }, |challenge: Bytes32| {
 
     for plot in PLOTS.get().unwrap() {
         let qualities = plot.get_qualities_for_challenge(&challenge).expect("get_qualities_for_challenge()");
+
+        // `qualities_for_challenge()` must never return duplicate quality chains.
+        let mut uniq = HashSet::<[u64; NUM_CHAIN_LINKS]>::with_capacity(qualities.len());
+        for q in &qualities {
+            assert!(
+                uniq.insert(q.chain_links),
+                "duplicate qualities returned by get_qualities_for_challenge()"
+            );
+        }
 
         let strength = plot.get_strength();
         let plot_group_id = plot.plot_group_id();
