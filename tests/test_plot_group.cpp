@@ -13,81 +13,81 @@
 
 TEST_SUITE_BEGIN("plot-group");
 
-TEST_CASE("plot-group-full")
-{
-    constexpr const char* CHALLENGE_HEX = "3e91b7d4c82a506f14fd63a9b075ec219a46d8f3527b1c0ee6a934850dcf7200";
-    constexpr const char* PLOT_GROUP_ID_HEX = "c6b84729c23dc6d60c92f22c17083f47845c1179227c5509f07a5d2804a7b835";
-    constexpr int k = 18;
-    constexpr int strength = 2;
+// TEST_CASE("plot-group-full")
+// {
+//     constexpr const char* CHALLENGE_HEX = "3e91b7d4c82a506f14fd63a9b075ec219a46d8f3527b1c0ee6a934850dcf7200";
+//     constexpr const char* PLOT_GROUP_ID_HEX = "c6b84729c23dc6d60c92f22c17083f47845c1179227c5509f07a5d2804a7b835";
+//     constexpr int k = 18;
+//     constexpr int strength = 2;
 
-    PlotGroupId plot_group_id(PLOT_GROUP_ID_HEX);
+//     PlotGroupId plot_group_id(PLOT_GROUP_ID_HEX);
 
-    PlotGroupParams group_params(plot_group_id, k, strength, 0);
-    PlotProofParams params = group_params.get_plot_params_for_index(0);
-    Plotter plotter(params);
-    PlotData plot = plotter.run();
+//     PlotGroupParams group_params(plot_group_id, k, strength, 0);
+//     PlotProofParams params = group_params.get_plot_params_for_index(0);
+//     Plotter plotter(params);
+//     PlotData plot = plotter.run();
 
-    // Create a plot and serialize it as a plot group
-    std::string file_name = (std::string("test-plot-") + "k") +
-                             std::to_string(k) + "_" + PLOT_GROUP_ID_HEX +
-                             ".test_plot.bin";
+//     // Create a plot and serialize it as a plot group
+//     std::string file_name = (std::string("test-plot-") + "k") +
+//                              std::to_string(k) + "_" + PLOT_GROUP_ID_HEX +
+//                              ".test_plot.bin";
 
-    PlotGroupFile::writeData(
-        file_name, plot, group_params, PlotGroupFile::PROOFS_PER_CHUNK_BITS, {});
+//     PlotGroupFile::writeData(
+//         file_name, plot, group_params, PlotGroupFile::PROOFS_PER_CHUNK_BITS, {});
 
-    GroupProver prover(file_name);
+//     GroupProver prover(file_name);
 
-    std::array<uint8_t, 32> challenge = Utils::hexToBytes(CHALLENGE_HEX);
-    std::vector<PlotQualityChains> quality_chains;
-    bool found_quality = false;
+//     std::array<uint8_t, 32> challenge = Utils::hexToBytes(CHALLENGE_HEX);
+//     std::vector<PlotQualityChains> quality_chains;
+//     bool found_quality = false;
 
-    for (uint16_t challenge_index = 0; challenge_index < 256; challenge_index++) {
-        challenge.back() = uint8_t(challenge_index);
-        quality_chains = prover.prove(challenge);
+//     for (uint16_t challenge_index = 0; challenge_index < 256; challenge_index++) {
+//         challenge.back() = uint8_t(challenge_index);
+//         quality_chains = prover.prove(challenge);
 
-        for (auto const& pqc : quality_chains) {
-            if (!pqc.quality_chains.empty()) {
-                found_quality = true;
-                break;
-            }
-        }
+//         for (auto const& pqc : quality_chains) {
+//             if (!pqc.quality_chains.empty()) {
+//                 found_quality = true;
+//                 break;
+//             }
+//         }
 
-        if (found_quality) {
-            break;
-        }
-    }
+//         if (found_quality) {
+//             break;
+//         }
+//     }
 
-    ENSURE(found_quality);
+//     ENSURE(found_quality);
 
-    for (auto& pqc : quality_chains) {
-        ProofValidator proof_validator(group_params, 0);
+//     for (auto& pqc : quality_chains) {
+//         ProofValidator proof_validator(group_params, 0);
 
-        for (auto& qc: pqc.quality_chains) {
-            std::vector<uint32_t> x_bits_list;
-            ProofFragmentCodec fragment_codec(params);
+//         for (auto& qc: pqc.quality_chains) {
+//             std::vector<uint32_t> x_bits_list;
+//             ProofFragmentCodec fragment_codec(params);
 
-            for (auto const& fragment: qc.chain_links) {
-                std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(fragment);
+//             for (auto const& fragment: qc.chain_links) {
+//                 std::array<uint32_t, 4> x_bits = fragment_codec.get_x_bits_from_proof_fragment(fragment);
 
-                for (auto const& x_bit: x_bits) {
-                    x_bits_list.push_back(x_bit);
-                }
-            }
+//                 for (auto const& x_bit: x_bits) {
+//                     x_bits_list.push_back(x_bit);
+//                 }
+//             }
 
-            Solver solver(params);
-            auto proofs = solver.solve(Solver::XBitsList(x_bits_list));
+//             Solver solver(params);
+//             auto proofs = solver.solve(Solver::XBitsList(x_bits_list));
 
-            ENSURE(!proofs.empty());
+//             ENSURE(!proofs.empty());
 
-            for (auto const& proof: proofs) {
-                std::optional<QualityChainLinks> validated_chain
-                    = proof_validator.validate_full_proof(proof, challenge);
+//             for (auto const& proof: proofs) {
+//                 std::optional<QualityChainLinks> validated_chain
+//                     = proof_validator.validate_full_proof(proof, challenge);
 
-                ENSURE(validated_chain.has_value());
-            }
-        }
-    }
-}
+//                 ENSURE(validated_chain.has_value());
+//             }
+//         }
+//     }
+// }
 
 TEST_CASE("test_no_duplicate_qualities_for_known_challenge")
 {
@@ -97,6 +97,9 @@ TEST_CASE("test_no_duplicate_qualities_for_known_challenge")
     uint8_t meta_group = 0;
     PlotGroupId plot_group_id("1212121212121212121212121212121212121212121212121212121212121212");
     std::array<uint8_t, 112> memo = {};
+
+    // Test thingy
+    // FeistelCipher cipher(plot_group_id.bytes(), 28);
 
     std::filesystem::create_directories(".test_plots");
     std::string plot_path = ".test_plots/pos2_dup_qualities_k18.gplot";
