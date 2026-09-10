@@ -2,21 +2,29 @@
 #include "plot/PlotFile.hpp"
 #include "plot/Plotter.hpp"
 #include "test_util.h"
+#include "pos/sha/sha256.hpp"
 
 TEST_SUITE_BEGIN("plot-file");
 
 TEST_CASE("plot-read-write")
 {
-#define PLOT_ID_HEX "c6b84729c23dc6d60c92f22c17083f47845c1179227c5509f07a5d2804a7b835"
-    constexpr int K = 18;
-    constexpr int strength = 2;
+    #define PLOT_GROUP_ID_HEX "c6b84729c23dc6d60c92f22c17083f47845c1179227c5509f07a5d2804a7b835"
 
-    printfln("Creating a %d plot: %s", K, PLOT_ID_HEX);
+    constexpr int k = 18;
+    constexpr int strength = 2;
+    constexpr int index = 0;
+
+    PlotGroupParams group_params(PlotGroupId(PLOT_GROUP_ID_HEX), k, strength, 0);
+    PlotProofParams params = group_params.get_plot_params_for_index(uint16_t(index));
+
+    PlotId plot_id = params.get_plot_id();
+    std::string plot_id_hex = plot_id.to_string();
+
+    printfln("Creating a %d plot (index %d): %s -> %s",  k, index, PLOT_GROUP_ID_HEX, plot_id_hex.c_str());
 
     Timer timer {};
     timer.start("");
 
-    ProofParams params(Utils::hexToBytes(PLOT_ID_HEX).data(), K, strength, 0);
     Plotter plotter(params);
     PlotData plot = plotter.run();
     timer.stop();
@@ -38,12 +46,16 @@ TEST_CASE("plot-read-write")
 
     printfln("Plot completed, writing to file...");
 
-#define tostr std::to_string
-    std::string file_name = (std::string("plot_") + "k") + tostr(K) + "_" PLOT_ID_HEX + ".bin";
+    #define tostr std::to_string
+    std::string file_name = (std::string("plot_") + "k") + tostr(k) + ("_" PLOT_GROUP_ID_HEX "_") + tostr(index) + ".bin";
 
     timer.start("Writing plot file: " + file_name);
     PlotFile::writeData(
-        file_name, plot, plotter.getProofParams(), 0, 0, std::array<uint8_t, 32 + 48 + 32>({}));
+        file_name, 
+        plot,
+        group_params,
+        uint16_t(index),
+        std::array<uint8_t, 32 + 48 + 32>({}));
     timer.stop();
 
     timer.start("Reading plot file: " + file_name);
@@ -52,7 +64,6 @@ TEST_CASE("plot-read-write")
 
     PlotData converted = ChunkedProofFragments::convertToPlotData(partitioned_data);
     ENSURE(plot == converted);
-    ENSURE(plotter.getProofParams() == read_plot.params);
+    ENSURE(group_params == read_plot.params);
 }
-
 TEST_SUITE_END();

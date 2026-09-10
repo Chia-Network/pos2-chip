@@ -7,8 +7,7 @@ constexpr int TOTAL_T3_PAIRS_IN_PROOF = 16;
 constexpr int TOTAL_PROOF_FRAGMENTS_IN_PROOF = 16;
 
 constexpr int NUM_CHAIN_LINKS = 16;
-constexpr int CHAIN_SET_BITS
-    = 6; // number of bits to determine chaining set size (64 entries per set)
+constexpr int CHAIN_SET_BITS = 6; // number of bits to determine chaining set size (64 entries per set)
 constexpr int CHAIN_FACTOR_FRONT_LOAD_BITS = CHAIN_SET_BITS;
 
 // Number of distinct challenge fragment sets selected per challenge. Each set
@@ -35,4 +34,3 @@ constexpr int CHAIN_STARTER_FILTER_BITS = 2;
 static_assert((1 << CHAIN_STARTER_FILTER_BITS) == NUM_CHALLENGE_SETS,
     "CHAIN_STARTER_FILTER_BITS should be log2(NUM_CHALLENGE_SETS)");
 
-constexpr uint32_t TESTNET_G_XOR_CONST = 0xA3B1C4D7;

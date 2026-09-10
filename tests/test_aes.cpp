@@ -17,7 +17,7 @@ TEST_CASE("AesHash g_x soft vs hardware")
     for (size_t i = 0; i < plot_id.size(); ++i)
         plot_id[i] = static_cast<uint8_t>(i * 7 + 3);
     int k = 20;
-    AesHash hasher(plot_id.data(), k);
+    AesHash hasher(plot_id, k);
 
     for (uint32_t x: { 0u, 1u, 0x12345678u, 0xFFFFFFFFu, 0xABCDEF12u }) {
         REQUIRE(hasher.g_x<false>(x) == hasher.g_x<true>(x));
@@ -32,7 +32,7 @@ TEST_CASE("AesHash matching_target soft vs hardware")
     for (size_t i = 0; i < plot_id.size(); ++i)
         plot_id[i] = static_cast<uint8_t>(i);
     int k = 28;
-    AesHash hasher(plot_id.data(), k);
+    AesHash hasher(plot_id, k);
 
     for (int extra_bits: { 0, 1 }) {
         for (uint64_t meta: { 0ULL, 0x0123456789ABCDEFULL, 0xFEDCBA9876543210ULL }) {
@@ -52,7 +52,7 @@ TEST_CASE("AesHash pairing soft vs hardware")
     for (size_t i = 0; i < plot_id.size(); ++i)
         plot_id[i] = static_cast<uint8_t>(255 - i);
     int k = 16;
-    AesHash hasher(plot_id.data(), k);
+    AesHash hasher(plot_id, k);
 
     for (int extra_bits: { 0, 1 }) {
         auto r1 = hasher.pairing<false>(0x0123456789ABCDEFULL, 0x0FEDCBA987654321ULL, extra_bits);
@@ -112,7 +112,7 @@ TEST_CASE("AesHash regression list soft vs hardware")
     for (size_t i = 0; i < plot_id.size(); ++i)
         plot_id[i] = static_cast<uint8_t>(i * 11 + 5);
     int k = 28;
-    AesHash hasher(plot_id.data(), k);
+    AesHash hasher(plot_id, k);
     auto hw = aes_regression_results<false>(hasher);
     auto sw = aes_regression_results<true>(hasher);
 
@@ -132,7 +132,7 @@ TEST_CASE("AesHash emit regression list to CLI")
     for (size_t i = 0; i < plot_id.size(); ++i)
         plot_id[i] = static_cast<uint8_t>(i * 11 + 5);
     int k = 28;
-    AesHash hasher(plot_id.data(), k);
+    AesHash hasher(plot_id, k);
 
     auto sw = aes_regression_results<true>(hasher);
 
@@ -160,7 +160,7 @@ TEST_CASE("AesHash fixed regression list matches")
     for (size_t i = 0; i < plot_id.size(); ++i)
         plot_id[i] = static_cast<uint8_t>(i * 11 + 5);
     int k = 28;
-    AesHash hasher(plot_id.data(), k);
+    AesHash hasher(plot_id, k);
 
     auto sw = aes_regression_results<true>(hasher);
 

@@ -8,16 +8,30 @@ buildType:
       short: Release
       buildType: Release
 
+libpos:
+  default: off
+  choices:
+    off:
+      short: libPOS Disabled
+      long:  Disable libPOS target
+      settings:
+        CP_ENABLE_LIBPOS2: OFF
+    on:
+      short: libPOS Enabled
+      long:  Enable libPOS target
+      settings:
+        CP_ENABLE_LIBPOS2: ON
+
 tests:
   default: off
   choices:
     off:
       short: Tests Disabled
-      long: Disable CUDA
+      long: Disable Tests
       settings:
-        CP_ENABLE_TESTS: OFF
+        CP_BUILD_TESTS: OFF
     on:
       short: Tests Enabled
-      long: Enable CUDA
+      long: Enable Tests
       settings:
-        CP_ENABLE_TESTS: ON
+        CP_BUILD_TESTS: ON

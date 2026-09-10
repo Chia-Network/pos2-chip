@@ -3,16 +3,18 @@
 #include "pos/ProofFragment.hpp"
 #include "pos/ProofValidator.hpp"
 #include "solve/Solver.hpp"
+#include "pos/sha/sha256.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <string>
 
+
 int benchmark(uint8_t k, uint8_t plot_strength)
 {
-    std::string const plot_id_hex
-        = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
-    // hex to bytes
-    std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
+    std::string const plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+
+    PlotId plot_id(plot_id_hex);
+
 
     // benchmark with sequential x-bits, so we see performance in full set of groups.
     uint32_t x_bits_list[TOTAL_T1_PAIRS_IN_PROOF];
@@ -22,12 +24,13 @@ int benchmark(uint8_t k, uint8_t plot_strength)
 
     std::cout << "Running benchmark for:" << std::endl;
 
-    ProofParams params(plot_id.data(), k, plot_strength, 0);
+    auto params = PlotProofParams::create_raw(plot_id, k, plot_strength);
     params.show();
 
     Solver solver(params);
-    solver.setBitmaskShift(
-        0); // with large chaining of 16 bitmask shift doesn't help much (if at all).
+
+    // with large chaining of 16 bitmask shift doesn't help much (if at all).
+    solver.setBitmaskShift(0);
 
     solver.setUsePrefetching(true);
     // std::cout << "Not using prefetching." << std::endl;
@@ -46,20 +49,12 @@ int benchmark(uint8_t k, uint8_t plot_strength)
     return 0;
 }
 
-int xbits(std::string const& plot_id_hex,
-    std::vector<uint32_t> const& x_bits_list,
-    uint8_t k,
-    uint8_t strength)
+int xbits(PlotProofParams& params, std::vector<uint32_t> const& x_bits_list)
 {
-    // convert plot_id_hex to bytes
-    std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
-    ProofParams params(plot_id.data(), k, strength, 0);
-
     params.show();
 
     Solver solver(params);
-    solver.setBitmaskShift(
-        0); // with large chaining of 16 bitmask shift doesn't help much (if at all).
+    solver.setBitmaskShift(0); // with large chaining of 16 bitmask shift doesn't help much (if at all).
 
     solver.setUsePrefetching(true);
     std::cout << "Using prefetching." << std::endl;
@@ -86,13 +81,14 @@ int xbits(std::string const& plot_id_hex,
 
 int main(int argc, char* argv[])
 try {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <mode> <arg>\n"
+
+    if (argc < 2) {
+        std::cerr << "Usage: solver <mode> <arg>\n"
                   << "Modes:\n"
                   << "  benchmark <k-size> [strength (default 2)]   Run benchmark with the given "
                      "k-size integer and optional plot strength\n"
-                  << "  xbits <plot_id_hex> <xbits_hex> <strength>   Solve for proofs given plot "
-                     "ID, partial x-bits, and plot strength\n";
+                  << "  xbits <strength> <plot_id_hex> <xbits_hex>\n"
+                     "   Solve for proofs given plot ""ID, partial x-bits, and plot strength\n";
         return 1;
     }
 
@@ -123,30 +119,33 @@ try {
         return benchmark(numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(plot_strength));
     }
     else if (mode == "xbits") {
-        // must have 5 args: xbits <k-size> <plot_id_hex> <xbits_hex> <strength>
         if (argc != 5) {
-            std::cerr << "Usage: " << argv[0] << " xbits <plot_id_hex> <xbits_hex> [strength]\n"
+            std::cerr << "Usage: " << argv[0] << " xbits <strength> <plot_id_hex> <xbits_hex>\n"
+                      << "  strength:    integer\n"
                       << "  plot_id_hex: 64-hex-character string\n"
-                      << "  xbits_hex: string for 256 k/2-bit x-values\n"
-                      << "  strength: optional integer (default 2)\n";
+                      << "  xbits_hex:   string for 256 k/2-bit x-values\n";
             return 1;
         }
 
+        int strength = std::stoi(argv[2]);
+
         // then get plot id hex string
-        std::string plot_id_hex = argv[2];
+        std::string plot_id_hex = argv[3];
         if (plot_id_hex.length() != 64) {
             std::cerr << "Error: plot_id must be a 64-hex-character string." << std::endl;
             return 1;
         }
 
         // then get string of 256 hex characters for xbits
-        std::string xbits_hex = argv[3];
+        std::string xbits_hex = argv[4];
         size_t xbits_hex_len = xbits_hex.length();
+
         std::vector<uint32_t> x_bits_list;
-        size_t calculated_k
-            = xbits_hex_len / (TOTAL_XS_IN_PROOF / 16); // each uint32_t is 4 hex characters
+        size_t calculated_k = xbits_hex_len / (TOTAL_XS_IN_PROOF / 16); // each uint32_t is 4 hex characters
+
         std::cout << "xbits_hex length: " << xbits_hex_len << ", calculated k: " << calculated_k
                   << std::endl;
+
         if (calculated_k < 18 || calculated_k > 32 || (calculated_k % 2) != 0) {
             std::cerr << "Error: k-size must be an even integer between 18 and 32." << std::endl;
             return 1;
@@ -159,15 +158,18 @@ try {
             return 1;
         }
 
-        int plot_strength = argv[4] ? std::stoi(argv[4]) : 2; // default strength is 2
-        std::cout << "Running xbits with k-size = " << calculated_k << " plot id: " << plot_id_hex
-                  << " xbits = " << xbits_hex << " plot strength = " << plot_strength << std::endl;
-        // convert xbits_hex to uint32_t array
+        std::cout << "Running xbits with k-size = " << calculated_k 
+                  << " plot id:  " << plot_id_hex
+                  << " strength: " << strength
+                  << " xbits:    " << xbits_hex << std::endl << std::endl;
 
-        return xbits(plot_id_hex,
-            x_bits_list,
+
+        auto params = PlotProofParams::create_raw(PlotId(plot_id_hex),
             numeric_cast<uint8_t>(calculated_k),
-            numeric_cast<uint8_t>(plot_strength));
+            numeric_cast<uint8_t>(strength)
+        );
+
+        return xbits(params, x_bits_list);
     }
     else {
         std::cerr << "Unknown mode: " << mode << "\n"

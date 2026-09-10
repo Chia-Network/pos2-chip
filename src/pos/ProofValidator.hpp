@@ -16,11 +16,17 @@
 
 class ProofValidator {
 public:
-    ProofValidator(ProofParams const& proof_params)
-        : params_(proof_params)
-        , proof_core_(proof_params)
+    ProofValidator(PlotGroupParams const& params, uint16_t plot_index)
+        : params_(params)
+        , proof_core_(params.get_plot_params_for_index(plot_index))
     {
     }
+
+    ProofValidator(ProofCore const& proof_core)
+        : proof_core_(proof_core)
+    {
+    }
+
 
     std::optional<T1Pairing> validate_table_1_pair(uint32_t const* x_pair)
     {
@@ -97,6 +103,16 @@ public:
             return std::nullopt;
         }
 
+        // Must be created with a PlotGroupParams.
+        // Validators are created with only a ProofCore when used by the solver.
+        if (!params_.has_value()) {
+            std::cerr << "Attempted to use a partial validator to validate a proof."
+                      << std::endl;
+            return std::nullopt;
+        }
+
+        PlotGroupParams& group_params = params_.value();
+
         // make challenge into std::array<uint8_t,32>
         std::array<uint8_t, 32> challenge_array;
         for (size_t i = 0; i < 32; ++i) {
@@ -125,7 +141,7 @@ public:
             // Create the proof fragment and add to list
             ProofFragment proof_fragment = proof_core_.fragment_codec.encode(x_values);
             chain.fragments[i] = proof_fragment;
-// proof_fragments.push_back(proof_fragment);
+
 #ifdef DEBUG_PROOF_VALIDATOR
             std::cout << "Sub-proof fragment " << fragment_id << " for sub-proof " << i << ": "
                       << "x-values: [";
@@ -138,11 +154,11 @@ public:
         }
 
         // determine the fragment ranges for all challenge sets
-        ProofCore::SelectedChallengeSets selected_sets
-            = proof_core_.selectChallengeSets(challenge_array);
+        SelectedChallengeSets selected_sets = ChallengeSetSelector::selectChallengeSets(
+                                                group_params, challenge_array);
 
         // validate the chain of proof fragments.
-        Chainer chainer(params_, challenge_array);
+        Chainer chainer(proof_core_.getProofParams(), challenge_array);
         bool valid = chainer.validate(chain, selected_sets.fragment_set_ranges);
         if (!valid) {
 #ifdef DEBUG_PROOF_VALIDATOR
@@ -156,6 +172,6 @@ public:
     }
 
 private:
-    ProofParams params_;
+    std::optional<PlotGroupParams> params_;
     ProofCore proof_core_;
 };

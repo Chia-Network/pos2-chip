@@ -113,6 +113,7 @@ std::string num(T v, int precision = 2, bool fixed = true)
 
 using namespace pretty;
 
+// TODO: This must be updated to use PlotProofParams/GroupParams
 class DiskBench {
 public:
     DiskBench(ProofParams const& proof_params) : proof_params_(proof_params) {}
@@ -187,20 +188,18 @@ public:
         size_t total_plots_passed_filter = 0;
 
         constexpr uint8_t k = 28;
-        std::string plot_id_hex
-            = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
-        std::string challenge_hex
-            = "5c00000000000000000000000000000000000000000000000000000000000000";
+        std::string plot_group_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+        std::string challenge_hex     = "5c00000000000000000000000000000000000000000000000000000000000000";
+
+        PlotGroupParams params(plot_group_id_hex, k, 2, 0);
+
         std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
         uint32_t sim_challenge_id = 0;
-        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2, 0);
-        ProofCore proof_core(proof_params);
         Timer timer;
         double total_harvesting_compute_time_ms = 0.0;
         size_t proofs_found = 0;
 
-        double const CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS
-            = 20000.0; // cap at 20 seconds total compute time
+        double const CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS = 20000.0; // cap at 20 seconds total compute time
         size_t total_challenges_before_compute_cap = 0;
         double max_compute_ms_per_challenge = 0;
         size_t max_plots_passing_filter_per_challenge = 0;
@@ -262,7 +261,7 @@ public:
                     challenge[3] = static_cast<uint8_t>((sim_challenge_id >> 24) & 0xFF);
                     sim_challenge_id++;
                     timer.start();
-                    Chainer chainer(proof_params, challenge);
+                    Chainer chainer(params.get_plot_params_for_index(0), challenge);
                     std::array<std::span<ProofFragment const>, NUM_CHALLENGE_SETS>
                         fragments_per_set_spans;
                     for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {

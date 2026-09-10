@@ -5,7 +5,9 @@
 #include "pos/Chainer.hpp"
 #include "pos/ProofConstants.hpp"
 #include "prove/Prover.hpp"
+#include "pos/sha/sha256.hpp"
 #include "test_util.h"
+
 
 #include <algorithm>
 #include <cmath>
@@ -73,36 +75,31 @@ double jensen_expected_chains(
 // exactly that factor so the empirical mean lands at ~1.0.
 TEST_CASE("chain-average-real-plot")
 {
-#ifdef NDEBUG
     constexpr size_t N_CHALLENGES = 1000;
-#else
-    constexpr size_t N_CHALLENGES = 100;
-#endif
 
     constexpr uint8_t k = 18;
     constexpr uint8_t plot_strength = 2;
-    constexpr uint8_t testnet = 0;
 
-    std::string const plot_id_hex
-        = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+    std::string const plot_group_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
 
     printfln("Creating k=%d strength=%d plot", (int)k, (int)plot_strength);
     Timer timer {};
     timer.debugOut = true;
     timer.start("Plot Creation");
-    ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, plot_strength, testnet);
+    PlotGroupParams group_params(plot_group_id_hex, k, plot_strength, 0);
+    PlotProofParams proof_params = group_params.get_plot_params_for_index(0);
     Plotter plotter(proof_params);
     PlotData plot = plotter.run();
     timer.stop();
 
+
     std::string const plot_file_name = std::string("plot_chain_avg_k") + std::to_string(k) + "_s"
-        + std::to_string(plot_strength) + "_" + plot_id_hex + ".bin";
+        + std::to_string(plot_strength) + "_" + proof_params.get_plot_id().to_string() + ".bin";
     timer.start("Writing plot file: " + plot_file_name);
     PlotFile::writeData(plot_file_name,
         plot,
-        plotter.getProofParams(),
-        0,
-        0,
+        group_params,
+        proof_params.get_plot_index(),
         std::array<uint8_t, 32 + 48 + 32>({}));
     timer.stop();
 

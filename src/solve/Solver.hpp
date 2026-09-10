@@ -79,17 +79,12 @@ struct T3_match {
 
 class Solver {
 public:
-    // Constructor: supply the 32‐byte plot ID and the “k” parameter.
-    Solver(ProofParams const& proof_params) : params_(proof_params)
-    {
-        // Use a ProofCore instance to initialize parameters.
-        ProofCore proof_core(proof_params);
-        // num_section_bits_ = proof_params.get_num_section_bits();
-        // num_match_key_bits_ = 4;
-        // num_match_target_bits_ = num_k_bits_ - num_section_bits_ - num_match_key_bits_;
-        // num_T2_match_key_bits_ = 2;
-        // num_T2_match_target_bits_ = num_k_bits_ - num_section_bits_ - num_T2_match_key_bits_;
-    }
+    using XBitsList = std::span<uint32_t const, TOTAL_XS_IN_PROOF / 2>;
+    using SolveResult = std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>>;
+
+    Solver(PlotProofParams const& params)
+        : params_(params)
+    {}
 
     void setUsePrefetching(bool use_prefetching) { use_prefetching_ = use_prefetching; }
 
@@ -139,9 +134,7 @@ public:
     //        (debug and verify).
     // Returns: a vector of complete proofs (each proof is an array of TOTAL_XS_IN_PROOF uint32_t
     // x-values).
-    std::vector<std::array<uint32_t, TOTAL_XS_IN_PROOF>> solve(
-        std::span<uint32_t const, TOTAL_XS_IN_PROOF / 2> const x_bits_list,
-        std::span<uint32_t const> const x_solution = {})
+    SolveResult solve(XBitsList const x_bits_list, std::span<uint32_t const> const x_solution = {})
     {
         XBitGroupMappings x_bits_group = compress_with_lookup(x_bits_list, params_.get_k() / 2);
 #ifdef DEBUG_VERIFY
@@ -415,6 +408,7 @@ public:
         // T3 matching.
         {
             ProofValidator validator(params_);
+
             for (size_t i = 0; i < t2_matches.size(); i += 2) {
                 size_t t3_group = i / 2;
                 std::vector<T2_match> const& groupA = t2_matches[i];
@@ -429,8 +423,9 @@ public:
                             groupB[k].x_values[1],
                             groupB[k].x_values[2],
                             groupB[k].x_values[3] };
-                        std::optional<T3Pairing> result
-                            = validator.validate_table_3_pairs(x_values);
+
+                        std::optional<T3Pairing> result = validator.validate_table_3_pairs(x_values);
+
                         if (result.has_value()) {
                             // could match faster in T4 by adding both T3 matches and then doing
                             // more checks but probably negligible speedup than this simpler way.
@@ -1400,6 +1395,7 @@ public:
             // Move match_key loop inside: compute chacha once per x and then emit entries for all
             // match keys.
             for (uint32_t x = x1_range_start; x < x1_range_start + x1_range_size; ++x) {
+                // NOTE: This comment is stale now that testnet has been removed.
                 // Must use ProofHashing::g (not raw AES) so testnet XOR matches plot / validation.
                 uint32_t const g_hash = proof_core.hashing.g(uint32_t(x));
 
@@ -1471,7 +1467,7 @@ private:
     // ------------------------------------------------------------------------
     // Private member variables.
     // ------------------------------------------------------------------------
-    ProofParams params_;
+    PlotProofParams params_;
     ProofSolverTimings timings_;
 
     int bitmask_shift_ = 0;

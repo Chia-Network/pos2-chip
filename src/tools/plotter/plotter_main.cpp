@@ -1,6 +1,7 @@
 #include "common/Utils.hpp"
 #include "plot/PlotFile.hpp"
 #include "plot/Plotter.hpp"
+#include "pos/sha/sha256.hpp"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -14,14 +15,13 @@ static void print_usage(char const* prog)
 {
     std::cerr
         << "Usage:\n"
-        << "  " << prog << " test <k> <plot_id_hex> [strength] [verbose]\n"
-        << "    <k>            : even integer between 18 and 32\n"
-        << "    <plot_id_hex>  : 64 hex characters\n"
-        << "    [strength]     : optional, defaults to 2\n"
-        << "    [plot_index]   : optional, defaults to 0\n"
-        << "    [meta_group]   : optional, defaults to 0\n"
-        << "    [verbose]      : optional, 0 (default) for progress bar, 1 for verbose output\n"
-        << "    [--testnet]    : optional, use testnet parameters\n";
+        << "  " << prog << " test <k> <plot_group_id> [strength] [verbose]\n"
+        << "    <k>             : even integer between 18 and 32\n"
+        << "    <plot_group_id> : 64 hex characters\n"
+        << "    [strength]      : optional, defaults to 2\n"
+        << "    [plot_index]    : optional, defaults to 0\n"
+        << "    [meta_group]    : optional, defaults to 0\n"
+        << "    [verbose]       : optional, 0 (default) for progress bar, 1 for verbose output\n";
 }
 
 static void render_progress_line(
@@ -74,24 +74,15 @@ try {
     }
 
     // Expect: prog test <k> <plot_id_hex> [strength=2 (default)] [plotIndex=0 (default)]
-    // [metaGroup=0 (default)] [verbose=0] [--testnet]
+    //          [metaGroup=0 (default)] [verbose=0]
     if (argc < 4) {
         print_usage(argv[0]);
         return 1;
     }
 
-    // Scan for --testnet flag and remove it from argv before positional parsing
-    bool testnet = false;
     std::vector<char*> positional_args;
-    positional_args.push_back(argv[0]);
-    positional_args.push_back(argv[1]);
-    for (int i = 2; i < argc; ++i) {
-        if (std::string(argv[i]) == "--testnet") {
-            testnet = true;
-        }
-        else {
-            positional_args.push_back(argv[i]);
-        }
+    for (int i = 0; i < argc; ++i) {
+        positional_args.push_back(argv[i]);
     }
     int pargc = static_cast<int>(positional_args.size());
 
@@ -101,7 +92,7 @@ try {
     }
 
     int const k = std::atoi(positional_args[2]);
-    std::string plot_id_hex = positional_args[3];
+    std::string plot_group_id_hex = positional_args[3];
     int strength = 2;
     int plot_index = 0;
     int meta_group = 0;
@@ -131,7 +122,7 @@ try {
         return 1;
     }
 
-    if (plot_id_hex.size() != 64) {
+    if (plot_group_id_hex.size() != 64) {
         std::cerr << "Error: plot_id_hex must be 64 hex characters.\n";
         return 1;
     }
@@ -155,17 +146,20 @@ try {
     opt.validate = false;
     opt.verbose = verbose;
 
-    ProofParams params(Utils::hexToBytes(plot_id_hex).data(),
+    auto plot_group_id = PlotGroupId::from_hex_str(plot_group_id_hex);
+
+    PlotGroupParams group_params(plot_group_id,
         numeric_cast<uint8_t>(k),
         numeric_cast<uint8_t>(strength),
-        numeric_cast<uint8_t>(testnet ? 1 : 0));
+        numeric_cast<uint8_t>(meta_group)
+    );
+
+    PlotProofParams params = group_params.get_plot_params_for_index(numeric_cast<uint16_t>(plot_index));
+
     Plotter plotter(params);
 
     PlotData plot;
 
-    if (testnet) {
-        std::cout << "TESTNET plot -- will NOT be valid on mainnet." << std::endl;
-    }
 
 #if HAVE_AES
     std::cout << "Using AES hardware acceleration." << std::endl;
@@ -221,23 +215,20 @@ try {
     bool writeToFile = true;
     if (writeToFile) {
         std::string filename = "plot_" + std::to_string(k) + "_" + std::to_string(strength) + "_"
-            + std::to_string(plot_index) + "_" + std::to_string(meta_group)
-            + (testnet ? "_testnet" : "");
+            + std::to_string(plot_index) + "_" + std::to_string(meta_group);
 #ifdef RETAIN_X_VALUES_TO_T3
         filename += "_xvalues";
 #endif
-        filename += '_' + plot_id_hex + ".bin";
+        filename += '_' + plot_group_id_hex + ".bin";
+
         Timer writeTimer;
         writeTimer.start();
         std::cout << "Writing plot to " << filename << "...\n";
-        // pass in plot index and meta group to writeData
-        // IMPORTANT: caller is responsible for passing in the correct plot index and meta group
-        // used for generating the plot id, not verified by the plotter.
+
         size_t bytes_written = PlotFile::writeData(filename,
             plot,
-            plotter.getProofParams(),
+            group_params,
             numeric_cast<uint16_t>(plot_index),
-            numeric_cast<uint8_t>(meta_group),
             std::array<uint8_t, 32 + 48 + 32>({}));
         double write_time_ms = writeTimer.stop();
 

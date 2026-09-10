@@ -8,12 +8,86 @@
             "name":    "Tests",
             "type":    "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/test",
+            // "program": "${workspaceFolder}/build/test",
+            // "program": "${workspaceFolder}/build/tests/compute_last_link_extra_threshold",
+            "program": "${workspaceFolder}/build/tests/plot_group_file",
             "cwd":     "${workspaceFolder}/build",
             "preLaunchTask": "build-tests",
             "args": [
-                "-tc", "plot-file"
+                "-tc",
+                "test_no_duplicate_qualities_for_known_challenge",
+                // "-tc",
+                // "decompress_group_chunk"
+                // "plot-file"
             ],
+            "initCommands": [
+            ]
+        },
+        {
+            "name":    "Prover",
+            "type":    "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/prover",
+            "cwd":     "${workspaceFolder}/build",
+            "preLaunchTask": "build-prover",
+            "args": [
+                // "challenge",
+                // "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+                // "/Users/harito/projects/chia/pos2/.bin/.sandbox/plots/gplot-0d5535e13cc9708d0ff0289af2fae27e564b6bcbcd9242f5140d96957744a517-s02-m000-x3-2026-08-18-22-34.gplot"
+
+                "check",
+                "/home/rocky/projects/chia/pos2/.bin/sandbox/plots/gplot-6759c9074961b0c386f3a4f93b771cd5075fbef603c0fc09c25571102bd2f40c-s02-m000-x64-2026-08-18-23-50.gplot",
+        
+
+                // "verify",
+                // "0d5535e13cc9708d0ff0289af2fae27e564b6bcbcd9242f5140d96957744a517",
+                // "0",
+                // "f922c15ac8abb71a05140a735b57cf1e1f29551020144028f37c092d02675cdfedd98e81468aa9d1e423e593f143b28925784e83bf3c55f15af3423306bcb1d8fa075576ebd1dfe7e41494af03d05ea99a23aedd4f57c624997342f05cbab43fb8cfa143d912ff84be4802d2c408abb985072d7cb6c56eb01970711167364dc16299f25d05555b50b83c7da0f6333db914be0e12225d9bcc37adb822c9cbc9046a47c60f99e03599327c5823df40cc2e58871468bac8b91334c5b15ee67237e09c7082cb0b952900280c57cb528d2a926f511148b63584badbecd526d22e260078bf3188aeb1d88a93c4d0883812b2d09efc622569ccfb6be4ad34a9202dd7de64b75ae820da5c0c5105d1428cf17468d0ca15eb721f164eabf99beba14e2b60836d5e8054fa5b5c0f52dde350166ac71a0eaee7c79660e4dc0e2763818959635bb0769824f921b16f29f53b97c6f96a91eb6bfbb9d1b6cb64df5aab0f8268be",
+                // "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+                // "2",
+
+                // "/Users/harito/projects/chia/pos2/.bin/.sandbox/plots/gplot-70bdae783c0691b2b1d367a5905e50547fcc27612468ba0feb563dd8ca4b9da4-s02-m000-x128-2026-06-24-21-55.gplot"
+                // "92f6813d916a9de81da2d982e19d904a76c2db5d19d8681a5c1a905612b0a3de",
+                // "/Users/harito/projects/chia/pos2/.bin/.sandbox/plots/gplot-92f6813d916a9de81da2d982e19d904a76c2db5d19d8681a5c1a905612b0a3de-s02-m000-x64-2026-06-25-20-30.gplot",
+                // "/Users/harito/projects/chia/pos2/.bin/.sandbox/plots/gplot-92f6813d916a9de81da2d982e19d904a76c2db5d19d8681a5c1a905612b0a3de-s02-m000-x3-2026-06-25-21-29.gplot"
+            ],
+            "initCommands": [
+            ]
+        },
+        {
+            "name":    "Plotter",
+            "type":    "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/plotter",
+            "cwd":     "${workspaceFolder}/build",
+            "preLaunchTask": "build-plotter",
+            "args": [
+                "test",
+                "18",
+                "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+                "2"
+            ],
+        },
+
+        {
+            "name":    "Cargo Tests",
+            "type":    "lldb",
+            "request": "launch",
+            // "program": "${workspaceFolder}/build/test",
+            "program": "${workspaceFolder}/target/debug/deps/chia_pos2-f97248a82928864a",
+            "cwd":     "${workspaceFolder}",
+            "preLaunchTask": "cargo-build-tests",
+            "args": [
+                // "tests::test_plot_roundtrip::index_1_0u16::meta_group_1_0u8",
+                // "tests::test_plot_roundtrip::index_1_0u16::meta_group_2_7u8",
+                // "tests::test_plot_roundtrip::index_2_3u16::meta_group_1_0u8",
+                // "tests::test_plot_roundtrip::index_2_3u16::meta_group_2_7u8",
+                "tests::test_no_duplicate_qualities_for_known_challenge",
+                "--exact",
+                "--nocapture",
+                "--include-ignored"
+            ],
+            "sourceLanguages": ["rust", "cpp"],
             "initCommands": [
             ]
         },

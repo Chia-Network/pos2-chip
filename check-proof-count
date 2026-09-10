@@ -1,0 +1,61 @@
+#! /usr/bin/env bash
+set -eo pipefail
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+
+count=1
+k=18
+plot_id=1f33beed3723d3fc779748fdfcc2bd6c22a8dbdcaff13ab4689a8524b855e013
+build_dir="build-release"
+
+while (($#)); do
+  case $1 in
+    -n|-c|-count)
+    shift && count=$1 || exit 1
+
+    if [[ $count -lt 1 ]]; then
+      echo "Count must be greater than 0"
+      exit 1
+    fi
+    ;;
+
+    -i|-id)
+      shift && plot_id=$1 || exit 1
+      if [[ -z "${plot_id}" ]]; then
+        echo "Plot id is empty"
+        exit 1
+      fi
+    ;;
+
+    -b|-build-dir)
+    shift && build_dir=$1 || exit 1
+    ;;
+
+    -k)
+      shift && k=$1 || exit 1
+    ;;
+
+  esac
+
+  shift
+done
+
+
+# Build, if required
+mkdir -p "${build_dir}"
+pushd "${build_dir}" >/dev/null
+
+# if [[ ! -f plotter || ! -f prover ]]; then
+  cmake -DCMAKE_BUILD_TYPE=Release ..
+  cmake --build . --target plotter prover
+# fi
+
+# Plot, if required
+plot_file_name="plot_${k}_2_0_0_${plot_id}.bin"
+
+if [[ ! -f "${plot_file_name}" ]]; then
+  ./plotter test $k "${plot_id}" 2
+fi
+
+
+# Run challenge trials (this will fail if it does not pass the expected threshold)
+./prover check -s "${plot_file_name}" $count

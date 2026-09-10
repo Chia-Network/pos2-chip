@@ -1,8 +1,9 @@
 #include "common/Timer.hpp"
-#include "plot/ChunkCompressor.hpp"
+#include "plot/ChunkCompression.hpp"
 #include "test_util.h"
 #include <cstring>
 #include <vector>
+#include "pos/sha/sha256.hpp"
 
 TEST_CASE("compress_proof_fragments")
 {

@@ -3,6 +3,7 @@
 #include "pos/ProofFragment.hpp"
 #include "pos/ProofValidator.hpp"
 #include "solve/Solver.hpp"
+#include "pos/sha/sha256.hpp"
 #include "test_util.h"
 
 TEST_SUITE_BEGIN("solve");
@@ -12,10 +13,12 @@ TEST_CASE("solve-partial")
     // TODO: add solve tests for k28,k30, and k32.
     int k = 18;
     int plot_strength = 2;
+    uint16_t plot_index = 0;
 
     // xs were created by running a k 18 plot with RETAIN_X_VALUES on, and scanning challenges to
     // find an example proof with full x values.
-    std::vector<uint32_t> k18_xs_in_proof = { 67829,
+    std::vector<uint32_t> k18_xs_in_proof = {
+        67829,
         225328,
         71782,
         191211,
@@ -161,12 +164,16 @@ TEST_CASE("solve-partial")
         x_bits_list.push_back(x6_bits);
     }
 
-    std::string plot_id_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-    std::array<uint8_t, 32> plot_id = Utils::hexToBytes(plot_id_hex);
+    std::string plot_group_id_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-    ProofParams params(
-        plot_id.data(), numeric_cast<uint8_t>(k), numeric_cast<uint8_t>(plot_strength), 0);
-    ProofCore proof_core(params);
+    PlotGroupParams group_params(
+        PlotGroupId(plot_group_id_hex),
+        numeric_cast<uint8_t>(k),
+        numeric_cast<uint8_t>(plot_strength),
+        0);
+
+    PlotProofParams params = group_params.get_plot_params_for_index(plot_index);
+
     ProofFragmentCodec fragment_codec(params);
 
     Solver solver(params);
