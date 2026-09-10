@@ -481,8 +481,8 @@ mod tests {
         plot_group_id[2] = meta_group;
 
         let memo = [0u8; 112];
-        let plot_name = format!("pos2_chia_test_k20_i{index}_m{meta_group}.gplot",);
-        let plot_dir = std::env::current_dir().unwrap().join(".test_plots");
+        let plot_name = format!("pos2_chia_test_k20_i{index}_m{meta_group}.gplot");
+        let plot_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".test_plots");
         std::fs::create_dir_all(&plot_dir).unwrap();
         let plot_path = plot_dir.join(plot_name);
 

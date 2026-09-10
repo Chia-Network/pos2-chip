@@ -1,15 +1,14 @@
 //! Throughput benchmarks for `chia_pos2` FFI-heavy APIs.
 //!
 //! **Plot file:** expects the same file the `test_plot_roundtrip` unit test creates for
-//! mainnet, `index == 0`, `meta_group == 0`:
-//! `{std::env::temp_dir()}/pos2_chia_test_k20_i0_g0.plot`
+//! `index == 0`, `meta_group == 0`:
+//! `{env!("CARGO_MANIFEST_DIR")}/pos2_chia_test_k20_i0_m0.gplot`
 //!
 //! If it is missing, the benchmark exits with a short message. Generate the plot first, e.g.:
 //! ```text
-//! cargo test -p chia-pos2 'test_plot_roundtrip::testnet_1_false::index_1_0u16::meta_group_1_0u8' -- --ignored
+//! cargo test -p chia-pos2 'test_plot_roundtrip::index_1_0u16::meta_group_1_0u8' -- --ignored
 //! ```
 
-use std::env;
 use std::hint::black_box;
 use std::path::Path;
 use std::process;
@@ -22,7 +21,9 @@ use chia_pos2::{
 };
 
 fn default_plot_path() -> std::path::PathBuf {
-    env::temp_dir().join("pos2_chia_test_k20_i0_g0.plot")
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(".test_plots")
+        .join("pos2_chia_test_k20_i0_m0.gplot")
 }
 
 fn exit_missing_plot(path: &Path) -> ! {
@@ -32,7 +33,7 @@ fn exit_missing_plot(path: &Path) -> ! {
          This file is created by the `test_plot_roundtrip` test in `crates/chia-pos2/src/lib.rs` \
          (mainnet, index=0, meta_group=0).\n\
          Generate it with:\n\
-           cargo test -p chia-pos2 --release 'test_plot_roundtrip::testnet_1_false::index_1_0u16::meta_group_1_0u8' -- --ignored\n",
+           cargo test -p chia-pos2 --release 'test_plot_roundtrip::index_1_0u16::meta_group_1_0u8' -- --ignored\n",
         path.display()
     );
     process::exit(1);
