@@ -440,6 +440,7 @@ public:
     #pragma pack(pop)
     static_assert(sizeof(Header) == 51);
     static_assert(offsetof(Header, chunk_index_offset) == 42);
+    static_assert(std::is_standard_layout_v<Header>);
 
     struct Info {
         uint64_t    chunks_pos;                    // Where the chunk data starts.

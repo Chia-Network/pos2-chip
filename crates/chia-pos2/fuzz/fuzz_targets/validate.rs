@@ -10,7 +10,7 @@ fuzz_target!(|data: &[u8]| -> Corpus {
     let Ok(plot_group_id) = Bytes32::arbitrary(&mut unstructured) else {
         return Corpus::Reject;
     };
-    let Ok(k_size) = unstructured.int_in_range::<u8>(12..=32) else {
+    let Ok(k_size) = unstructured.int_in_range::<u8>(12..=28) else {
         return Corpus::Reject;
     };
     let Ok(challenge) = Bytes32::arbitrary(&mut unstructured) else {

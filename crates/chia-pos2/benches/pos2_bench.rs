@@ -129,9 +129,7 @@ fn pos2_benchmarks(c: &mut Criterion) {
     c.bench_function("validate_proof_v2", |b| {
         b.iter(|| {
             black_box(validate_proof_v2(
-                black_box(
-                    &plot_id_for_index(&f.plot_group_id, f.plot_index, f.meta_group).unwrap(),
-                ),
+                black_box(&f.plot_group_id),
                 f.plot_index,
                 f.k,
                 f.strength,

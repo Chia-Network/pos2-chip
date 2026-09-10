@@ -3,7 +3,7 @@ BinPackArguments: false
 BinPackParameters: OnePerLine
 BitFieldColonSpacing: After
 BreakBeforeBraces: Stroustrup
-ColumnLimit:     200
+ColumnLimit:     100
 QualifierAlignment: Right
 ReferenceAlignment: Left
 SkipMacroDefinitionBody: true

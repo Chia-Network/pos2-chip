@@ -180,6 +180,7 @@ private:
 };
 #pragma pack(pop)
 static_assert(sizeof(PlotGroupId) == 32);
+static_assert(std::is_standard_layout_v<PlotGroupId>);
 
 struct Range {
     uint64_t start;

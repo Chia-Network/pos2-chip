@@ -282,20 +282,18 @@ bool derive_plot_id(
 bool plot_group_read_info(
     PlotGroupFile::Info* out_info,
     uint8_t* memo_buf,
-    uint8_t* memo_buf_size,
+    uint8_t memo_buf_size,
     char const* plot_group_path)
 try {
-    if (out_info == nullptr || memo_buf == nullptr || 
-        memo_buf_size == nullptr || plot_group_path == nullptr)
-    {
+    if (out_info == nullptr || memo_buf == nullptr ||  plot_group_path == nullptr) {
         return false;
     }
 
     auto plot_group = PlotGroupFile::open(plot_group_path);
     PlotGroupFile::Info const& info = plot_group.getInfo();
+    *out_info = info;
 
-    if (*memo_buf_size < info.memo_length) {
-        *memo_buf_size = info.memo_length;
+    if (memo_buf_size < info.memo_length) {
         return false;
     }
 
@@ -304,10 +302,7 @@ try {
         return false;
     }
 
-    *memo_buf_size = info.memo_length;
-    *out_info = info;
     memcpy(memo_buf, memo.data(), info.memo_length);
-
     return true;
 }
 catch (std::exception const&) {

@@ -110,7 +110,7 @@ unsafe extern "C" {
     fn plot_group_read_info(
         out_info: *mut PlotGroupInfo,
         memo_buf: *mut u8,
-        memo_buf_size: *mut u8,
+        memo_buf_size: u8,
         plot_group_path: *const c_char,
     ) -> bool;
 }
@@ -314,12 +314,11 @@ impl Prover {
 
         let c_path = CString::new(plot_group_path.to_string_lossy().as_bytes()).unwrap();
 
-        let mut memo_len = memo_buf.len() as u8;
         let result = unsafe {
             plot_group_read_info(
                 &mut info,
                 memo_buf.as_mut_ptr(),
-                &mut memo_len,
+                memo_buf.len() as u8,
                 c_path.as_ptr(),
             )
         };
@@ -331,7 +330,7 @@ impl Prover {
         Ok(Prover {
             path: plot_group_path.to_path_buf(),
             plot_group_id: info.plot_group_id,
-            memo: memo_buf[..memo_len as usize].to_vec(),
+            memo: memo_buf[..info.memo_length as usize].to_vec(),
             group_size: info.group_size,
             strength: info.strength,
             meta_group: info.meta_group,
@@ -351,6 +350,15 @@ impl Prover {
         challenge: &Bytes32,
         plot_index_base: u16,
     ) -> Result<Vec<PlotQualityChain>> {
+        // Sanity check.
+        // Because tests want to try different plot indices, we must have a way to
+        // be able to give the prover an artificial offset for where to the plot
+        // index 'starts'. We can only create single-plot groups from this repo,
+        // and as plot groups indices are contiguous, we opt for an artificial starting offset.
+        // This function must remain private and not expose the `plot_index_base` parameter,
+        // as it is ONLY meant to be used by tests as stated.
+        // The public interface above, however, ALWAYS passes '0' as that parameter.
+        // So this should never execute in that scenario.
         #[cfg(not(test))]
         {
             if plot_index_base != 0 {
@@ -397,13 +405,13 @@ impl Prover {
                     break;
                 }
 
-                // Need to resize and try again
                 if i == 0 {
+                    // Need to resize and try again
                     assert!(num_results as usize > results.capacity());
                     results.reserve(num_results as usize);
                     num_results = results.capacity() as u32;
                 } else {
-                    // If somehow we ended up num_results gave us MORE on the second run
+                    // If num_results somehow gave us MORE on the second run
                     // (which should never happen), then cap the results.
                     let result_len = std::cmp::min(num_results as usize, results.capacity());
                     results.set_len(result_len);
@@ -423,17 +431,7 @@ impl Prover {
     }
 
     pub fn plot_id_for_index(&self, plot_index: u16) -> Bytes32 {
-        let mut plot_id = Bytes32::default();
-        unsafe {
-            derive_plot_id(
-                plot_id.as_mut_ptr(),
-                self.plot_group_id.as_ptr(),
-                plot_index,
-                self.meta_group,
-            );
-        }
-
-        plot_id
+        plot_id_for_index(self.plot_group_id(), plot_index, self.meta_group).unwrap()
     }
 
     pub fn get_strength(&self) -> u8 {

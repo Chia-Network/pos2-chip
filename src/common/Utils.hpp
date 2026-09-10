@@ -182,60 +182,12 @@ private:
     uint64_t bit_count_ = 0;
 };
 
-// template<typename T, typename F>
-// class Guard {
-// public:
-//     inline Guard(T* target, F callback)
-//         : target_(target)
-//         , callback_(callback)
-//     {}
-
-//     inline Guard(T* target, F callback)
-//         : target_(target)
-//         , callback_(callback)
-//     {}
-
-//     inline ~Guard() {
-//         callback_(target_);
-//     }
-
-// private:
-//     T* target_;
-//     std::function<T*> callback_;
-// };
-
-
-template<typename F, typename T>
-concept ObjectGuardCallback =
-    requires(F& callback, T* target) {
-        { std::invoke(callback, target) } -> std::same_as<void>;
-    };
 
 template<typename F>
 concept GuardCallback =
     requires(F& callback) {
         { std::invoke(callback) } -> std::same_as<void>;
     };
-
-
-template<typename T, typename F>
-requires ObjectGuardCallback<F, T>
-class ObjectGuard {
-public:
-    ObjectGuard(T* target, F callback)
-        : target_(target)
-        , callback_(std::move(callback))
-    {}
-
-    ~ObjectGuard() {
-        std::invoke(callback_, target_);
-    }
-
-private:
-    T* target_;
-    F callback_;
-};
-
 
 template<typename F>
 requires GuardCallback<F>
