@@ -138,4 +138,67 @@ TEST_CASE("test_no_duplicate_qualities_for_known_challenge")
     }
 }
 
+TEST_CASE("plot-group-ans-size-bounds")
+{
+    // Check truncated and oversized LEB128 sizes through the plot group reader.
+    std::string const path = "test-ans-size-bounds.gplot";
+    Guard cleanup([&] {
+        std::error_code error;
+        std::filesystem::remove(path, error);
+    });
+
+    auto check_size = [&](std::span<uint8_t const> bytes, char const* expected_error) {
+        constexpr uint8_t k = 18;
+        size_t const chunk_count = PlotGroupFile::getChunkCountForK(k);
+        std::vector<uint64_t> sizes(chunk_count, 1);
+        sizes[0] = bytes.size();
+        BitWriter index;
+        gsz_encode(sizes, 1, index);
+
+        PlotGroupFile::Header header {};
+        header.magic = PlotGroupFile::MAGIC;
+        header.version = PlotGroupFile::FORMAT_VERSION;
+        header.k = k;
+        header.strength = 2;
+        header.group_size = 1;
+        header.chunk_index_offset = sizeof(header) + bytes.size() + chunk_count - 1;
+
+        {
+            std::ofstream out(path, std::ios::binary);
+            out.exceptions(std::ios::badbit | std::ios::failbit);
+            out.write(reinterpret_cast<char const*>(&header), sizeof(header));
+            out.write(reinterpret_cast<char const*>(bytes.data()), bytes.size());
+            std::vector<uint8_t> remaining_chunks(chunk_count - 1, 0);
+            out.write(reinterpret_cast<char const*>(remaining_chunks.data()), remaining_chunks.size());
+            auto const index_bytes = index.asBytes();
+            out.write(reinterpret_cast<char const*>(index_bytes.data()), index_bytes.size());
+        }
+
+        auto plot = PlotGroupFile::open(path);
+        std::vector<std::vector<ProofFragment>> fragments(1);
+        CHECK_THROWS_WITH_AS(plot.readChunk(0, fragments), expected_error, std::runtime_error);
+    };
+
+    for (size_t length = 1; length < 10; ++length) {
+        CAPTURE(length);
+        std::vector<uint8_t> bytes(length, 0x80);
+        check_size(bytes, "Truncated ANS blob size");
+    }
+
+    std::array<uint8_t, 10> bytes;
+    bytes.fill(0xff);
+    for (unsigned last = 0; last <= 255; ++last) {
+        CAPTURE(last);
+        bytes.back() = static_cast<uint8_t>(last);
+        // Valid sizes reach the blob length check because the chunk has no payload.
+        check_size(bytes, last <= 1 ? "Invalid ANS blob size" : "ANS blob size exceeds 64 bits");
+    }
+
+    // A terminator after the tenth byte must not make an oversized encoding valid.
+    std::array<uint8_t, 11> overlong;
+    overlong.fill(0x80);
+    overlong.back() = 0;
+    check_size(overlong, "ANS blob size exceeds 64 bits");
+}
+
 TEST_SUITE_END();

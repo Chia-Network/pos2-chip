@@ -708,9 +708,9 @@ public:
                 uint64_t const ans_size_bit_count      = (sizeof(ans_size) * 8) - std::countl_zero(ans_size);
                 uint64_t const ans_size_leb_byte_count = cdiv(ans_size_bit_count, 7);
 
-                assert(ans_size_leb_byte_count <= 16);
+                assert(ans_size_leb_byte_count <= 10);
 
-                uint8_t ans_size_leb[16] = {};
+                uint8_t ans_size_leb[10] = {};
 
                 for (size_t i = 0; i < ans_size_leb_byte_count; i++) {
                     ans_size_leb[i] = 0x80 | uint8_t((ans_size >> (i * 7)) & 0x7f);
@@ -814,9 +814,18 @@ public:
 
         // Read the size for the ANS-compressed portion, which is encoded as LEB128
         uint64_t ans_blob_size = 0;
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < 10; i++) {
+            if (chunk_reader.empty()) {
+                throw std::runtime_error("Truncated ANS blob size");
+            }
+
             uint64_t value = chunk_reader[0];
             chunk_reader = chunk_reader.subspan(1, chunk_reader.size()-1);
+
+            // The tenth byte has room for one bit and cannot request another byte.
+            if (i == 9 && value > 1) {
+                throw std::runtime_error("ANS blob size exceeds 64 bits");
+            }
 
             ans_blob_size |= (value & 0x7f) << (i*7);
 
