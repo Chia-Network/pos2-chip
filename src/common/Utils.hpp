@@ -1,7 +1,11 @@
 #pragma once
 
 #include <array>
+#include <bit>
+// Allow tests to supply their own assert macro.
+#if !POS2_TEST_ASSERT_OVERRIDE
 #include <cassert>
+#endif
 #include <cstdint>
 #include <iomanip>
 #include <span>
@@ -142,6 +146,8 @@ public:
 
     void append(uint64_t value, uint32_t const bit_count) {
         assert(bit_count <= 64);
+        // Check that the value fits in bit_count bits. If bit_count is zero, value must be zero.
+        assert(bit_count == 64 || (value >> bit_count) == 0);
 
         uint64_t const field_index     = bit_count_ >> 6; // Divide by 64
         uint32_t const field_bit_index = uint32_t(bit_count_ - (field_index << 6));
@@ -163,6 +169,9 @@ public:
     }
 
     inline std::span<uint8_t const> asBytes() const {
+        static_assert(std::endian::native == std::endian::little,
+            "BitWriter serializes little-endian 64-bit fields and requires a little-endian host");
+
         if (bit_count_ == 0) {
             return {};
         }

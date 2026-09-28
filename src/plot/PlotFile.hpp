@@ -917,7 +917,7 @@ public:
 
                 uint64_t const unary_field_bits = field >> field_bits_decoded;
                 uint64_t const field_bits_available = 64 - field_bits_decoded;
-                uint64_t const ones = Bits::count_trailing_ones(unary_field_bits, field_bits_available);
+                uint64_t const ones = Bits::count_trailing_ones(unary_field_bits);
 
                 quotient += ones;
                 field_bits_decoded += ones;

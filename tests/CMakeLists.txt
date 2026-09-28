@@ -22,6 +22,7 @@ new_test(plot_group_file test_plot_group.cpp)
 new_test(plot_challenge_solve_validate test_plot_challenge_solve_validate.cpp)
 # new_test(solve test_solver.cpp) # TODO: Re-enable after generating new values
 new_test(utils test_Utils.cpp)
+new_test(bits test_bits.cpp)
 new_test(parallel test_parallel_for_range.cpp)
 new_test(blake_hash test_blake.cpp)
 new_test(chunk_compressor test_chunk_compressor.cpp)
