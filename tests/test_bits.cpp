@@ -17,17 +17,13 @@
 #include <utility>
 #include <vector>
 
-namespace {
-struct AssertFailure {};
-}
-
 // Load standard headers first so the assert replacement applies only to the code being tested.
 #pragma push_macro("POS2_TEST_ASSERT_OVERRIDE")
 #undef POS2_TEST_ASSERT_OVERRIDE
 #define POS2_TEST_ASSERT_OVERRIDE 1
 #pragma push_macro("assert")
 #undef assert
-#define assert(condition) ((condition) ? void(0) : throw AssertFailure{})
+#define assert(condition) TEST_ASSERT(condition)
 #include "common/BitReader.hpp"
 #include "common/Utils.hpp"
 #pragma pop_macro("assert")

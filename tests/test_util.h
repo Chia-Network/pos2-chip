@@ -21,6 +21,10 @@
 #include <assert.h>
 #include <stdarg.h>
 
+// Throw on failed assertions so tests can check them without ending the process.
+struct AssertFailure {};
+#define TEST_ASSERT(condition) ((condition) ? void(0) : throw ::AssertFailure{})
+
 #ifdef _WIN32
     #ifndef WIN32_LEAN_AND_MEAN
     #define WIN32_LEAN_AND_MEAN 1
