@@ -10,6 +10,11 @@ constexpr int NUM_CHAIN_LINKS = 16;
 constexpr int CHAIN_SET_BITS = 6; // number of bits to determine chaining set size (64 entries per set)
 constexpr int CHAIN_FACTOR_FRONT_LOAD_BITS = CHAIN_SET_BITS;
 
+constexpr uint8_t K_MIN        = 18;
+constexpr uint8_t K_MAX        = 28;
+constexpr uint8_t STRENGTH_MIN = 2;
+constexpr uint8_t STRENGTH_MAX = 17;
+
 // Number of distinct challenge fragment sets selected per challenge. Each set
 // has a chaining_set index that is exclusive modulo NUM_CHALLENGE_SETS. A chain
 // can start in *any* of the selected sets; once started in set s the chain

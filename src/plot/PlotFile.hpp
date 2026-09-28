@@ -496,6 +496,10 @@ public:
 
         info.chunks_pos = static_cast<uint64_t>(in.tellg());
 
+        // Validate parameters
+        PlotGroupParams params(PlotGroupId(info.group_id), info.k, info.strength, info.meta_group);
+        PlotProofParams plot_params = params.get_plot_params_for_index(0);
+        (void)plot_params;
 
         // Find the file size to ensure the chunks sizes pos is valid
         in.seekg(0, std::ifstream::end);

@@ -208,18 +208,27 @@ class PlotProofParams {
     PlotProofParams(PlotId plot_id,
         uint8_t const k,
         uint8_t const strength,
-        uint16_t const plot_index)  // TODO: Do we need to store this here??
+        uint16_t const plot_index)
     : plot_id_(plot_id)
     , plot_index_(plot_index)
     , k_(k)
     , strength_(strength)
     {
-        // strength must be >= 2
-        if (strength_ < 2) {
-            throw std::invalid_argument("PlotProofParams: strength must be at least 2.");
+        if (k < K_MIN) {
+            throw std::invalid_argument("PlotProofParams: 'k' must be at least " + std::to_string(K_MIN) + ".");
         }
-        if (strength_ > 63) {
-            throw std::invalid_argument("PlotProofParams: strength must be less than 64.");
+        if (k > K_MAX) {
+            throw std::invalid_argument("PlotProofParams: 'k' must not be greater than " + std::to_string(K_MAX) + ".");
+        }
+        if ((k & 1) != 0) {
+            throw std::invalid_argument("PlotProofParams: 'k' must be divisible by 2.");
+        }
+
+        if (strength_ < STRENGTH_MIN) {
+            throw std::invalid_argument("PlotProofParams: strength must be at least " + std::to_string(STRENGTH_MIN) + ".");
+        }
+        if (strength_ > STRENGTH_MAX) {
+            throw std::invalid_argument("PlotProofParams: strength must be less than " + std::to_string(STRENGTH_MAX) + ".");
         }
         if (strength_ > k - get_num_section_bits() - 1) {
             throw std::invalid_argument(
@@ -228,7 +237,6 @@ class PlotProofParams {
     }
 
 public:
-
     static PlotProofParams create_raw(
         PlotId plot_id,
         uint8_t const k,
@@ -385,19 +393,23 @@ public:
     , strength_(strength)
     , meta_group_(meta_group)
     {
-        // strength must be >= 2
-        if (strength_ < 2) {
-            throw std::invalid_argument("PlotGroupParams: strength must be at least 2.");
+        if (k < K_MIN) {
+            throw std::invalid_argument("PlotGroupParams: 'k' must be at least " + std::to_string(K_MIN) + ".");
         }
-        if (strength_ > 63) {
-            throw std::invalid_argument("PlotGroupParams: strength must be less than 64.");
+        if (k > K_MAX) {
+            throw std::invalid_argument("PlotGroupParams: 'k' must not be greater than " + std::to_string(K_MAX) + ".");
         }
+        if ((k & 1) != 0) {
+            throw std::invalid_argument("PlotGroupParams: 'k' must be divisible by 2.");
+        }
+        
 
-        // TODO: validate this here?
-        // if (strength_ > k - get_num_section_bits() - 1) {
-        //     throw std::invalid_argument(
-        //         "ProofParams: strength must be less than k - section_bits - 1");
-        // }
+        if (strength_ < STRENGTH_MIN) {
+            throw std::invalid_argument("PlotGroupParams: strength must be at least " + std::to_string(STRENGTH_MIN) + ".");
+        }
+        if (strength_ > STRENGTH_MAX) {
+            throw std::invalid_argument("PlotGroupParams: strength must be less than " + std::to_string(STRENGTH_MAX) + ".");
+        }
     }
 
 public:

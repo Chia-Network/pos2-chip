@@ -5,43 +5,15 @@
 #include <span>
 #include <stdexcept>
 #include <utility>
-#if _WIN32
-    #include <intrin.h>
-#endif
+#include <bit>
 
 struct Bits {
-    inline static uint64_t count_trailing_ones(uint64_t const value, uint64_t const limit = 64) {
-        uint64_t ones = 0;
-        #if defined(_MSC_VER)
-                unsigned long zero_bit_index = 0;
-                ones = _BitScanForward64(&zero_bit_index, ~value)
-                    ? static_cast<uint64_t>(zero_bit_index)
-                    : 64;
-        #elif defined(__GNUC__) || defined(__clang__)
-                ones = ~value == 0 ? 64 : static_cast<uint64_t>(__builtin_ctzll(~value));
-        #else
-                while (ones < limit && ((value >> ones) & uint64_t(1)) != 0) {
-                    ones += 1;
-                }
-        #endif
-        return std::min(ones, limit);
+    inline static uint64_t count_trailing_ones(uint64_t const value) {
+        return std::countr_one(value);
     }
 
     inline static uint64_t count_leading_zeros(uint64_t const value) {
-        #if defined(_MSC_VER)
-                unsigned long one_bit_index = 0;
-                return _BitScanReverse64(&one_bit_index, value)
-                    ? 63 - static_cast<uint64_t>(one_bit_index)
-                    : 64;
-        #elif defined(__GNUC__) || defined(__clang__)
-                return value == 0 ? 64 : static_cast<uint64_t>(__builtin_clzll(value));
-        #else
-                uint64_t zeroes = 0;
-                while (zeroes < 64 && ((value >> (63 - zeroes)) & uint64_t(1)) == 0) {
-                    zeroes += 1;
-                }
-                return zeroes;
-        #endif
+        return std::countl_zero(value);
     }
 };
 
@@ -55,6 +27,7 @@ class BitReader {
 
         return { field_index, field_bit_index };
     }
+
     static constexpr uint64_t MASK_64 = 0xffffffffffffffff;
 
 public:
