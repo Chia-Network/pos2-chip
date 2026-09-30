@@ -13,6 +13,15 @@
 
 TEST_SUITE_BEGIN("plot-group");
 
+TEST_CASE("plot-parameter-strength-limit")
+{
+    CHECK_NOTHROW(PlotGroupParams(PlotGroupId {}, 18, 15, 0));
+    CHECK_NOTHROW(PlotProofParams::create_raw(PlotId {}, 18, 15));
+    CHECK_THROWS_AS(PlotGroupParams(PlotGroupId {}, 18, 16, 0), std::invalid_argument);
+    CHECK_THROWS_AS(PlotProofParams::create_raw(PlotId {}, 18, 16), std::invalid_argument);
+    CHECK_NOTHROW(PlotGroupParams(PlotGroupId {}, 20, 17, 0));
+}
+
 TEST_CASE("plot-group-full")
 {
     constexpr const char* CHALLENGE_HEX = "3e91b7d4c82a506f14fd63a9b075ec219a46d8f3527b1c0ee6a934850dcf7200";

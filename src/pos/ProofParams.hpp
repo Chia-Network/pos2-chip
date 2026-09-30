@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <bit>
 
 extern "C" {
@@ -222,26 +223,7 @@ class PlotProofParams {
     , k_(k)
     , strength_(strength)
     {
-        if (k < K_MIN) {
-            throw std::invalid_argument("PlotProofParams: 'k' must be at least " + std::to_string(K_MIN) + ".");
-        }
-        if (k > K_MAX) {
-            throw std::invalid_argument("PlotProofParams: 'k' must not be greater than " + std::to_string(K_MAX) + ".");
-        }
-        if ((k & 1) != 0) {
-            throw std::invalid_argument("PlotProofParams: 'k' must be divisible by 2.");
-        }
-
-        if (strength_ < STRENGTH_MIN) {
-            throw std::invalid_argument("PlotProofParams: strength must be at least " + std::to_string(STRENGTH_MIN) + ".");
-        }
-        if (strength_ > STRENGTH_MAX) {
-            throw std::invalid_argument("PlotProofParams: strength must be less than " + std::to_string(STRENGTH_MAX) + ".");
-        }
-        if (strength_ > k - get_num_section_bits() - 1) {
-            throw std::invalid_argument(
-                "PlotProofParams: strength must be less than k - section_bits - 1");
-        }
+        validate_input_args(k, strength);
     }
 
 public:
@@ -281,7 +263,7 @@ public:
 
     // Returns the number of section bits.
     // If k is less than 28, returns 2; otherwise returns (k - 26).
-    inline uint32_t get_num_section_bits() const { return (k_ < 28 ? 2 : (k_ - 26)); }
+    inline uint32_t get_num_section_bits() const { return num_section_bits_for_k(k_); }
 
     // Returns the number of match keys (2^(num_match_key_bits)).
     inline size_t get_num_match_keys(size_t table_id) const
@@ -334,7 +316,7 @@ public:
     // Returns the number of match key bits for table 3
     uint8_t get_match_key_bits() const { return strength_; }
 
-        int get_chaining_set_bits() const
+    int get_chaining_set_bits() const
     {
         // 9 bits (512) tuned as security/hdd usage sweet spot
         return CHAIN_SET_BITS;
@@ -345,6 +327,38 @@ public:
     int get_num_chaining_sets_bits() const { return k_ - get_chaining_set_bits(); }
 
     uint32_t get_num_chaining_sets() const { return 1 << get_num_chaining_sets_bits(); }
+
+
+    static constexpr uint32_t num_section_bits_for_k(uint8_t k)
+    {
+        return k < 28 ? 2 : k - 26;
+    }
+
+    static void validate_input_args(uint8_t k, uint8_t strength)
+    {
+        if (k < K_MIN) {
+            throw std::invalid_argument("ProofParams: 'k' must be at least "
+                + std::to_string(K_MIN) + ".");
+        }
+        if (k > K_MAX) {
+            throw std::invalid_argument("ProofParams: 'k' must not be greater than "
+                + std::to_string(K_MAX) + ".");
+        }
+        if ((k & 1) != 0) {
+            throw std::invalid_argument("ProofParams: 'k' must be divisible by 2.");
+        }
+        if (strength < STRENGTH_MIN) {
+            throw std::invalid_argument("ProofParams: strength must be at least "
+                + std::to_string(STRENGTH_MIN) + ".");
+        }
+        if (strength > STRENGTH_MAX) {
+            throw std::invalid_argument("ProofParams: strength must be less than "
+                + std::to_string(STRENGTH_MAX) + ".");
+        }
+        if (strength > k - num_section_bits_for_k(k) - 1) {
+            throw std::invalid_argument("ProofParams: strength must be less than k - section_bits - 1");
+        }
+    }
 
 
     // Displays the plot parameters and a hexadecimal representation of the plot ID.
@@ -401,23 +415,7 @@ public:
     , strength_(strength)
     , meta_group_(meta_group)
     {
-        if (k < K_MIN) {
-            throw std::invalid_argument("PlotGroupParams: 'k' must be at least " + std::to_string(K_MIN) + ".");
-        }
-        if (k > K_MAX) {
-            throw std::invalid_argument("PlotGroupParams: 'k' must not be greater than " + std::to_string(K_MAX) + ".");
-        }
-        if ((k & 1) != 0) {
-            throw std::invalid_argument("PlotGroupParams: 'k' must be divisible by 2.");
-        }
-        
-
-        if (strength_ < STRENGTH_MIN) {
-            throw std::invalid_argument("PlotGroupParams: strength must be at least " + std::to_string(STRENGTH_MIN) + ".");
-        }
-        if (strength_ > STRENGTH_MAX) {
-            throw std::invalid_argument("PlotGroupParams: strength must be less than " + std::to_string(STRENGTH_MAX) + ".");
-        }
+        PlotProofParams::validate_input_args(k, strength);
     }
 
 public:
