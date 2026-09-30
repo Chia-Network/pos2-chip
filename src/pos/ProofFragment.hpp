@@ -13,7 +13,7 @@ using ProofFragment = uint64_t;
 // extracting partition bits from the resulting encrypted value.
 class ProofFragmentCodec {
 public:
-    // Constructor: uses the provided ProofParams.
+    // Use the provided PlotProofParams to encode and decode fragments.
     ProofFragmentCodec(PlotProofParams const& params)
         : ProofFragmentCodec(params.get_plot_id().data(), static_cast<uint8_t>(params.get_k()))
     {

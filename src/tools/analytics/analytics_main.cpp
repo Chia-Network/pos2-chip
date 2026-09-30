@@ -12,13 +12,21 @@
 void printUsage()
 {
     std::cout << "Usage:\n"
-              << "  analytics simdiskusage [plotIdFilter=256] [diskTB=20] [diskSeekMs=10] "
-                 "[diskReadMBs=70]\n"
+              << "  analytics simdiskusage [plotIdFilterBits=8] [plotsInGroup=32] [diskTB=20] "
+                 "[diskSeekMs=10] [diskReadMBs=250]\n"
+              << "  analytics simpreallocateplotgrouping <plotFile> [numPlotsInGroup=64] "
+                 "[numTrials=10000]\n"
               << "  analytics hashbench [N (for 2^N)] [rounds=16] [threads=max]\n";
 }
 
 int hashBench(int N, int rounds, int num_threads)
 {
+    if (N < 4 || N > 32) {
+        throw std::invalid_argument("Hash count exponent must be between 4 and 32.");
+    }
+    if (rounds <= 0 || num_threads <= 0) {
+        throw std::invalid_argument("Rounds and threads must be positive.");
+    }
     uint64_t count = 1ULL << N;
     std::array<uint8_t, 32> plot_id = { 0 };
     // don't spawn more threads than items
@@ -56,25 +64,23 @@ int hashBench(int N, int rounds, int num_threads)
         else if (test == 3) {
             std::cout << "Chacha Hash Benchmark\n";
         }
+        uint64_t work_count = test == 3 ? chacha_count : count;
+        int worker_count = numeric_cast<int>(
+            std::min(work_count, numeric_cast<uint64_t>(num_threads)));
         std::cout << "------------------------------------\n";
         std::cout << "   Total hashes to compute : " << count << " (2^" << N << ")\n";
-        std::cout << "   Threads                 : " << num_threads << "\n";
+        std::cout << "   Threads                 : " << worker_count << "\n";
         if (test == 0 || test == 1) {
             std::cout << "   AES Rounds              : " << rounds << "\n";
         }
         std::cout << "------------------------------------\n";
         std::vector<thread> threads;
-        threads.reserve(num_threads);
-        uint64_t base = 0;
-        uint64_t chunk = count / num_threads;
-        if (test == 3) {
-            // chacha does groups of 16, so change the count.
-            chunk = chacha_count / num_threads;
-        }
+        threads.reserve(worker_count);
+        uint64_t chunk = work_count / worker_count;
         auto t0 = std::chrono::high_resolution_clock::now();
-        for (int ti = 0; ti < num_threads; ++ti) {
-            uint64_t start = base + ti * chunk;
-            uint64_t end = (ti + 1 == num_threads) ? count : (start + chunk);
+        for (int ti = 0; ti < worker_count; ++ti) {
+            uint64_t start = ti * chunk;
+            uint64_t end = (ti + 1 == worker_count) ? work_count : (start + chunk);
             if (test == 0) {
                 threads.emplace_back([start, end, &out, &hasher, rounds]() {
                     for (uint64_t i = start; i < end; ++i) {
@@ -99,10 +105,10 @@ int hashBench(int N, int rounds, int num_threads)
                 });
             }
             else if (test == 3) {
-                end = (start + chunk);
                 threads.emplace_back([start, end, &out, &chacha_hasher]() {
                     for (uint64_t i = start; i < end; ++i) {
-                        chacha_hasher.do_chacha16_range(static_cast<uint32_t>(i), &out[i]);
+                        // do_chacha16_range writes 16 hashes to its own output block.
+                        chacha_hasher.do_chacha16_range(static_cast<uint32_t>(i * 16), &out[i * 16]);
                     }
                 });
             }
@@ -148,7 +154,7 @@ try {
         size_t diskTB = 20;
         double diskSeekMs = 10.0;
         double diskReadMBs = 250.0;
-        if (argc < 2 || argc > 7) {
+        if (argc > 7) {
             std::cerr << "Usage: " << argv[0]
                       << " simdiskusage [plotIdFilterBits=8] [plotsInGroup=32] [diskTB=20] "
                          "[diskSeekMs=10] [diskReadMBs=250]\n";
@@ -169,19 +175,19 @@ try {
         if (argc >= 7) {
             diskReadMBs = std::stod(argv[6]);
         }
-        ProofParams proof_params(
-            Utils::hexToBytes("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF")
-                .data(),
+        PlotGroupParams plot_group_params(
+            PlotGroupId("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"),
             28,
-            2);
-        DiskBench diskbench(proof_params);
+            2,
+            0);
+        DiskBench diskbench(plot_group_params);
         diskbench.simulateChallengeDiskReads(
             plotIdFilter, plotsInGroup, diskTB, diskSeekMs, diskReadMBs);
 
         return 0;
     }
     else if (mode == "simpreallocateplotgrouping") {
-        if (argc < 2 || argc > 5) {
+        if (argc < 3 || argc > 5) {
             std::cerr << "Usage: " << argv[0]
                       << " simpreallocateplotgrouping [plotFile] [numPlotsInGroup=64] "
                          "[numTrials=10000]\n";
@@ -195,6 +201,9 @@ try {
         }
         if (argc >= 5) {
             num_trials = std::stoi(argv[4]);
+        }
+        if (numPlotsInGroup == 0 || num_trials <= 0) {
+            throw std::invalid_argument("Plots per group and trials must be positive.");
         }
         std::cout << "Analyzing plot file: " << plotFile << " for groupings of " << numPlotsInGroup
                   << " plots over " << num_trials << " trials.\n";
