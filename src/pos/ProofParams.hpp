@@ -62,13 +62,17 @@ struct PlotId {
 
     inline uint8_t const* bytes() const { return data_.data(); }
 
-    inline std::span<uint8_t const, 32> span() const {
+    inline std::span<uint8_t const, 32> span() const & {
         return std::span<uint8_t const, 32>(&data_[0], 32);
     }
 
-    inline operator std::span<uint8_t const, 32>() const {
+    std::span<uint8_t const, 32> span() const && = delete;
+
+    inline operator std::span<uint8_t const, 32>() const & {
         return span();
     }
+
+    operator std::span<uint8_t const, 32>() const && = delete;
 
     uint8_t operator[](size_t i) const noexcept {
         return data_[i];
@@ -145,13 +149,17 @@ struct PlotGroupId {
 
     inline uint8_t const* bytes() const { return data_.data(); }
 
-    inline std::span<uint8_t const, 32> span() const {
+    inline std::span<uint8_t const, 32> span() const & {
         return std::span<uint8_t const, 32>(&data_[0], 32);
     }
 
-    inline operator std::span<uint8_t const, 32>() const {
+    std::span<uint8_t const, 32> span() const && = delete;
+
+    inline operator std::span<uint8_t const, 32>() const & {
         return span();
     }
+
+    operator std::span<uint8_t const, 32>() const && = delete;
 
     uint8_t operator[](size_t i) const noexcept {
         return data_[i];
