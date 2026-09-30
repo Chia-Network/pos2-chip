@@ -12,9 +12,7 @@
 #include <string_view>
 #include <vector>
 
-extern "C" {
-#include "pos/sha/sha256.h"
-}
+#include "pos/sha/sha256.hpp"
 
 namespace {
 
