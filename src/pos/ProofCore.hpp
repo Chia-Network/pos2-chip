@@ -19,11 +19,6 @@
 // Structs for pairing results
 //------------------------------------------------------------------------------
 
-// use retain x values to make a plot and save x values to disk for analysis
-// use BOTH includes to for deeper validation of results
-// #define RETAIN_X_VALUES_TO_T3 true
-// #define RETAIN_X_VALUES true
-
 using QualityChainLinks = std::array<ProofFragment, NUM_CHAIN_LINKS>;
 
 struct QualityChain {
@@ -135,7 +130,7 @@ public:
         if (pair.test_result != 0) {
             return std::nullopt;
         }
-        T2Pairing result;
+        T2Pairing result {};
         result.match_info = pair.match_info_result;
         result.meta = pair.meta_result;
         uint32_t half_k = params_.get_k() / 2;
@@ -162,7 +157,7 @@ public:
         uint64_t all_x_bits = (static_cast<uint64_t>(x_bits_l) << params_.get_k()) | x_bits_r;
         ProofFragment proof_fragment = fragment_codec.encode(all_x_bits);
 
-        T3Pairing result;
+        T3Pairing result {};
         result.proof_fragment = proof_fragment;
         return result;
     }

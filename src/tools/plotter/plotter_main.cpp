@@ -15,7 +15,7 @@ static void print_usage(char const* prog)
 {
     std::cerr
         << "Usage:\n"
-        << "  " << prog << " test <k> <plot_group_id> [strength] [verbose]\n"
+        << "  " << prog << " test <k> <plot_group_id> [strength] [plot_index] [meta_group] [verbose]\n"
         << "    <k>             : even integer between 18 and 32\n"
         << "    <plot_group_id> : 64 hex characters\n"
         << "    [strength]      : optional, defaults to 2\n"
@@ -73,8 +73,7 @@ try {
         return 1;
     }
 
-    // Expect: prog test <k> <plot_id_hex> [strength=2 (default)] [plotIndex=0 (default)]
-    //          [metaGroup=0 (default)] [verbose=0]
+    // Read the plot group ID, strength, plot index, meta group, and verbosity.
     if (argc < 4) {
         print_usage(argv[0]);
         return 1;
@@ -123,7 +122,7 @@ try {
     }
 
     if (plot_group_id_hex.size() != 64) {
-        std::cerr << "Error: plot_id_hex must be 64 hex characters.\n";
+        std::cerr << "Error: plot_group_id must be 64 hex characters.\n";
         return 1;
     }
 
@@ -192,10 +191,10 @@ try {
 #ifdef RETAIN_X_VALUES
     bool validate = true;
     if (validate) {
-        ProofParams params = plotter.getProofParams();
-        ProofValidator validator(params);
+        ProofValidator validator(ProofCore(plotter.getProofParams()));
 
         // first validate all xs in T3
+        Timer timer;
         timer.start("Validating Table 3 - Final");
         for (auto const& xs_array: plot.xs_correlating_to_proof_fragments) {
             auto result = validator.validate_table_3_pairs(xs_array.data());
@@ -204,7 +203,7 @@ try {
                           << xs_array[1] << ", " << xs_array[2] << ", " << xs_array[3] << ", "
                           << xs_array[4] << ", " << xs_array[5] << ", " << xs_array[6] << ", "
                           << xs_array[7] << "]\n";
-                return {};
+                return 1;
             }
         }
         std::cout << "Table 3 pairs validated successfully." << std::endl;

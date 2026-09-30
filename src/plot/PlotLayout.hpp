@@ -118,8 +118,11 @@ struct PlotLayout {
         , minor_scratch()
         , target_scratch()
     {
-        // Your original sizing, but aligned up so typed spans are more likely aligned.
         std::size_t raw_block = (max_section_pairs * max_element_bytes) / 4;
+#ifdef RETAIN_X_VALUES_TO_T3
+        // Keep the larger T3 output within eight blocks so it cannot overlap the sort buffer.
+        raw_block = std::max(raw_block, (max_pairs * max_element_bytes + 7) / 8);
+#endif
         block_size_bytes = align_up(raw_block, kPlanAlign);
 
         total_bytes = block_size_bytes * num_blocks + minor_scratch_bytes;

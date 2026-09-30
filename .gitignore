@@ -17,4 +17,4 @@ cmake-build*/
 build-*/
 target/
 .codex/
-.test_plots/
+**/.test_plots/

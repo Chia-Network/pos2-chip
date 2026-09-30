@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -93,7 +94,8 @@ TEST_CASE("chain-average-real-plot")
     timer.stop();
 
 
-    std::string const plot_file_name = std::string("plot_chain_avg_k") + std::to_string(k) + "_s"
+    std::filesystem::create_directories(".test_plots");
+    std::string const plot_file_name = std::string(".test_plots/plot_chain_avg_k") + std::to_string(k) + "_s"
         + std::to_string(plot_strength) + "_" + proof_params.get_plot_id().to_string() + ".bin";
     timer.start("Writing plot file: " + plot_file_name);
     PlotFile::writeData(plot_file_name,

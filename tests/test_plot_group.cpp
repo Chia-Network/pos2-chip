@@ -28,7 +28,8 @@ TEST_CASE("plot-group-full")
     PlotData plot = plotter.run();
 
     // Create a plot and serialize it as a plot group
-    std::string file_name = (std::string("test-plot-") + "k") +
+    std::filesystem::create_directories(".test_plots");
+    std::string file_name = (std::string(".test_plots/test-plot-") + "k") +
                              std::to_string(k) + "_" + PLOT_GROUP_ID_HEX +
                              ".test_plot.bin";
 
@@ -141,7 +142,8 @@ TEST_CASE("test_no_duplicate_qualities_for_known_challenge")
 TEST_CASE("plot-group-ans-size-bounds")
 {
     // Check truncated and oversized LEB128 sizes through the plot group reader.
-    std::string const path = "test-ans-size-bounds.gplot";
+    std::filesystem::create_directories(".test_plots");
+    std::string const path = ".test_plots/test-ans-size-bounds.gplot";
     Guard cleanup([&] {
         std::error_code error;
         std::filesystem::remove(path, error);

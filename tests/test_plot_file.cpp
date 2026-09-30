@@ -3,6 +3,7 @@
 #include "plot/Plotter.hpp"
 #include "test_util.h"
 #include "pos/sha/sha256.hpp"
+#include <filesystem>
 
 TEST_SUITE_BEGIN("plot-file");
 
@@ -47,7 +48,8 @@ TEST_CASE("plot-read-write")
     printfln("Plot completed, writing to file...");
 
     #define tostr std::to_string
-    std::string file_name = (std::string("plot_") + "k") + tostr(k) + ("_" PLOT_GROUP_ID_HEX "_") + tostr(index) + ".bin";
+    std::filesystem::create_directories(".test_plots");
+    std::string file_name = (std::string(".test_plots/plot_") + "k") + tostr(k) + ("_" PLOT_GROUP_ID_HEX "_") + tostr(index) + ".bin";
 
     timer.start("Writing plot file: " + file_name);
     PlotFile::writeData(
@@ -63,7 +65,7 @@ TEST_CASE("plot-read-write")
     timer.stop();
 
     PlotData converted = ChunkedProofFragments::convertToPlotData(partitioned_data);
-    ENSURE(plot == converted);
+    ENSURE(plot.t3_proof_fragments == converted.t3_proof_fragments);
     ENSURE(group_params == read_plot.params);
 }
 TEST_SUITE_END();

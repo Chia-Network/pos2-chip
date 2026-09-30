@@ -30,12 +30,12 @@ public:
         IProgressSink* sink = &null_progress_sink(); // optional
     };
 
-    // Construct with a hexadecimal plot ID, k parameter, and sub-k parameter
+    // Construct with the parameters for one plot index in a plot group.
     Plotter(PlotProofParams const& proof_params)
         : proof_params_(proof_params)
         , fragment_codec_(proof_params)
     #if RETAIN_X_VALUES
-        , validator_(proof_params)
+        , validator_(ProofCore(proof_params))
     #endif
     {
     }
@@ -133,8 +133,8 @@ public:
 #ifdef RETAIN_X_VALUES
         if (validate_) {
             for (auto const& pair: t1_pairs) {
-                uint32_t xs[2] = { static_cast<uint32_t>(pair.meta >> proof_params_.get_k()),
-                    static_cast<uint32_t>(pair.meta & ((1 << proof_params_.get_k()) - 1)) };
+                uint32_t xs[2] = { static_cast<uint32_t>(pair.meta() >> proof_params_.get_k()),
+                    static_cast<uint32_t>(pair.meta() & ((uint64_t(1) << proof_params_.get_k()) - 1)) };
                 auto result = validator_.validate_table_1_pair(xs);
                 if (!result.has_value()) {
                     std::cerr << "Validation failed for Table 1 pair: [" << xs[0] << ", " << xs[1]
@@ -233,8 +233,14 @@ public:
         // copy out the proof fragments
         std::vector<ProofFragment> t3_proof_fragments;
         t3_proof_fragments.reserve(t3_results.size());
+#ifdef RETAIN_X_VALUES_TO_T3
+        plot_data.xs_correlating_to_proof_fragments.reserve(t3_results.size());
+#endif
         for (auto const& t3_pair: t3_results) {
             t3_proof_fragments.push_back(t3_pair.proof_fragment);
+#ifdef RETAIN_X_VALUES_TO_T3
+            plot_data.xs_correlating_to_proof_fragments.push_back(t3_pair.xs);
+#endif
         }
         plot_data.t3_proof_fragments = t3_proof_fragments;
 

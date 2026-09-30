@@ -9,18 +9,18 @@ target_include_directories(${name} PRIVATE
   ../lib/doctest
 )
 
-## Link tests against fse so tests that include PlotFile.hpp (which includes fse.h)
-## get the proper include directory and link the library.
-target_link_libraries(${name} PRIVATE fse)
+# Link tests through pos2_base for headers, fse, and optional retain X definitions.
+target_link_libraries(${name} PRIVATE pos2_base)
 
 add_test(NAME ${name}_test COMMAND ${name} )
+set_tests_properties(${name}_test PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 endmacro()
 
 new_test(plot_file test_plot_file.cpp)
 new_test(plot_group_file test_plot_group.cpp)
 new_test(plot_challenge_solve_validate test_plot_challenge_solve_validate.cpp)
-# new_test(solve test_solver.cpp) # TODO: Re-enable after generating new values
+new_test(solve test_solver.cpp)
 new_test(utils test_Utils.cpp)
 new_test(bits test_bits.cpp)
 new_test(gsz test_gsz.cpp)

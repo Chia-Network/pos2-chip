@@ -6,6 +6,7 @@
 #include "solve/Solver.hpp"
 #include "pos/sha/sha256.hpp"
 #include "test_util.h"
+#include <filesystem>
 
 TEST_SUITE_BEGIN("plot-challenge-solve-verify");
 
@@ -67,7 +68,8 @@ TEST_CASE("plot-k18-strength2-4-5")
         PlotData plot = plotter.run();
         timer.stop();
 
-        std::string plot_file_name = (std::string("plot_") + "k") + std::to_string(k) + "_"
+        std::filesystem::create_directories(".test_plots");
+        std::string plot_file_name = (std::string(".test_plots/plot_") + "k") + std::to_string(k) + "_"
             + std::to_string(plot_strength) + "_" + plot_group_id_hex + "_0_.bin";
 
         timer.start("Writing plot file: " + plot_file_name);
@@ -116,7 +118,7 @@ TEST_CASE("plot-k18-strength2-4-5")
             #ifdef RETAIN_X_VALUES_TO_T3
                 // find all indexes of proof fragments
                 std::cout << "check proof x values: "; // << std::hex;
-                for (int i = 0; i < proof_fragments.size(); i++) {
+                for (size_t i = 0; i < proof_fragments.size(); i++) {
                     // scan plot file contents for matching proof fragment
                     auto it = std::find(plot.t3_proof_fragments.begin(),
                         plot.t3_proof_fragments.end(),

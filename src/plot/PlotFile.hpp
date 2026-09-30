@@ -166,7 +166,7 @@ public:
 
     // -------- Instance reading API --------
 
-    // Read header + xs (if present) + chunk index (num_chunks + offsets) and cache locally.
+    // Read the header and chunk index and cache them locally.
     // Safe to call multiple times; only does work once.
     void readHeadersAndIndexes()
     {
@@ -379,10 +379,6 @@ public:
         uint64_t num_chunks = 0;
         std::vector<uint64_t> offsets;
         
-        #ifdef RETAIN_X_VALUES_TO_T3
-            std::vector<std::array<uint32_t, 8>> xs_correlating_to_proof_fragments;
-        #endif
-
         // Explicit constructor so this type can be constructed
         explicit PlotFileHeader(PlotGroupParams const& p) : params(p) {}
     };
