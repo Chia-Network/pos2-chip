@@ -46,7 +46,6 @@ public:
 
     PairingResult pairing_t3(uint64_t meta_l, uint64_t meta_r, int num_test_bits);
 
-    // TODO @Harold: If this is supposed to use plot_group_id, we should move it out to ChallengeSetSelector
     std::array<uint64_t, NUM_CHAIN_LINKS> chainingChallengeWithPlotIdHash(
         std::span<uint8_t const, 32> const challenge) const
     {
