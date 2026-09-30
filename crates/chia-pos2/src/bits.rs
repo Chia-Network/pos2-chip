@@ -49,7 +49,7 @@ pub(crate) fn expand_bits(proof: &[u8], k: u8) -> Option<Vec<u32>> {
     if k == 0 {
         return None;
     }
-    if k > 32 {
+    if k > 28 {
         return None;
     }
     let mut x_values = Vec::<u32>::with_capacity(proof.len() * 8 / usize::from(k));
@@ -131,7 +131,9 @@ mod tests {
         assert_eq!(expect.len() % 8, 0);
         assert_eq!(print_bits(bits.as_slice()), expect);
 
-        if padding > 0 && tail {
+        if num_bits > 28 {
+            assert!(expand_bits(bits.as_slice(), num_bits).is_none());
+        } else if padding > 0 && tail {
             if let Some(round_trip) = expand_bits(bits.as_slice(), num_bits) {
                 assert!(round_trip.len() > input.len());
             }

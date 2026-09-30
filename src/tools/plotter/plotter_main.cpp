@@ -16,7 +16,7 @@ static void print_usage(char const* prog)
     std::cerr
         << "Usage:\n"
         << "  " << prog << " test <k> <plot_group_id> [strength] [plot_index] [meta_group] [verbose]\n"
-        << "    <k>             : even integer between 18 and 32\n"
+        << "    <k>             : even integer between " << int(K_MIN) << " and " << int(K_MAX) << "\n"
         << "    <plot_group_id> : 64 hex characters\n"
         << "    [strength]      : optional, defaults to 2\n"
         << "    [plot_index]    : optional, defaults to 0\n"
@@ -116,8 +116,8 @@ try {
         verbose = (std::atoi(positional_args[7]) != 0);
     }
 
-    if ((k < 18) || (k > 32) || (k % 2 != 0)) {
-        std::cerr << "Error: k must be an even integer between 18 and 32.\n";
+    if ((k < K_MIN) || (k > K_MAX) || (k % 2 != 0)) {
+        std::cerr << "Error: k must be an even integer between " << int(K_MIN) << " and " << int(K_MAX) << ".\n";
         return 1;
     }
 

@@ -120,7 +120,7 @@ try {
 
         std::cout << "proof length: " << proof_hex_len << std::endl;
         std::cout << "k derived from proof length: " << k << std::endl;
-        if (k < 18 || k > 32 || (k % 2) != 0) {
+        if (k < K_MIN || k > K_MAX || (k % 2) != 0) {
             std::cerr << "Error: derived k from proof length is invalid: " << k << std::endl;
             return 1;
         }

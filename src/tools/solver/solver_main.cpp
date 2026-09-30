@@ -98,9 +98,9 @@ try {
         int plot_strength = argv[3] ? std::stoi(argv[3]) : 2; // default strength is 2
         try {
             k = std::stoi(argv[2]);
-            // k must be 18...32 even
-            if (k < 18 || k > 32 || (k % 2) != 0) {
-                std::cerr << "Error: k-size must be an even integer between 18 and 32."
+            // k must be even and within the supported range.
+            if (k < K_MIN || k > K_MAX || (k % 2) != 0) {
+                std::cerr << "Error: k-size must be an even integer between " << int(K_MIN) << " and " << int(K_MAX) << "."
                           << std::endl;
                 return 1;
             }
@@ -146,8 +146,8 @@ try {
         std::cout << "xbits_hex length: " << xbits_hex_len << ", calculated k: " << calculated_k
                   << std::endl;
 
-        if (calculated_k < 18 || calculated_k > 32 || (calculated_k % 2) != 0) {
-            std::cerr << "Error: k-size must be an even integer between 18 and 32." << std::endl;
+        if (calculated_k < K_MIN || calculated_k > K_MAX || (calculated_k % 2) != 0) {
+            std::cerr << "Error: k-size must be an even integer between " << int(K_MIN) << " and " << int(K_MAX) << "." << std::endl;
             return 1;
         }
         // decompress each x value from k/2 bits.

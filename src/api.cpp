@@ -21,7 +21,7 @@ bool validate_proof(uint8_t const* plot_group_id,
     uint32_t const* proof,
     QualityChain* quality)
 try {
-    if ((k_size & 1) != 0 || k_size < 18 || k_size > 32)
+    if ((k_size & 1) != 0 || k_size < K_MIN || k_size > K_MAX)
         return false;
     if (strength < 2)
         return false;
@@ -115,7 +115,7 @@ bool proof_to_quality_string(uint8_t const* plot_id,
     uint32_t const* proof,
     QualityChain* quality)
 try {
-    if ((k & 1) != 0 || k < 18 || k > 32)
+    if ((k & 1) != 0 || k < K_MIN || k > K_MAX)
         return false;
     if (strength < 2)
         return false;
@@ -139,7 +139,7 @@ bool solve_partial_proof(QualityChain const* quality,
     uint8_t const strength,
     uint32_t* output)
 try {
-    if ((k & 1) != 0 || k < 18 || k > 32)
+    if ((k & 1) != 0 || k < K_MIN || k > K_MAX)
         return false;
     if (strength < 2)
         return false;
@@ -188,7 +188,7 @@ bool create_raw_plot(char const* filename,
     uint8_t const* memo,
     uint8_t const memo_length)
 try {
-    if ((k & 1) != 0 || k < 18 || k > 32)
+    if ((k & 1) != 0 || k < K_MIN || k > K_MAX)
         return false;
     if (filename == nullptr || plot_group_id == nullptr || memo == nullptr)
         return false;
@@ -232,7 +232,7 @@ bool create_single_plot_group(char const* filename,
     uint8_t const* memo,
     uint8_t const memo_length)
 try {
-    if ((k & 1) != 0 || k < 18 || k > 32)
+    if ((k & 1) != 0 || k < K_MIN || k > K_MAX)
         return false;
     if (filename == nullptr || plot_group_id == nullptr || memo == nullptr)
         return false;
