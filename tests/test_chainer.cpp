@@ -4,6 +4,7 @@
 #include "plot/Plotter.hpp"
 #include "pos/Chainer.hpp"
 #include "pos/ProofCore.hpp"
+#include "pos/sha/sha256.hpp"
 #include "test_util.h"
 
 #include <cstdint>
@@ -19,13 +20,14 @@ TEST_SUITE_BEGIN("chainer");
 TEST_CASE("small_lists")
 {
     constexpr uint8_t k = 28;
-    std::string plot_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+    constexpr uint8_t strength = 2;
+    std::string plot_group_id_hex = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
     std::string challenge_hex = "5c00000000000000000000000000000000000000000000000000000000000000";
     std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
-    ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2, 0);
-    ProofCore proof_core(proof_params);
 
-    ProofCore::SelectedChallengeSets selected_sets = proof_core.selectChallengeSets(challenge);
+    PlotGroupParams group_params(plot_group_id_hex, k, strength, 0);
+
+    auto selected_sets = ChallengeSetSelector::selectChallengeSets(group_params, challenge);
 
 #ifdef DEBUG_CHAINER
     for (int i = 0; i < NUM_CHALLENGE_SETS; ++i) {
@@ -43,7 +45,7 @@ TEST_CASE("small_lists")
     std::uniform_int_distribution<ProofFragment> dist(0, max_offset);
 
     // now create NUM_CHALLENGE_SETS lists of size chaining_set_size each
-    int chaining_set_size = proof_params.get_chaining_set_size();
+    int chaining_set_size = group_params.get_chaining_set_size();
 #ifdef DEBUG_CHAINER
     std::cout << "Creating " << NUM_CHALLENGE_SETS << " chaining lists of size "
               << chaining_set_size << " each, indexes:";
@@ -68,6 +70,8 @@ TEST_CASE("small_lists")
         }
     }
 #ifdef NDEBUG
+    PlotProofParams proof_params = group_params.get_plot_params_for_index(0);
+
     int num_trials = 10000;
     int num_chains_validated = 0;
     size_t total_chains_found = 0;

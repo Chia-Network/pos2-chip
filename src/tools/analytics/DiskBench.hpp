@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -115,7 +116,9 @@ using namespace pretty;
 
 class DiskBench {
 public:
-    DiskBench(ProofParams const& proof_params) : proof_params_(proof_params) {}
+    explicit DiskBench(PlotGroupParams const& plot_group_params)
+        : plot_group_params_(plot_group_params)
+    {}
 
     // Run a simulation of disk reads for a given number of plots.
     // Outputs: total time in ms and total data read in MB.
@@ -125,25 +128,47 @@ public:
         double diskSeekMs,
         double diskReadMBs) const
     {
+        if (plot_id_filter_bits >= 32) {
+            throw std::invalid_argument("Plot ID filter bits must be less than 32.");
+        }
+        if (num_plots_in_group == 0
+            || num_plots_in_group > size_t(std::numeric_limits<uint16_t>::max()) + 1) {
+            throw std::invalid_argument("Plots per group must be between 1 and 65536.");
+        }
+        if (diskTB == 0 || !std::isfinite(diskSeekMs) || diskSeekMs < 0.0
+            || !std::isfinite(diskReadMBs) || diskReadMBs <= 0.0) {
+            throw std::invalid_argument(
+                "Disk capacity and read speed must be positive. Seek time must be nonnegative.");
+        }
         // std::cout << "Simulating disk reads with plot ID filter bits: " << plot_id_filter_bits
         //           << ", Disk size: " << diskTB << " TB, Seek time: " << diskSeekMs << " ms, Read
         //           speed: " << diskReadMBs << " MB/s\n";
 
-        double bits_per_entry = 1.45 + double(proof_params_.get_k());
-        size_t plot_bytes = (size_t)(bits_per_entry * (1ULL << proof_params_.get_k()) / 8);
+        double bits_per_entry = 1.45 + double(plot_group_params_.get_k());
+        size_t plot_bytes = (size_t)(bits_per_entry * (1ULL << plot_group_params_.get_k()) / 8);
         size_t grouped_plot_bytes = plot_bytes * num_plots_in_group;
 
-        uint32_t chaining_set_size = proof_params_.get_chaining_set_size();
+        uint32_t chaining_set_size = plot_group_params_.get_chaining_set_size();
         size_t chaining_set_bytes
             = (size_t)(static_cast<double>(chaining_set_size) * bits_per_entry / 8);
 
         size_t num_plots = (diskTB * 1000 * 1000 * 1000 * 1000) / plot_bytes;
         size_t num_grouped_plots = num_plots / num_plots_in_group;
+        if (num_grouped_plots == 0) {
+            throw std::invalid_argument("Disk capacity must fit at least one plot group.");
+        }
+
+        std::vector<PlotProofParams> plot_params;
+        plot_params.reserve(num_plots_in_group);
+        for (size_t i = 0; i < num_plots_in_group; ++i) {
+            plot_params.push_back(
+                plot_group_params_.get_plot_params_for_index(numeric_cast<uint16_t>(i)));
+        }
         std::cout << std::endl;
         std::cout << "------------------------------------\n";
         std::cout << "Harvester Disk Simulation Parameters:\n";
         std::cout << "------------------------------------\n";
-        std::cout << "   Plot ID filter                   : " << (1 << plot_id_filter_bits)
+        std::cout << "   Plot ID filter                   : " << (1ULL << plot_id_filter_bits)
                   << " (bits: " << plot_id_filter_bits << ")\n";
         std::cout << "   ----------------------------------\n";
         std::cout << "   Disk capacity                    : " << diskTB << " TB\n";
@@ -167,7 +192,7 @@ public:
         // different chaining set so the validate logic in Chainer would accept them.
         std::array<Range, NUM_CHALLENGE_SETS> set_ranges;
         for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
-            set_ranges[s] = proof_params_.get_chaining_set_range(s);
+            set_ranges[s] = plot_group_params_.get_chaining_set_range(s);
         }
         ProofFragment range_span
             = static_cast<ProofFragment>(set_ranges[0].end - set_ranges[0].start);
@@ -186,21 +211,13 @@ public:
         // Simulate disk reads for chaining sets
         size_t total_plots_passed_filter = 0;
 
-        constexpr uint8_t k = 28;
-        std::string plot_id_hex
-            = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
-        std::string challenge_hex
-            = "5c00000000000000000000000000000000000000000000000000000000000000";
-        std::array<uint8_t, 32> challenge = Utils::hexToBytes(challenge_hex);
+        std::array<uint8_t, 32> challenge {};
         uint32_t sim_challenge_id = 0;
-        ProofParams proof_params(Utils::hexToBytes(plot_id_hex).data(), k, 2, 0);
-        ProofCore proof_core(proof_params);
         Timer timer;
         double total_harvesting_compute_time_ms = 0.0;
         size_t proofs_found = 0;
 
-        double const CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS
-            = 20000.0; // cap at 20 seconds total compute time
+        double const CAP_COMPUTE_TOTAL_SIMULATION_TIME_MS = 20000.0; // cap at 20 seconds total compute time
         size_t total_challenges_before_compute_cap = 0;
         double max_compute_ms_per_challenge = 0;
         size_t max_plots_passing_filter_per_challenge = 0;
@@ -262,7 +279,7 @@ public:
                     challenge[3] = static_cast<uint8_t>((sim_challenge_id >> 24) & 0xFF);
                     sim_challenge_id++;
                     timer.start();
-                    Chainer chainer(proof_params, challenge);
+                    Chainer chainer(plot_params[i], challenge);
                     std::array<std::span<ProofFragment const>, NUM_CHALLENGE_SETS>
                         fragments_per_set_spans;
                     for (int s = 0; s < NUM_CHALLENGE_SETS; ++s) {
@@ -410,5 +427,5 @@ public:
     }
 
 private:
-    ProofParams proof_params_;
+    PlotGroupParams plot_group_params_;
 };

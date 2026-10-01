@@ -4,6 +4,7 @@
 #include "soft_aes.hpp"
 #include <array>
 #include <vector>
+#include <span>
 
 constexpr int AES_G_ROUNDS = 16;
 constexpr int AES_PAIRING_ROUNDS = 16;
@@ -38,10 +39,10 @@ void showHashCounts()
 class AesHash {
 public:
     // Construct from a pointer to at least 32 bytes of plot id material.
-    AesHash(uint8_t const* plot_id_bytes, int k) : k_(k)
+    AesHash(std::span<uint8_t const> plot_id_bytes, int k) : k_(k)
     {
-        round_key_1 = load_plot_id_as_aes_key(plot_id_bytes);
-        round_key_2 = load_plot_id_as_aes_key(plot_id_bytes + 16);
+        round_key_1 = load_plot_id_as_aes_key(plot_id_bytes.data());
+        round_key_2 = load_plot_id_as_aes_key(plot_id_bytes.data() + 16);
     }
 
     struct Result64 {

@@ -1,7 +1,9 @@
 #pragma once
 
 #include "fse.h" // adjust include path as needed
+#include "common/Utils.hpp"
 #include "pos/ProofCore.hpp"
+#include "common/BitReader.hpp"
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
@@ -343,3 +345,191 @@ private:
         }
     }
 };
+
+
+///
+/// This is the format in which the chunk index table is encoded.
+/// (Which determines the offsets of the chunks in the plot file.)
+///
+
+// Floor integer square root of n. Bit-exact; do not use floating sqrt.
+inline uint64_t gsz_isqrt_u64(uint64_t n) {
+    if (n < 2) {
+        return n;
+    }
+
+    // Highest bit set in the root is at most half of that in n.
+    uint64_t op  = n;
+    uint64_t res = 0;
+
+    // Highest even-numbered bit <= highest set bit in n.
+    uint64_t msb = 63 - Bits::count_leading_zeros(n);
+    uint64_t one = 1ull << (msb & (~(1ull)));
+
+    while (one != 0) {
+        if (op >= res + one) {
+            op -= res + one;
+            res = (res >> 1) + one;
+        } 
+        else {
+            res >>= 1;
+        }
+
+        one >>= 2;
+    };
+
+    return res;
+}
+
+// floor(log2(n)) for n >= 1 
+inline int gsz_floor_log2_u64(uint64_t n) {
+    return int(63ull - Bits::count_leading_zeros(n));
+}
+
+/*
+ * round(log2(n)) for n >= 1, in integers:
+ *   f = floor(log2(n));  round up iff n >= 2^f * sqrt(2)
+ *   i.e. n*n >= 2^(2f+1)
+ */
+inline int gsz_round_log2_u64( uint64_t n ) {
+    if (n <= 1) {
+        return 0;
+    }
+    int f = gsz_floor_log2_u64(n);
+    if (f >= 32) {
+        // G should never be >= 65,536, therefore we should never hit this
+        // or need 128 bit values.
+        throw std::runtime_error("gsz_round_log2_u64 N would overflow");
+    }
+    // if (f >= 63) {        // n >= 2^63; n*n would overflow — only compare top half
+    //     return f;         // 2^f * sqrt(2) > 2^63 for f>=63 in our use, keep f
+    // }
+
+    //  Widening compare: n*n < (1 << (2f+1)) ? f : f+1
+    uint64_t nn       = n * n;
+    uint64_t boundary = 1ull << (2 * uint64_t(f) + 1);
+
+    return (nn < boundary) ? f : f + 1;
+}
+
+inline int gsz_rice_k_for_g(uint64_t g) {
+    // 357 * g fits in uint64 for all uint32 g (357 * (2^32-1) < 2^64).
+    uint64_t med_est = gsz_isqrt_u64(357 * g);
+    if (med_est == 0) {
+        med_est = 1;
+    }
+
+    return gsz_round_log2_u64(med_est);
+}
+
+inline uint64_t gsz_expected_for_g(uint64_t g) {
+    return (g * 60301) >> 8;
+}
+
+template<bool K_NOT_ZERO>
+inline int64_t gsz_decode_delta(uint32_t const k, BitReader& reader) {
+
+    uint64_t const sign_bit = reader.read_one();
+
+    uint64_t r = 0;
+    if constexpr (K_NOT_ZERO) {
+        r = reader.read_u64(k);   // remainder
+    }
+
+    uint64_t const q = reader.read_unary_64(); // quotient
+
+    uint64_t const mag       = (q << k) | r;
+    uint64_t const sign_mask = 0ull - sign_bit;
+    int64_t  const delta     = int64_t((mag ^ sign_mask) + sign_bit);
+
+    return delta;
+}
+
+template<bool K_NOT_ZERO>
+void _gsz_decode_internal(std::span<uint64_t> out_sizes, uint32_t k, uint64_t group_size, BitReader& reader) {
+    auto expected = (int64_t)gsz_expected_for_g(group_size);
+
+    int64_t i = 0;
+    for (auto &v : out_sizes) {
+        int64_t delta = gsz_decode_delta<K_NOT_ZERO>(k, reader);
+        delta += expected;
+
+        if (delta < 1) {
+            throw std::runtime_error("Invalid delta " + std::to_string(delta) + " at index " + std::to_string(i));
+        }
+
+        v = (uint64_t)delta;
+        i++;
+    }
+}
+
+void gsz_decode(std::span<uint64_t> out_sizes, uint64_t group_size, BitReader& reader) {
+
+    auto k = (uint32_t)gsz_rice_k_for_g(group_size);
+
+    if (k != 0) {
+        _gsz_decode_internal<true>(out_sizes, k, group_size, reader);
+    }
+    else {
+        _gsz_decode_internal<false>(out_sizes, k, group_size, reader);
+    }
+}
+
+
+template<bool K_NOT_ZERO>
+inline void gsz_encode_delta(int64_t const delta, uint32_t const k, uint64_t const k_mask, BitWriter& writer)
+{
+    uint64_t const value     = uint64_t(delta);
+    uint64_t const sign_bit  = value >> 63;
+    uint64_t const sign_mask = 0ull - sign_bit;
+    uint64_t const mag       = (value ^ sign_mask) + sign_bit;
+    uint64_t const q         = mag >> k; // quotient
+
+    // Written into a u64-based bit field:
+    // MSbit                                                                LSbit
+    // --------------------------------------------------------------------------
+    // <zero_bit_separator><unary_quotient_bits>[remainder_binary_bits]<sign_bit>
+    //                                          ^
+    //                         variable-size <- | -> fixed-size with optional field
+
+    uint64_t const field_size = q + k + 2;
+    assert(field_size <= 64);
+
+    uint64_t const unary_value = (1ull << q) - 1;
+
+    if constexpr (K_NOT_ZERO) {
+        uint64_t const r = mag & k_mask; // remainder binary bits
+
+        uint64_t const field = (unary_value << (k + 1)) | (r << 1) | sign_bit;
+        writer.append(field, uint32_t(field_size));
+    }
+    else {
+        uint64_t const field = (unary_value << 1) | sign_bit;
+        writer.append(field, uint32_t(field_size));
+    }
+}
+
+template<bool K_NOT_ZERO>
+void _gsz_encode_internal(std::span<uint64_t const> const sizes, uint32_t const k,
+    uint64_t const group_size, BitWriter& writer)
+{
+    int64_t const expected = int64_t(gsz_expected_for_g(group_size));
+    uint64_t const k_mask  = (1ull << k) - 1;
+
+    for (uint64_t const v : sizes) {
+        int64_t const delta = int64_t(v) - expected;
+        gsz_encode_delta<K_NOT_ZERO>(delta, k, k_mask, writer);
+    }
+}
+
+void gsz_encode(std::span<uint64_t const> const sizes, uint64_t const group_size, BitWriter& writer)
+{
+    uint32_t const k = uint32_t(gsz_rice_k_for_g(group_size));
+
+    if (k != 0) {
+        _gsz_encode_internal<true>(sizes, k, group_size, writer);
+    }
+    else {
+        _gsz_encode_internal<false>(sizes, k, group_size, writer);
+    }
+}

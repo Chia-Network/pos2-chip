@@ -39,12 +39,23 @@ jobs:
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      - name: Cache Rust Dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+
+          key: test-cargo-v3-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', '.github/actions/setup-rust/action.yml') }}
+          restore-keys: test-cargo-v3-${{ matrix.os }}-${{ runner.arch }}-
+  
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.91.0
+        uses: ./.github/actions/setup-rust
         with:
           components: rustfmt, clippy
 
@@ -76,14 +87,33 @@ jobs:
     env:
       CARGO_PROFILE_RELEASE_LTO: false
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - name: Cache Rust Dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+
+          key: fuzz-cargo-v3-${{ runner.os }}-${{ runner.arch }}-${{ matrix.toolchain }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', '.github/actions/setup-rust/action.yml') }}
+          restore-keys: fuzz-cargo-v3-${{ runner.os }}-${{ runner.arch }}-${{ matrix.toolchain }}-
+
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: ${{ matrix.toolchain }}
 
+      - name: Cache cargo-fuzz
+        id: cache-cargo-fuzz
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cargo-fuzz
+          key: cargo-fuzz-${{ runner.os }}-${{ runner.arch }}-${{ matrix.toolchain }}-0.13.2-v2
+
       - name: Install cargo-fuzz
-        run: cargo +"${{ matrix.toolchain }}" install cargo-fuzz
+        if: steps.cache-cargo-fuzz.outputs.cache-hit != 'true'
+        run: cargo +"${{ matrix.toolchain }}" install cargo-fuzz --version 0.13.2 --locked
 
       - name: Fuzz
         env: ${{ matrix.package.env || fromJSON('{}') }}
@@ -97,15 +127,34 @@ jobs:
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@1.91.0
+        uses: ./.github/actions/setup-rust
+
+      - name: Cache Rust Dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+
+          key: build-crate-cargo-v3-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml', '.github/actions/setup-rust/action.yml') }}
+          restore-keys: build-crate-cargo-v3-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Cache cargo-workspaces
+        id: cache-cargo-workspaces
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cargo-ws
+          key: cargo-workspaces-${{ runner.os }}-${{ runner.arch }}-0.4.2-v2
 
       - name: Install cargo-workspaces
-        run: cargo install cargo-workspaces --locked
+        if: steps.cache-cargo-workspaces.outputs.cache-hit != 'true'
+        run: cargo install cargo-workspaces --version 0.4.2 --locked
 
       - name: Publish (dry run)
         run: cargo ws publish --publish-as-is --dry-run

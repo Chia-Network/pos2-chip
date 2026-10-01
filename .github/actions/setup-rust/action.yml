@@ -1,0 +1,18 @@
+name: Setup Rust
+
+inputs:
+  toolchain:
+    required: false
+    default: 1.92.0
+
+  components:
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        components: ${{ inputs.components }}

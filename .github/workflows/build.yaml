@@ -65,7 +65,7 @@ jobs:
             toolchain: ubsan
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Select Clang
@@ -81,21 +81,20 @@ jobs:
         run: |
             cd build
             ctest --output-on-failure -j 4 -C ${{ matrix.mode }}
-      - name: Plotter (Windows)
-        if: ${{ startsWith(matrix.os, 'windows') }}
-        run: |
-          build\plotter.exe test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF 2
-          build\prover.exe challenge 8503000000000000000000000000000000000000000000000000000000000000 plot_18_2_0_0_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin
       - name: Plotter
-        if: ${{ !startsWith(matrix.os, 'windows') }}
+        shell: bash
         run: |
+          set -eo pipefail
           build/plotter test 18 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF 2
           build/prover challenge 8503000000000000000000000000000000000000000000000000000000000000 plot_18_2_0_0_0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF.bin
-      - name: Benchmark (Windows)
-        if: ${{ matrix.mode == 'Release' && startsWith(matrix.os, 'windows') }}
+      - name: Challenge Test
+        if: ${{ matrix.mode == 'Release' }}
+        shell: bash
         run: |
-          build\solver.exe benchmark 28
+          set -eo pipefail
+          ./check-proof-count -b build -n 500
       - name: Benchmark
-        if: ${{ matrix.mode == 'Release' && !startsWith(matrix.os, 'windows') }}
+        if: ${{ matrix.mode == 'Release' }}
+        shell: bash
         run: |
           build/solver benchmark 28

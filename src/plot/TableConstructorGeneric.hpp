@@ -20,7 +20,7 @@
 #include "pos/ProofParams.hpp"
 #include "pos/ProofValidator.hpp"
 
-static std::size_t max_pairs_per_section_possible(ProofParams const& params)
+static std::size_t max_pairs_per_section_possible(PlotProofParams const& params)
 {
     int extra_margin_bits = 0; // default for k28
     extra_margin_bits = 8 - ((28 - params.get_k()) / 2);
@@ -39,7 +39,7 @@ template <typename PairingCandidate, typename T_Pairing, typename T_Result>
 class TableConstructorGeneric {
 public:
     TableConstructorGeneric(int table_id,
-        ProofParams const& proof_params,
+        PlotProofParams const& proof_params,
         ResettableArenaResource& target_scratch,
         ResettableArenaResource& minor_scratch,
         IProgressSink& sink = null_progress_sink())
@@ -483,7 +483,7 @@ public:
 
 protected:
     int table_id_;
-    ProofParams params_;
+    PlotProofParams params_;
     Timer timer_;
     ResettableArenaResource* target_scratch_arena_;
     ResettableArenaResource* minor_scratch_arena_;
@@ -500,7 +500,7 @@ struct Xs_Candidate {
 
 class XsConstructor {
 public:
-    XsConstructor(ProofParams const& proof_params, IProgressSink& sink = null_progress_sink())
+    XsConstructor(PlotProofParams const& proof_params, IProgressSink& sink = null_progress_sink())
         : params_(proof_params)
         , proof_core_(proof_params)
         , sink_(sink)
@@ -571,7 +571,7 @@ public:
     } timings;
 
 protected:
-    ProofParams params_;
+    PlotProofParams params_;
     ProofCore proof_core_;
     IProgressSink& sink_;
 };
@@ -579,7 +579,7 @@ protected:
 class Table1Constructor : public TableConstructorGeneric<Xs_Candidate, T1Pairing, T1Pairing> {
 public:
     // NOTE: this base now requires a scratch arena reference
-    explicit Table1Constructor(ProofParams const& proof_params,
+    explicit Table1Constructor(PlotProofParams const& proof_params,
         ResettableArenaResource& target_scratch,
         ResettableArenaResource& minor_scratch,
         IProgressSink& sink = null_progress_sink())
@@ -641,7 +641,7 @@ public:
 
 class Table2Constructor : public TableConstructorGeneric<T1Pairing, T2Pairing, T2Pairing> {
 public:
-    explicit Table2Constructor(ProofParams const& proof_params,
+    explicit Table2Constructor(PlotProofParams const& proof_params,
         ResettableArenaResource& target_scratch,
         ResettableArenaResource& minor_scratch,
         IProgressSink& sink = null_progress_sink())
@@ -721,7 +721,7 @@ public:
 
 class Table3Constructor : public TableConstructorGeneric<T2Pairing, T3Pairing, T3Pairing> {
 public:
-    explicit Table3Constructor(ProofParams const& proof_params,
+    explicit Table3Constructor(PlotProofParams const& proof_params,
         ResettableArenaResource& target_scratch,
         ResettableArenaResource& minor_scratch,
         IProgressSink& sink = null_progress_sink())

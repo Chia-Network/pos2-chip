@@ -94,6 +94,11 @@
         "cfenv": "cpp",
         "cinttypes": "cpp",
         "coroutine": "cpp",
-        "__config": "cpp"
+        "__config": "cpp",
+        "future": "cpp",
+        "sha256.h": "c",
+        "sha256.c": "cpp",
+        "*.tcc": "cpp",
+        "codecvt": "cpp"
     }
 }

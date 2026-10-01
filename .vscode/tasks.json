@@ -14,11 +14,12 @@
       "options": {
       },
     },
+  
     {
-      "label":  "build-tests",
+      "label":  "build-prover",
       "type": 	"cmake",
       "command":"build",
-      "targets": [ "tests"],
+      "targets": [ "prover" ],
       "group": {
         "kind":     "build",
         "isDefault": true
@@ -27,5 +28,76 @@
       "options": {
       },
     },
+
+    {
+      "label":  "build-solver",
+      "type": 	"cmake",
+      "command":"build",
+      "targets": [ "solver" ],
+      "group": {
+        "kind":     "build",
+        "isDefault": true
+      },
+      "problemMatcher": [ "$gcc", "$msvc" ],
+      "options": {
+      },
+    },
+
+    {
+      "label":  "build-libpos",
+      "type": 	"cmake",
+      "command":"build",
+      "targets": [ "lib_pos2" ],
+      "group": {
+        "kind":     "build",
+        "isDefault": true
+      },
+      "problemMatcher": [ "$gcc", "$msvc" ],
+      "options": {
+      },
+    },
+
+    {
+      "label":  "build-tests",
+      "type":   "cmake",
+      "command":"build",
+      // "targets": [
+      //   // "plot_group_file",
+      //   // "plot_challenge_solve_validate"
+      // ],
+      "group": {
+        "kind":     "build",
+        "isDefault": true
+      },
+      "problemMatcher": [ "$gcc", "$msvc" ],
+      "options": {
+      },
+    },
+
+    {
+      "label": "cargo-build-tests",
+      "type": "shell",
+      "command": "cargo test --no-run --all --all-features -- --include-ignored",
+      "group": {
+        "kind":     "build",
+        "isDefault": true
+      },
+      "problemMatcher": [ "$rustc"],
+    },
+
+    {
+      "label":  "build-all",
+      "type":   "cmake",
+      "command":"build",
+      // "targets": [ ],
+      "group": {
+        "kind":     "build",
+        "isDefault": true
+      },
+      "problemMatcher": [ "$gcc", "$msvc" ],
+      "options": {
+      },
+    },
+
   ]
 }
