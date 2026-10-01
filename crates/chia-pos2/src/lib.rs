@@ -563,10 +563,10 @@ mod tests {
     /// Tallies over **100** sequential challenges (`challenge_idx` 0..100).
     fn expected_proof_count(index: u16, meta_group: u8) -> u32 {
         match (index, meta_group) {
-            (0, 0) => 97,
-            (0, 7) => 92,
-            (3, 0) => 111,
-            (3, 7) => 122,
+            (0, 0) => 95,
+            (0, 7) => 133,
+            (3, 0) => 115,
+            (3, 7) => 76,
             _ => unreachable!("test matrix is fixed to 4 cases"),
         }
     }
@@ -632,7 +632,8 @@ mod tests {
         assert_eq!(prover.get_strength(), strength);
 
         // Deterministic challenge that currently yields duplicate quality chains.
-        const CHALLENGE_IDX: i32 = 15_849;
+        // Without fragment deduplication, this challenge returns seven chains instead of five.
+        const CHALLENGE_IDX: i32 = 7_206;
 
         let mut challenge = [0u8; 32];
         challenge[0..4].copy_from_slice(&CHALLENGE_IDX.to_le_bytes());
