@@ -130,7 +130,8 @@ TEST_CASE("test_no_duplicate_qualities_for_known_challenge")
     ENSURE(info.strength == strength);
 
     // Deterministic challenge that currently yields duplicate quality chains.
-    constexpr int32_t CHALLENGE_IDX = 15849;
+    // Without fragment deduplication, this challenge returns seven chains instead of five.
+    constexpr int32_t CHALLENGE_IDX = 7206;
 
     std::array<uint8_t, 32> challenge = {};
     *reinterpret_cast<int32_t*>(&challenge) = CHALLENGE_IDX;

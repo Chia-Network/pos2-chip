@@ -2,7 +2,7 @@
 //!
 //! **Plot file:** expects the same file the `test_plot_roundtrip` unit test creates for
 //! `index == 0`, `meta_group == 0`:
-//! `{env!("CARGO_MANIFEST_DIR")}/pos2_chia_test_k20_i0_m0.gplot`
+//! `{env!("CARGO_MANIFEST_DIR")}/.test_plots/pos2_chia_test_k20_i0_m0.gplot`
 //!
 //! If it is missing, the benchmark exits with a short message. Generate the plot first, e.g.:
 //! ```text
