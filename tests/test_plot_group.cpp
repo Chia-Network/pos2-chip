@@ -213,4 +213,40 @@ TEST_CASE("plot-group-ans-size-bounds")
     check_size(overlong, "ANS blob size exceeds 64 bits");
 }
 
+TEST_CASE("plot-group-dense-chunk")
+{
+    std::filesystem::create_directories(".test_plots");
+    std::string const path = ".test_plots/test-dense-chunk.gplot";
+    Guard cleanup([&] {
+        std::error_code error;
+        std::filesystem::remove(path, error);
+    });
+
+    for (uint8_t const k : {18, 20}) {
+        CAPTURE(k);
+        PlotGroupParams params(PlotGroupId {}, k, 2, 0);
+        ChunkedProofFragments data;
+        data.proof_fragments_chunks.resize(PlotGroupFile::getChunkCountForK(k));
+        uint64_t const range_per_chunk = 1ull << (k + PlotGroupFile::PROOFS_PER_CHUNK_BITS);
+
+        for (size_t chunk = 0; chunk < data.proof_fragments_chunks.size(); ++chunk) {
+            size_t count = 64;
+            if (chunk == 0) {
+                // The old allocation held only 106 high bytes for a single-plot group.
+                count = 108;
+            }
+            for (size_t entry = 0; entry < count; ++entry) {
+                // Unit deltas have zero quotients and use exactly k-7 non-ANS bits.
+                data.proof_fragments_chunks[chunk].push_back(chunk * range_per_chunk + entry + 1);
+            }
+        }
+
+        PlotGroupFile::writeData(path, data, params, PlotGroupFile::PROOFS_PER_CHUNK_BITS, {});
+        auto plot = PlotGroupFile::open(path);
+        std::vector<std::vector<ProofFragment>> fragments(1);
+        plot.readChunk(0, fragments);
+        CHECK(fragments[0] == data.proof_fragments_chunks[0]);
+    }
+}
+
 TEST_SUITE_END();
