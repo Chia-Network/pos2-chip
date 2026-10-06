@@ -37,7 +37,7 @@ TEST_CASE("plot-k18-strength2-4-5")
             break;
         case 1:
             plot_strength = 4;
-            challenge_hex = "26d4fa7f3b0bd2d3cc6dc0cf569a97d649cdb543abf4be03f2bc54f15f67784c";
+            challenge_hex = "0200000000000000000000000000000000000000000000000000000000000000";
             break;
         case 2:
             plot_strength = 5;
@@ -45,7 +45,7 @@ TEST_CASE("plot-k18-strength2-4-5")
             break;
         case 3:
             plot_strength = 2;
-            challenge_hex = "7ea596522b9c9b226f5c2bf8d3b09736f0f286b123076a5e78dc295ccf2a891c";
+            challenge_hex = "0000000000000000000000000000000000000000000000000000000000000000";
             break;
         default:
             // return error
