@@ -831,12 +831,14 @@ public:
             throw std::runtime_error("Invalid ANS blob size");
         }
 
-        // chunk_reader starts after the length prefix. Subtract the ANS blob to
-        // obtain the size of the trailing unary and low-bit stream.
+        // Get the size of the unary-encoded 'low-bits' (comes immediately after the ans portion)
+        // to obtain the size of the trailing unary and low-bit stream.
         size_t const non_ans_size = chunk_reader.size() - ans_blob_size;
+
         // Each delta uses k-8 low bits and at least one unary terminator bit.
-        // Dividing the available bits by k-7 bounds the number of deltas from above.
-        // Longer quotients and byte padding can only increase this bound.
+        // Dividing the available bits by k-7 gives enough capacity for every encoded delta.
+        // Extra quotient bits and padding may overestimate the delta count,
+        // but cannot make the capacity smaller than the actual count.
         size_t const max_deltas = non_ans_size * 8 / (info_.k - 7);
 
         // FSE produces one high byte per delta.
