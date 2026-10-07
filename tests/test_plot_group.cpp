@@ -151,7 +151,8 @@ TEST_CASE("test_no_duplicate_qualities_for_known_challenge")
 
 TEST_CASE("plot-group-ans-size-bounds")
 {
-    // Check truncated and oversized LEB128 sizes through the plot group reader.
+    // Check that the plot group reader rejects truncated or overflowing LEB128 sizes,
+    // invalid ANS blob lengths, and non-ANS data too short to contain a delta.
     std::filesystem::create_directories(".test_plots");
     std::string const path = ".test_plots/test-ans-size-bounds.gplot";
     Guard cleanup([&] {
@@ -159,8 +160,7 @@ TEST_CASE("plot-group-ans-size-bounds")
         std::filesystem::remove(path, error);
     });
 
-    auto check_size = [&](std::span<uint8_t const> bytes, char const* expected_error) {
-        constexpr uint8_t k = 18;
+    auto check_size = [&](std::span<uint8_t const> bytes, char const* expected_error, uint8_t k = 18) {
         size_t const chunk_count = PlotGroupFile::getChunkCountForK(k);
         std::vector<uint64_t> sizes(chunk_count, 1);
         sizes[0] = bytes.size();
@@ -211,6 +211,26 @@ TEST_CASE("plot-group-ans-size-bounds")
     overlong.fill(0x80);
     overlong.back() = 0;
     check_size(overlong, "ANS blob size exceeds 64 bits");
+
+    // The ANS blob must be nonempty and leave room for the non-ANS data.
+    for (uint8_t const ans_size : std::array<uint8_t, 3>{0, 2, 3}) {
+        CAPTURE(ans_size);
+        std::array<uint8_t, 3> const invalid_size = {ans_size, 1, 0};
+        check_size(invalid_size, "Invalid ANS blob size");
+    }
+
+    // One byte cannot hold a delta at k18. At k24, even two bytes are insufficient.
+    for (uint8_t const k : std::array<uint8_t, 2>{18, 24}) {
+        CAPTURE(k);
+        for (size_t non_ans_size = 1; non_ans_size * 8 < size_t(k - 7); ++non_ans_size) {
+            CAPTURE(non_ans_size);
+            std::vector<uint8_t> chunk(2 + non_ans_size, 0);
+            chunk[0] = 1;
+            // This ANS end marker lets FSE reach the write that previously crashed.
+            chunk[1] = 1;
+            check_size(chunk, "Non-ANS data is too short to contain a delta", k);
+        }
+    }
 }
 
 TEST_CASE("plot-group-dense-chunk")
@@ -223,7 +243,7 @@ TEST_CASE("plot-group-dense-chunk")
         std::filesystem::remove(path, error);
     });
 
-    for (uint8_t const k : {18, 20}) {
+    for (uint8_t const k : std::array<uint8_t, 2>{18, 20}) {
         CAPTURE(k);
 
         PlotGroupParams params(PlotGroupId {}, k, 2, 0);

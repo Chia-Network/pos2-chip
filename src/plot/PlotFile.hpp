@@ -813,7 +813,7 @@ public:
             }
 
             uint64_t value = chunk_reader[0];
-            chunk_reader = chunk_reader.subspan(1, chunk_reader.size()-1);
+            chunk_reader = chunk_reader.subspan(1);
 
             // The tenth byte has room for one bit and cannot request another byte.
             if (i == 9 && value > 1) {
@@ -827,7 +827,7 @@ public:
             }
         }
 
-        if (ans_blob_size >= chunk_reader.size()) {
+        if (ans_blob_size == 0 || ans_blob_size >= chunk_reader.size()) {
             throw std::runtime_error("Invalid ANS blob size");
         }
 
@@ -840,6 +840,11 @@ public:
         // Extra quotient bits and padding may overestimate the delta count,
         // but cannot make the capacity smaller than the actual count.
         size_t const max_deltas = non_ans_size * 8 / (info_.k - 7);
+
+        // FSE cannot safely decode into an empty destination.
+        if (max_deltas == 0) {
+            throw std::runtime_error("Non-ANS data is too short to contain a delta");
+        }
 
         // FSE produces one high byte per delta.
         std::vector<uint8_t> high_bytes{};
@@ -857,7 +862,7 @@ public:
 
             POS2_FSE_freeDTable(dtable); dtable = nullptr;
 
-            chunk_reader = chunk_reader.subspan(ans_blob_size, chunk_reader.size() - ans_blob_size);
+            chunk_reader = chunk_reader.subspan(ans_blob_size);
 
             if (POS2_FSE_isError(deltas_count)) {
                 std::string error = "FSE_decompress_usingDTable error " + std::to_string(deltas_count) + ": "
