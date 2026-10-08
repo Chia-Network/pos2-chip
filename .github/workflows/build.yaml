@@ -92,7 +92,7 @@ jobs:
         shell: bash
         run: |
           set -eo pipefail
-          ./check-proof-count -b build -n 500
+          ./check-proof-count -b build -n 1000
       - name: Benchmark
         if: ${{ matrix.mode == 'Release' }}
         shell: bash
