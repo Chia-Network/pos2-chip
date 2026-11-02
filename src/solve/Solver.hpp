@@ -12,6 +12,7 @@
 #include <array>
 #include <atomic>
 #include <bitset>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <numeric> // for iota
@@ -1134,6 +1135,23 @@ public:
         return bounds;
     }
 
+    static size_t x2CandidateCapacity(
+        double hit_probability, uint64_t max_candidates, unsigned num_threads)
+    {
+        double const mean = std::min(1.0, hit_probability) * double(max_candidates);
+
+        // Use a Bernstein tail bound for independent bitmask hits. The union bound
+        // limits the modeled overflow probability across all workers to 1e-15.
+        double const log_tail = std::log(double(num_threads) / 1e-15);
+        double const headroom
+            = log_tail / 3.0 + std::sqrt(2.0 * mean * log_tail + log_tail * log_tail / 9.0);
+        uint64_t const capacity = uint64_t(std::ceil(mean + headroom));
+
+        // A full buffer triggers the overflow check, so leave one spare entry
+        // even when every candidate matches. Round up to preserve the headroom.
+        return size_t((std::min(capacity, max_candidates + 1) + 15) & ~uint64_t(0xf));
+    }
+
     void filterX2Candidates(std::span<uint32_t const> const x1_bitmask,
         size_t num_x_pairs,
         std::vector<uint32_t>& x2_potential_match_xs,
@@ -1157,21 +1175,18 @@ public:
 
         double const hit_probability
             = double(num_match_target_hashes) / double(NUM_XS >> this->bitmask_shift_);
-        // add extra safety margin for each reduction in k from 28
-        double const extra_margin = (num_k_bits < 28) ? 1.0 + 0.01 * double(28 - num_k_bits) : 1.0;
-        uint64_t const estimated_matches
-            = uint64_t(hit_probability * static_cast<double>(NUM_XS) * extra_margin);
-
-        // round down to multiple of 16
-        size_t const MAX_RESULTS_PER_THREAD = (estimated_matches / num_threads) & ~size_t(0xf);
+        // The last worker also scans the remainder from aligning chunk_size.
+        uint64_t const max_candidates = NUM_XS - uint64_t(num_threads - 1) * chunk_size;
+        size_t const MAX_RESULTS_PER_THREAD
+            = x2CandidateCapacity(hit_probability, max_candidates, num_threads);
 
         if (false) {
             std::cout << "num x pairs: " << num_x_pairs << std::endl;
             std::cout << "num_match_target_hashes: " << num_match_target_hashes << std::endl;
             std::cout << "NUM_XS: " << NUM_XS << std::endl;
             std::cout << "hit_probability: " << hit_probability << std::endl;
-            std::cout << "extra margin: " << extra_margin << std::endl;
-            std::cout << "estimated_matches: " << estimated_matches << std::endl;
+            std::cout << "max candidates per thread: " << max_candidates << std::endl;
+            std::cout << "capacity per thread: " << MAX_RESULTS_PER_THREAD << std::endl;
             std::cout << "esimtated matches calc:" << (double)hit_probability * (double)NUM_XS
                       << std::endl;
         }
