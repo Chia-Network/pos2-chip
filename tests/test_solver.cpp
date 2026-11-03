@@ -64,22 +64,22 @@ TEST_CASE("solve-partial")
 TEST_CASE("x2-candidate-capacity")
 {
     // The fully occupied bitmask must fit, including the existing spare-entry rule.
-    CHECK(Solver::x2CandidateCapacity(1.0, 8192, 32) > 8192);
-    CHECK(Solver::x2CandidateCapacity(4.0, 8192, 32) > 8192);
-    CHECK(Solver::x2CandidateCapacity(0.0, 8192, 32) > 0);
+    CHECK(Solver::x2CandidateCapacity(1.0, 8192) > 8192);
+    CHECK(Solver::x2CandidateCapacity(4.0, 8192) > 8192);
+    CHECK(Solver::x2CandidateCapacity(0.0, 8192) > 0);
 
-    // Sparse candidates need more than a fixed percentage of headroom.
-    size_t const sparse_capacity = Solver::x2CandidateCapacity(1.0 / 128.0, 1024, 256);
-    CHECK(sparse_capacity > 18);
+    // Sparse candidates still need enough space for uneven worker counts.
+    size_t const sparse_capacity = Solver::x2CandidateCapacity(1.0 / 128.0, 1024);
+    CHECK(sparse_capacity >= 256);
     CHECK(sparse_capacity % 16 == 0);
 
     // A final worker can receive a much larger chunk after alignment.
     uint64_t const num_xs = uint64_t(1) << 18;
     uint64_t const chunk = (num_xs / 192) & ~uint64_t(15);
     uint64_t const last_chunk = num_xs - 191 * chunk;
-    double const hit_probability = 2048.0 / double(num_xs);
-    CHECK(Solver::x2CandidateCapacity(hit_probability, last_chunk, 192)
-        > Solver::x2CandidateCapacity(hit_probability, chunk, 192));
+    double const hit_probability = 32768.0 / double(num_xs);
+    CHECK(Solver::x2CandidateCapacity(hit_probability, last_chunk)
+        > Solver::x2CandidateCapacity(hit_probability, chunk));
 }
 
 TEST_CASE("solve-partial-k28-headroom")

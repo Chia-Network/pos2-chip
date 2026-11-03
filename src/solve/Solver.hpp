@@ -1135,17 +1135,14 @@ public:
         return bounds;
     }
 
-    static size_t x2CandidateCapacity(
-        double hit_probability, uint64_t max_candidates, unsigned num_threads)
+    static size_t x2CandidateCapacity(double hit_probability, uint64_t max_candidates)
     {
-        double const mean = std::min(1.0, hit_probability) * double(max_candidates);
+        double const expected_matches = std::min(1.0, hit_probability) * double(max_candidates);
 
-        // Use a Bernstein tail bound for independent bitmask hits. The union bound
-        // limits the modeled overflow probability across all workers to 1e-15.
-        double const log_tail = std::log(double(num_threads) / 1e-15);
-        double const headroom
-            = log_tail / 3.0 + std::sqrt(2.0 * mean * log_tail + log_tail * log_tail / 9.0);
-        uint64_t const capacity = uint64_t(std::ceil(mean + headroom));
+        // Reserve twice the estimate and a minimum of 256 entries to allow for
+        // uneven worker counts, including when the estimate is small.
+        uint64_t const capacity
+            = std::max<uint64_t>(256, uint64_t(std::ceil(2.0 * expected_matches)));
 
         // A full buffer triggers the overflow check, so leave one spare entry
         // even when every candidate matches. Round up to preserve the headroom.
@@ -1178,7 +1175,7 @@ public:
         // The last worker also scans the remainder from aligning chunk_size.
         uint64_t const max_candidates = NUM_XS - uint64_t(num_threads - 1) * chunk_size;
         size_t const MAX_RESULTS_PER_THREAD
-            = x2CandidateCapacity(hit_probability, max_candidates, num_threads);
+            = x2CandidateCapacity(hit_probability, max_candidates);
 
         if (false) {
             std::cout << "num x pairs: " << num_x_pairs << std::endl;
