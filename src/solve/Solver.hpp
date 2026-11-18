@@ -860,7 +860,7 @@ public:
                             if (pairing.has_value()) {
                                 int pos = t1_num_matches.fetch_add(1);
                                 if (pos >= max_matches) {
-                                    throw std::runtime_error("Solver encountered too many matches");
+                                    return;
                                 }
                                 T1_Match m;
                                 m.x1 = xx1;
@@ -933,7 +933,7 @@ public:
                                 if (pairing.has_value()) {
                                     int const pos = t1_num_matches.fetch_add(1);
                                     if (pos >= max_matches) {
-                                        throw std::runtime_error("Solver encountered too many matches");
+                                        return;
                                     }
                                     T1_Match m;
                                     m.x1 = xx1;
@@ -957,8 +957,13 @@ public:
         }
         timings_.match_x1_x2_sorted_lists += timer.stop();
 
-        // 5) trim to actual match count and return
         int const total = t1_num_matches.load(std::memory_order_relaxed);
+
+        if (total > max_matches) {
+            throw std::runtime_error("Solver encountered too many matches");
+        }
+
+        // 5) trim to actual match count and return
         t1_matches.resize(total);
 
         return t1_matches;
