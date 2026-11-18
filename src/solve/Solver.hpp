@@ -860,8 +860,7 @@ public:
                             if (pairing.has_value()) {
                                 int pos = t1_num_matches.fetch_add(1);
                                 if (pos >= max_matches) {
-                                    std::cerr << "ERROR: Too many matches\n";
-                                    std::exit(1);
+                                    throw std::runtime_error("Solver encountered too many matches");
                                 }
                                 T1_Match m;
                                 m.x1 = xx1;
@@ -934,8 +933,7 @@ public:
                                 if (pairing.has_value()) {
                                     int const pos = t1_num_matches.fetch_add(1);
                                     if (pos >= max_matches) {
-                                        std::cerr << "ERROR: Too many matches\n";
-                                        std::exit(1);
+                                        throw std::runtime_error("Solver encountered too many matches");
                                     }
                                     T1_Match m;
                                     m.x1 = xx1;
