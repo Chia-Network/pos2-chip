@@ -22,7 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - macos-14
           - macos-15
           - macos-15-intel
           - ubuntu-22.04
@@ -37,13 +36,13 @@ jobs:
         compiler: [""]
         toolchain: [default]
         include:
-          - os: macos-14
+          - os: macos-15
             toolchain: ubsan
             mode: Debug
-          - os: macos-14
+          - os: macos-15
             toolchain: asan
             mode: Debug
-          - os: macos-14
+          - os: macos-15
             mode: Release
             toolchain: tsan
           - os: ubuntu-24.04
